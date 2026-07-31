@@ -4270,62 +4270,39 @@ async function connectBosch(){
     btLog('Bosch verbunden: '+(dev.name||''));
   }catch(err){ btLog('Bosch: '+err.message); }
 }
+/* Paketaufbau des Bosch GLM (aus dem Protokoll eines GLM abgelesen):
+     c0 55 10 <art> <status> <zähler-lo> <zähler-hi> <float32 Entfernung> … <prüfsumme>
+   Art 06 = eine Messung, 42 = Messung mit Vorwerten (ab Byte 11 die älteren),
+   Art 02 = reine Statusmeldung, Nutzdaten alle null.
+   Die Bytes 5/6 sind ein Paketzähler, der bei JEDEM Paket hochzählt. Die frühere
+   Heuristik durchsuchte das ganze Paket und las bei den leeren Status-Paketen diesen
+   Zähler als Millimeterwert — daher kamen 6,085 / 6,086 / 6,087 … als „Messwerte".
+   Deshalb jetzt fest: Kopf prüfen, Entfernung ausschließlich ab Byte 7 lesen,
+   sonst das Paket verwerfen. */
 function boschFrame(v){
   const u8=new Uint8Array(v.buffer);
   const dv=new DataView(v.buffer);
-  const cand=[];
-  for(let o=0;o+4<=dv.byteLength;o++){
-    const f=dv.getFloat32(o,true);
-    if(isFinite(f)&&f>0.049&&f<330) cand.push({o,f});
-  }
-  // Kandidaten mit ihrer Position mitschreiben — daran lässt sich das Protokoll ablesen,
-  // falls doch einmal der falsche Wert genommen wird
-  btLog('Bosch RX: '+hexStr(u8)+(cand.length ? '  → '+cand.map(c=>`@${c.o}=${fmt3(c.f)}`).join(' ') : ''));
+  const kopfOk = u8.length>=11 && u8[0]===0xC0 && u8[1]===0x55;
   let m=null;
-  const pref=cand.find(c=>c.o===7)||cand.find(c=>c.o===5)||cand[0];
-  if(pref) m=pref.f;
-  if(m==null){
-    for(let o=0;o+4<=dv.byteLength;o++){
-      const mm=dv.getUint32(o,true);
-      if(mm>=50&&mm<=330000 && (o<4 || dv.getUint8(o-1)!==0)){ m=mm/1000; break; }
-    }
+  if(kopfOk){
+    const f=dv.getFloat32(7,true);
+    if(isFinite(f) && f>0.049 && f<330) m=f;
   }
+  const kennung = kopfOk
+    ? `Art ${u8[3].toString(16).padStart(2,'0')} Nr ${u8[5]|(u8[6]<<8)}`
+    : 'unbekannter Kopf';
+  btLog(`Bosch RX (${kennung}): ${hexStr(u8)} → ${m!=null?fmt3(m)+' m':'keine Messung'}`);
   if(m!=null) handleMeasurement(m,'Bosch');
-  else btLog('(kein Messwert im Frame erkannt — Log bitte melden, Protokoll wird angepasst)');
 }
 function btDisconnect(){
   try{ if(bt.device&&bt.device.gatt.connected) bt.device.gatt.disconnect(); }catch(e){}
   setBtStatus(false,'getrennt');
 }
-/* Bosch schickt vor der Entfernung eine fortlaufende Zählzahl.
-   Erkennungsmerkmal ohne Zwischenspeichern: Eine Zählzahl ist eine ganze Zahl, die
-   die vorige um genau 1 erhöht. Alles andere — jeder Wert mit Nachkommastellen —
-   geht unverzüglich durch. Dieses Verfahren kann also nie den Messwert verschlucken.
-   (Ein Sammelfenster hatte ich versucht; bei einem Gerät, das laufend sendet, kam
-   damit gar nichts mehr an.) */
-let letzteZaehlzahl=null;
 function handleMeasurement(m, src){
   m=Math.round(m*1000)/1000;
-  let vielleichtZaehler=false;
-  if(src==='Bosch'){
-    const ganz = Math.abs(m-Math.round(m))<1e-9;
-    if(ganz && m>=1 && m<=9999){
-      if(letzteZaehlzahl!=null && Math.round(m)===letzteZaehlzahl+1){
-        letzteZaehlzahl=Math.round(m);          // Kette bestätigt → sicher die Zählzahl
-        btLog(`Zählzahl ${letzteZaehlzahl} übersprungen`);
-        return;
-      }
-      letzteZaehlzahl=Math.round(m);
-      vielleichtZaehler=true;                   // erste ganze Zahl: durchlassen, aber nicht sperren
-    }
-    // Die Kette NICHT bei Messwerten zurücksetzen — zwischen zwei Zählzahlen liegt ja
-    // immer eine Entfernung. Sonst wäre jede Zählzahl wieder „die erste".
-  }
   const now=Date.now();
-  if(!vielleichtZaehler){
-    if(now-bt.lastAt<250) return;               // Doppel-Notifications ausfiltern
-    bt.lastAt=now;                              // eine mögliche Zählzahl sperrt NICHT,
-  }                                             // damit die Entfernung sie gleich ersetzt
+  if(now-bt.lastAt<250) return;   // Doppel-Notifications ausfiltern
+  bt.lastAt=now;
   btLog(`Messwert (${src}): ${fmt3(m)} m`);
   messwertUebernehmen(m);
 }
