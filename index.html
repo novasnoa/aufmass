@@ -4272,13 +4272,15 @@ async function connectBosch(){
 }
 function boschFrame(v){
   const u8=new Uint8Array(v.buffer);
-  btLog('Bosch RX: '+hexStr(u8));
   const dv=new DataView(v.buffer);
   const cand=[];
   for(let o=0;o+4<=dv.byteLength;o++){
     const f=dv.getFloat32(o,true);
     if(isFinite(f)&&f>0.049&&f<330) cand.push({o,f});
   }
+  // Kandidaten mit ihrer Position mitschreiben — daran lässt sich das Protokoll ablesen,
+  // falls doch einmal der falsche Wert genommen wird
+  btLog('Bosch RX: '+hexStr(u8)+(cand.length ? '  → '+cand.map(c=>`@${c.o}=${fmt3(c.f)}`).join(' ') : ''));
   let m=null;
   const pref=cand.find(c=>c.o===7)||cand.find(c=>c.o===5)||cand[0];
   if(pref) m=pref.f;
@@ -4295,12 +4297,34 @@ function btDisconnect(){
   try{ if(bt.device&&bt.device.gatt.connected) bt.device.gatt.disconnect(); }catch(e){}
   setBtStatus(false,'getrennt');
 }
+/* Bosch schickt je Messung mehrere Werte, und vor der Entfernung steht eine
+   fortlaufende Zählzahl. Deshalb werden bei Bosch alle Werte eines Schubs gesammelt
+   und erst am Ende der letzte übernommen — die Zählzahl fällt damit weg.
+   Leica meldet nur den Messwert, dort bleibt es bei der einfachen Doppelsperre. */
+let btSchub=null;
 function handleMeasurement(m, src){
+  m=Math.round(m*1000)/1000;
+  if(src==='Bosch'){
+    if(!btSchub) btSchub={werte:[], timer:null};
+    btSchub.werte.push(m);
+    clearTimeout(btSchub.timer);
+    btSchub.timer=setTimeout(()=>{
+      const w=btSchub.werte; btSchub=null;
+      const genommen=w[w.length-1];
+      btLog(w.length>1
+        ? `Schub (${w.length} Werte): ${w.map(fmt3).join(' · ')} → übernommen ${fmt3(genommen)} m`
+        : `Messwert (Bosch): ${fmt3(genommen)} m`);
+      messwertUebernehmen(genommen);
+    }, 220);
+    return;
+  }
   const now=Date.now();
   if(now-bt.lastAt<250) return;   // Doppel-Notifications ausfiltern
   bt.lastAt=now;
-  m=Math.round(m*1000)/1000;
   btLog(`Messwert (${src}): ${fmt3(m)} m`);
+  messwertUebernehmen(m);
+}
+function messwertUebernehmen(m){
   const bv=$('#btvalue'); if(bv) bv.textContent=fmt3(m)+' m';
   if(mode==='draw' && draft.points.length && draft.dir){ addSegment(m); return; }
   const ae=document.activeElement;
@@ -4484,7 +4508,7 @@ function planSvg(rooms, opts){
   const maxDicke=opts.mini?0:rooms.reduce((m,r)=>
     r.points.reduce((k,_,i)=>Math.max(k, wandDicke(r,i)), m), 0);
   // Rand nur so groß wie die Maßketten bei 7 pt brauchen — sonst schrumpft der Plan unnötig
-  let pad=(opts.masse?0.8:0.5)+maxDicke;
+  let pad=(opts.masse?0.8:(opts.grau?0.05:0.5))+maxDicke;
   if(opts.masse) for(let k=0;k<4;k++){
     const s0=Math.min(boxW/(iw+2*pad), boxH/(ih+2*pad));
     const need=(PT9_MM/s0)*4.2+maxDicke;                    // zwei Maßreihen + Zahl bei 9 pt
@@ -4504,15 +4528,20 @@ function planSvg(rooms, opts){
   rooms.forEach(r=>{
     const hl=opts.highlight===r.id;
     const d=r.points.map((p,i)=>(i?'L':'M')+p.x+' '+p.y).join(' ')+' Z';
+    if(opts.grau){ out+=`<path d="${d}" fill="#fff"/>`; return; }   // Hervorhebung kommt zuletzt
     out+=`<path d="${d}" fill="${hl?'#fdecec':'#fff'}" stroke="${hl?'#d64545':(opts.mini?'#9aa1ad':'#000')}"`+
       ` stroke-width="${hl?w/240:(opts.mini?w/500:0.02)}" stroke-linejoin="miter"/>`;
   });
-  if(!opts.mini) out+=wandLage(rooms, {fuell:'#d0d0d0', linie:'#000', sw:Math.max(0.01, w/1100)});
+  if(!opts.mini) out+=wandLage(rooms, opts.grau
+    ? {fuell:'#d9d9d9', linie:'#a9a9a9', sw:Math.max(0.02, w/700)}
+    : {fuell:'#d0d0d0', linie:'#000', sw:Math.max(0.01, w/1100)});
   rooms.forEach(r=>{
     if(!opts.mini){
-      out+=openingMarks(r, lbl).replace(/var\(--canvas\)/g,'#fff');
-      out+=wallMarks(r, lbl);
-      if(opts.objekte!==false) out+=objMarks(r, lbl, false);
+      out+=grauStellen(openingMarks(r, lbl).replace(/var\(--canvas\)/g,'#fff'), opts.grau);
+      if(!opts.grau){
+        out+=wallMarks(r, lbl);
+        if(opts.objekte!==false) out+=objMarks(r, lbl, false);
+      }
     }
     if(opts.namen){
       const c=raumMitte(r), st=roomStats(r);
@@ -4539,11 +4568,30 @@ function planSvg(rooms, opts){
       });
     }
   });
+  // Der aktuelle Raum wird zuletzt rot darübergelegt — so bleibt er auch über
+  // Wänden und Türen sichtbar
+  if(opts.grau && opts.highlight){
+    const hr=rooms.find(x=>x.id===opts.highlight);
+    if(hr){
+      const dh=hr.points.map((p,i)=>(i?'L':'M')+p.x+' '+p.y).join(' ')+' Z';
+      out+=`<path d="${dh}" fill="#d64545" fill-opacity="0.5" stroke="#c62828"`+
+        ` stroke-width="${Math.max(0.03, w/260)}" stroke-linejoin="miter"/>`;
+    }
+  }
   out+='</svg>';
   // Sicherheitsnetz: keine Schrift im Plan unter 7 pt (auch Raumnamen, Objektnummern)
   out=out.replace(/font-size="([\d.]+)"/g, (m,v)=>`font-size="${Math.max(+v, minFs)}"`);
   if(refs.length) out+=`<div class="prefs">${refs.map(x=>`<span><b>${x.nr}</b> ${x.txt} m</span>`).join('')}</div>`;
   return out;
+}
+/* Farbige Bauteile für die kleine Übersicht auf Grau ziehen */
+function grauStellen(svgTxt, aktiv){
+  if(!aktiv) return svgTxt;
+  return svgTxt
+    .replace(/#4d90d6/g, '#bdbdbd')      // Fensterflügel
+    .replace(/#5a6475/g, '#bdbdbd')      // Türblatt
+    .replace(/#8a93a5/g, '#cfcfcf')      // Schwenkbogen
+    .replace(/#2b3345/g, '#bdbdbd');     // Laibungskanten
 }
 /* Alle Fotos eines Raums mit ihrer Zuordnung einsammeln */
 function fotosVonRaum(r){
@@ -4593,7 +4641,8 @@ function buildPrint(){
         </div>
         <div class="pcols" style="margin-top:3mm">
           <div style="width:30mm; flex:0 0 30mm">
-            ${planSvg(rooms, {mini:true, highlight:r.id, boxW:30, boxH:38})}
+            ${planSvg(rooms, {grau:true, highlight:r.id, namen:false, masse:false,
+              objekte:false, boxW:30, boxH:38})}
           </div>
           <div style="flex:1">
             ${planSvg([r], {masse:true, objekte:true, boxW:150, boxH:132})}
