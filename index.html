@@ -831,9 +831,9 @@ function objMarks(r, lbl, interactive){
       out+=`<rect x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" fill="${fill}" fill-opacity="${fillOp}" stroke="${isSel?'#2f6fed':stroke}" stroke-width="${isSel?0.05:0.03}" stroke-dasharray="0.1 0.06"${interactive?` data-obj="${g.id}" style="cursor:move"`:''}/>`;
       out+=objBadge(g, g.x+g.w+lbl*0.45, g.y-lbl*0.45, lbl, interactive);
       if(isSel){
-        const hs=lbl*0.35;
         [[g.x,g.y,0],[g.x+g.w,g.y,1],[g.x+g.w,g.y+g.h,2],[g.x,g.y+g.h,3]].forEach(([px,py,k])=>{
-          out+=`<rect x="${px-hs}" y="${py-hs}" width="${2*hs}" height="${2*hs}" fill="#fff" stroke="#2f6fed" stroke-width="${lbl*0.08}" data-obj="${g.id}" data-objh="${k}" style="cursor:nwse-resize"/>`;
+          const an=sel.objH===k, hs=lbl*(an?0.45:0.35);
+          out+=`<rect x="${px-hs}" y="${py-hs}" width="${2*hs}" height="${2*hs}" fill="${an?'#2f6fed':'#fff'}" stroke="#2f6fed" stroke-width="${lbl*0.08}" data-obj="${g.id}" data-objh="${k}" style="cursor:nwse-resize"/>`;
         });
       }
     } else if(g.type==='sym'){
@@ -862,9 +862,10 @@ function objMarks(r, lbl, interactive){
       out+=objBadge(g, cx+W/2+lbl*0.45, cy-H/2-lbl*0.45, lbl, interactive);
       if(isSel){
         // Eckgriffe am sichtbaren Umriss (auch bei 90°/270° gedrehten Symbolen)
-        const vx=cx-W/2, vy=cy-H/2, hs=lbl*0.35;
+        const vx=cx-W/2, vy=cy-H/2;
         [[vx,vy,0],[vx+W,vy,1],[vx+W,vy+H,2],[vx,vy+H,3]].forEach(([px,py,k])=>{
-          out+=`<rect x="${px-hs}" y="${py-hs}" width="${2*hs}" height="${2*hs}" fill="#fff" stroke="#2f6fed" stroke-width="${lbl*0.08}" data-obj="${g.id}" data-objh="${k}" style="cursor:nwse-resize"/>`;
+          const an=sel.objH===k, hs=lbl*(an?0.45:0.35);
+          out+=`<rect x="${px-hs}" y="${py-hs}" width="${2*hs}" height="${2*hs}" fill="${an?'#2f6fed':'#fff'}" stroke="#2f6fed" stroke-width="${lbl*0.08}" data-obj="${g.id}" data-objh="${k}" style="cursor:nwse-resize"/>`;
         });
       }
     } else {
@@ -881,16 +882,24 @@ function objMarks(r, lbl, interactive){
       } else {
         out+=`<polyline points="${ptsStr}" fill="none" stroke="${cols[0]||'#7a4fd0'}" stroke-width="0.05"${dat}/>`;
       }
-      if(interactive)
-        out+=`<polyline points="${ptsStr}" fill="none" stroke="transparent" stroke-width="0.35" data-obj="${g.id}" style="cursor:move"/>`;
+      if(interactive){
+        // je Segment eine eigene Trefferfläche — Segmente sind einzeln anwählbar
+        for(let k=0;k<g.points.length-1;k++){
+          const q1=g.points[k], q2=g.points[k+1];
+          if(isSel && sel.objSeg===k)
+            out+=`<line x1="${q1.x}" y1="${q1.y}" x2="${q2.x}" y2="${q2.y}" stroke="#2f6fed" stroke-width="0.12" opacity="0.5" style="pointer-events:none"/>`;
+          out+=`<line x1="${q1.x}" y1="${q1.y}" x2="${q2.x}" y2="${q2.y}" stroke="transparent" stroke-width="0.35" data-obj="${g.id}" data-objseg="${k}" style="cursor:move"/>`;
+        }
+      }
       // Nummern-Plakette mittig auf dem mittleren Segment
       const mi=Math.floor((g.points.length-1)/2);
       const ma=g.points[mi], mb=g.points[Math.min(mi+1,g.points.length-1)];
       out+=objBadge(g, (ma.x+mb.x)/2, (ma.y+mb.y)/2, lbl, interactive);
       if(isSel){
-        const hs=lbl*0.35;
         g.points.forEach((pt,k)=>{
-          out+=`<rect x="${pt.x-hs}" y="${pt.y-hs}" width="${2*hs}" height="${2*hs}" fill="#fff" stroke="#2f6fed" stroke-width="${lbl*0.08}" data-obj="${g.id}" data-objh="${k}" style="cursor:pointer"/>`;
+          const an = sel.objH===k;                     // angewählter Punkt ist gefüllt und größer
+          const hs=lbl*(an?0.45:0.35);
+          out+=`<rect x="${pt.x-hs}" y="${pt.y-hs}" width="${2*hs}" height="${2*hs}" fill="${an?'#2f6fed':'#fff'}" stroke="#2f6fed" stroke-width="${lbl*0.08}" data-obj="${g.id}" data-objh="${k}" style="cursor:pointer"/>`;
         });
       }
     }
@@ -1228,7 +1237,55 @@ const SYMDEFS={
   '4k':{label:'4-K-Schleuse', w:4.0, h:1.0, k:4},
   'rfa':{label:'RFA', w:1.2, h:1.2, k:0}
 };
+/* ---------- Zwei-Finger-Gesten: Zoomen und Verschieben (iPad) ---------- */
+const zeiger=new Map();          // aktive Finger/Zeiger
+let pinch=null;
+// Laufendes Ziehen zurücknehmen, wenn der zweite Finger dazukommt —
+// sonst verschiebt die Zoom-Geste ungewollt Räume oder Objekte.
+function cancelDrag(){
+  if(!drag) return;
+  const d=drag; drag=null;
+  if(d.kind==='room' && d.room && d.orig){
+    d.room.points=d.orig.map(q=>({...q}));
+    if(d.origObjs) d.room.objects=JSON.parse(JSON.stringify(d.origObjs));
+  } else if(d.kind==='vertex' && d.room && d.orig){
+    d.room.points[d.idx]={...d.orig};
+  } else if(d.kind==='wall' && d.room && d.origA){
+    const n=d.room.points.length;
+    d.room.points[d.idx]={...d.origA};
+    d.room.points[(d.idx+1)%n]={...d.origB};
+  } else if((d.kind==='objmove'||d.kind==='objh'||d.kind==='objseg') && d.g && d.orig){
+    Object.assign(d.g, JSON.parse(JSON.stringify(d.orig)));
+  } else if((d.kind==='open'||d.kind==='openend') && d.o && d.orig){
+    Object.assign(d.o, d.orig);
+  }
+  renderCanvas();
+}
+const svgRatio = p => {                         // Bildschirmpunkt → Anteil im SVG-Feld
+  const r=svg.getBoundingClientRect();
+  return {x:(p.x-r.left)/r.width, y:(p.y-r.top)/r.height};
+};
+function startPinch(){
+  cancelDrag();
+  const [a,b]=[...zeiger.values()];
+  pinch={dist:Math.hypot(b.x-a.x, b.y-a.y), mid:{x:(a.x+b.x)/2, y:(a.y+b.y)/2}, vb:{...vb}};
+}
+function updatePinch(){
+  const [a,b]=[...zeiger.values()];
+  const d=Math.hypot(b.x-a.x, b.y-a.y);
+  if(d<12 || !pinch.dist) return;
+  const f=Math.max(0.05, Math.min(20, pinch.dist/d));          // >1 = weiter weg
+  const w=Math.max(0.4, Math.min(600, pinch.vb.w*f));
+  const h=w*(pinch.vb.h/pinch.vb.w);
+  const s0=svgRatio(pinch.mid), s1=svgRatio({x:(a.x+b.x)/2, y:(a.y+b.y)/2});
+  const wx=pinch.vb.x+s0.x*pinch.vb.w, wy=pinch.vb.y+s0.y*pinch.vb.h;   // festgehaltener Punkt
+  vb={x:wx-s1.x*w, y:wy-s1.y*h, w, h};
+  renderCanvas();
+}
 svg.addEventListener('pointerdown', e=>{
+  zeiger.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  if(zeiger.size===2){ startPinch(); return; }
+  if(zeiger.size>2) return;
   const p=svgPoint(e);
   svg.setPointerCapture(e.pointerId);
   if(mode==='draw'){ handleDrawClick(p); return; }
@@ -1292,9 +1349,27 @@ svg.addEventListener('pointerdown', e=>{
         return;
       }
       lastObjTap={id:g.id, t:now, x:p.x, y:p.y};
-      if(sel.objId!==g.id){ sel={roomId:focusRoomId, wall:null, vertex:null, objId:g.id}; renderAll(); }
-      if(t.dataset.objh!==undefined) drag={kind:'objh', room:r, g, h:+t.dataset.objh, moved:false};
-      else drag={kind:'objmove', room:r, g, start:p, orig:JSON.parse(JSON.stringify(g)), moved:false};
+      const neuesObjekt = sel.objId!==g.id;
+      if(neuesObjekt) sel={roomId:focusRoomId, wall:null, vertex:null, objId:g.id};
+      if(t.dataset.objh!==undefined){
+        // Ecke/Punkt: erst anwählen, ziehen geht erst beim zweiten Anfassen
+        const k=+t.dataset.objh;
+        const schon = !neuesObjekt && sel.objH===k;
+        sel={...sel, objH:k, objSeg:null};
+        if(schon) drag={kind:'objh', room:r, g, h:k, moved:false, orig:JSON.parse(JSON.stringify(g))};
+        renderAll(); return;
+      }
+      if(t.dataset.objseg!==undefined){
+        // Liniensegment: erst anwählen, dann verschieben
+        const k=+t.dataset.objseg;
+        const schon = !neuesObjekt && sel.objSeg===k;
+        sel={...sel, objSeg:k, objH:null};
+        if(schon) drag={kind:'objseg', room:r, g, idx:k, start:p, orig:JSON.parse(JSON.stringify(g)), moved:false};
+        renderAll(); return;
+      }
+      sel={...sel, objH:null, objSeg:null};
+      if(neuesObjekt) renderAll();
+      drag={kind:'objmove', room:r, g, start:p, orig:JSON.parse(JSON.stringify(g)), moved:false};
       return;
     }
   }
@@ -1307,25 +1382,29 @@ svg.addEventListener('pointerdown', e=>{
       const u={x:(b.x-a.x)/L, y:(b.y-a.y)/L};
       const tc=(p.x-a.x)*u.x+(p.y-a.y)*u.y;
       if(t.dataset.openend!==undefined){
-        drag={kind:'openend', room:r, o, end:+t.dataset.openend, moved:false};
+        drag={kind:'openend', room:r, o, end:+t.dataset.openend, moved:false, orig:{...o}};
       } else {
-        drag={kind:'open', room:r, o, grab:tc-Math.max(0,Math.min(o.offset,L-o.width)), moved:false};
+        drag={kind:'open', room:r, o, grab:tc-Math.max(0,Math.min(o.offset,L-o.width)), moved:false, orig:{...o}};
       }
       return;
     }
   }
   if(t.dataset && t.dataset.vertex!==undefined){
     const i=+t.dataset.vertex;
+    // Ecke: erster Klick wählt aus, erst danach lässt sie sich ziehen
+    const schon = sel.roomId===t.dataset.roomid && sel.vertex===i;
     sel={roomId:t.dataset.roomid, wall:null, vertex:i};
     const r=roomById(sel.roomId);
-    drag={kind:'vertex', room:r, idx:i, start:p, orig:{...r.points[i]}, moved:false};
+    if(schon) drag={kind:'vertex', room:r, idx:i, start:p, orig:{...r.points[i]}, moved:false};
     renderAll(); return;
   }
   if(t.dataset && t.dataset.wall!==undefined){
     const i=+t.dataset.wall;
+    // Wand: erster Klick wählt aus, erst danach lässt sie sich verschieben
+    const schon = sel.roomId===t.dataset.roomid && sel.wall===i;
     sel={roomId:t.dataset.roomid, wall:i, vertex:null};
     const r=roomById(sel.roomId);
-    drag={kind:'wall', room:r, idx:i, start:p,
+    if(schon) drag={kind:'wall', room:r, idx:i, start:p,
       origA:{...r.points[i]}, origB:{...r.points[(i+1)%r.points.length]}, moved:false};
     renderAll(); return;
   }
@@ -1341,6 +1420,8 @@ svg.addEventListener('pointerdown', e=>{
   drag={kind:'pan', start:{x:e.clientX,y:e.clientY}, orig:{...vb}, moved:false, pendingRoom};
 });
 svg.addEventListener('pointermove', e=>{
+  if(zeiger.has(e.pointerId)) zeiger.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  if(pinch){ if(zeiger.size>=2) updatePinch(); return; }
   const p=svgPoint(e);
   if(mode==='draw'){ draft.cursor=snapDir(p); renderCanvas(); updateDrawHint(); return; }
   if(mode==='place'){ if(placing){placing.at=p; renderCanvas();} return; }
@@ -1462,6 +1543,14 @@ svg.addEventListener('pointermove', e=>{
     else { g.x=o.x+dx; g.y=o.y+dy; }
     if(dx||dy) drag.moved=true;
     renderCanvas();
+  } else if(drag.kind==='objseg'){
+    // ganzes Liniensegment verschieben (beide Endpunkte)
+    const dx=mm(p.x-drag.start.x), dy=mm(p.y-drag.start.y);
+    const g=drag.g, k=drag.idx;
+    g.points[k]={x:drag.orig.points[k].x+dx, y:drag.orig.points[k].y+dy};
+    g.points[k+1]={x:drag.orig.points[k+1].x+dx, y:drag.orig.points[k+1].y+dy};
+    if(dx||dy) drag.moved=true;
+    renderCanvas();
   } else if(drag.kind==='objh'){
     const g=drag.g;
     let q={x:mm(p.x), y:mm(p.y)};
@@ -1492,7 +1581,16 @@ svg.addEventListener('pointermove', e=>{
     renderCanvas();
   }
 });
+svg.addEventListener('pointercancel', e=>{
+  zeiger.delete(e.pointerId);
+  if(pinch && zeiger.size<2){ pinch=null; drag=null; }
+});
 svg.addEventListener('pointerup', e=>{
+  zeiger.delete(e.pointerId);
+  if(pinch){                      // Ende der Zoom-Geste — kein Klick auslösen
+    if(zeiger.size<2){ pinch=null; drag=null; }
+    return;
+  }
   if(drag){
     if(drag.kind==='room' && !drag.moved && mode==='select'){
       const id=drag.room.id; drag=null; focusRoom(id); return;
@@ -1536,7 +1634,7 @@ svg.addEventListener('pointerup', e=>{
       mode='select'; drag=null; renderAll(); updateDrawHint(); return;
     }
     let refocused=false;
-    if(drag && drag.moved && (drag.kind==='objmove'||drag.kind==='objh')){
+    if(drag && drag.moved && (drag.kind==='objmove'||drag.kind==='objh'||drag.kind==='objseg')){
       // In einen anderen Raum geschoben? Dann dort einsortieren und dorthin wechseln
       const moved=reassignObjectRoom(drag.room, drag.g);
       if(moved){ focusRoomId=moved.id; sel={roomId:moved.id, wall:null, vertex:null, objId:drag.g.id}; refocused=true; }
@@ -1776,6 +1874,70 @@ function setWallLength(r, i, L){
   for(let k=i+1;k<p.length;k++){ p[k].x+=dx; p[k].y+=dy; }
   syncSharedDoors(); save(); renderAll();
 }
+/* ---------- Ecken einfügen/löschen ----------
+   Wandindizes werden von Öffnungen, LV-Positionen, Wandnummern und -fotos referenziert.
+   Beim Einfügen/Löschen einer Ecke müssen die alle mitwandern. */
+function wandRefsUmschreiben(r, mapFn){
+  const p=proj();
+  (p.attrs||[]).forEach(a=>{
+    if(a.roomId!==r.id || a.wall==null) return;
+    const n=mapFn(a.wall);
+    if(n==null) delete a.wall; else a.wall=n;
+  });
+  ['wallFotos','wallNr'].forEach(k=>{
+    if(!r[k]) return;
+    const neu={};
+    Object.entries(r[k]).forEach(([i,v])=>{
+      const n=mapFn(+i);
+      if(n==null) return;
+      if(neu[n]==null) neu[n]=v;
+      else if(Array.isArray(neu[n]) && Array.isArray(v)) neu[n]=neu[n].concat(v);  // Fotos zusammenlegen
+    });
+    r[k]=neu;
+  });
+}
+// Neue Ecke in der Mitte der Wand i — die Wand wird dadurch geteilt
+function eckeEinfuegen(r, i){
+  const [a,b]=wallPoints(r,i); const L=dist(a,b);
+  if(L<0.1){ alert('Diese Wand ist zu kurz zum Teilen.'); return false; }
+  const half=L/2;
+  (r.openings||[]).forEach(o=>{
+    if(o.wall===i){ if(o.offset>=half){ o.wall=i+1; o.offset=mm(o.offset-half); } }
+    else if(o.wall>i) o.wall++;
+  });
+  wandRefsUmschreiben(r, w=>w>i?w+1:w);
+  r.points.splice(i+1, 0, {x:mm((a.x+b.x)/2), y:mm((a.y+b.y)/2)});
+  return true;
+}
+// Ecke i entfernen — die beiden angrenzenden Wände verschmelzen zu einer
+function eckeLoeschen(r, i){
+  const n=r.points.length;
+  if(n<=3){ alert('Ein Raum braucht mindestens drei Ecken.'); return false; }
+  const vor=(i-1+n)%n;                          // Wand, die in die Ecke hineinläuft
+  const lenVor=dist(r.points[vor], r.points[i]);
+  const ziel = i>0 ? i-1 : n-2;                 // Index der verschmolzenen Wand NACH dem Entfernen
+  const map = w => w===i ? ziel : (w>i ? w-1 : w);
+  (r.openings||[]).forEach(o=>{
+    if(o.wall===i) o.offset=mm(o.offset+lenVor);  // Maß ab dem neuen Wandanfang
+    o.wall=map(o.wall);
+  });
+  wandRefsUmschreiben(r, map);
+  r.points.splice(i,1);
+  return true;
+}
+/* ---------- Linien: Segmente einfügen/löschen ---------- */
+function segmentEinfuegen(g, k){
+  const a=g.points[k], b=g.points[k+1];
+  if(!a||!b) return false;
+  g.points.splice(k+1, 0, {x:mm((a.x+b.x)/2), y:mm((a.y+b.y)/2)});
+  return true;
+}
+function segmentLoeschen(g, k){
+  if(g.points.length<=2){ alert('Eine Linie braucht mindestens ein Segment.'); return false; }
+  // Randsegment: äußeren Punkt entfernen · Mittelsegment: gemeinsamen Punkt entfernen
+  g.points.splice(k===0 ? 0 : (k===g.points.length-2 ? g.points.length-1 : k+1), 1);
+  return true;
+}
 function deleteRoom(id){
   const r=roomById(id); if(!r) return;
   if(!confirm(`Raum „${r.name}“ wirklich löschen? Zugehörige LV-Positionen werden mit gelöscht.`)) return;
@@ -1875,6 +2037,11 @@ function renderSidebar(){
           <div class="row"><label>Name</label><input type="text" id="objname" value="${esc(selObj.name||'')}"></div>
           <div class="row"><label>Gesamtlänge (m)</label><input class="laser objdim" data-f="len" value="${fmt(L,3)}"></div>
           <div class="stat"><span>Punkte</span><b>${selObj.points.length}</b></div>
+          <div class="row">
+            <button class="btn small" id="segadd" ${sel.objSeg==null?'disabled title="Erst ein Segment anklicken"':''}>＋ Segment einfügen</button>
+            <button class="btn small danger" id="segdel" ${sel.objSeg==null?'disabled title="Erst ein Segment anklicken"':''}>Segment löschen</button>
+          </div>
+          <p class="hint">${sel.objSeg!=null?`Segment ${sel.objSeg+1} ausgewählt.`:(sel.objH!=null?`Punkt ${sel.objH+1} ausgewählt — nochmal anfassen zum Ziehen.`:'Segment oder Punkt anklicken zum Auswählen.')}</p>
           ${btns}
           <p class="hint"><b>Doppelklick</b> auf die Linie fügt einen Punkt ein. Punktgriffe ziehen (rastet auf 45°), Längeneingabe skaliert die ganze Linie. Entf = löschen, Esc = abwählen.</p></div>`;
       }
@@ -1900,6 +2067,17 @@ function renderSidebar(){
         ${lvListHtml(p.attrs.filter(a=>a.objId===selOp.id))}
         <p class="hint">Ziehen verschiebt entlang der Wand, die weißen Griffe ändern die Breite. Esc = abwählen.</p>
       </div>`;
+    } else if(sel.vertex!=null){
+      /* Ecke im Fokus */
+      const pt=r.points[sel.vertex]||{x:0,y:0};
+      html+=`<div class="panel"><h3>Ecke ${sel.vertex+1} von ${r.points.length}</h3>
+        <div class="stat"><span>Position</span><b>${fmt(pt.x,2)} / ${fmt(pt.y,2)} m</b></div>
+        <div class="row">
+          <button class="btn small danger" id="eckedel">Ecke löschen</button>
+          <button class="btn small" id="eckedesel">Abwählen</button>
+        </div>
+        <p class="hint">Die Ecke ist ausgewählt — zum Verschieben noch einmal anfassen und ziehen.
+          Beim Löschen verschmelzen die beiden angrenzenden Wände.</p></div>`;
     } else if(sel.wall!=null){
       /* Wand im Fokus */
       const [a,b]=wallPoints(r,sel.wall);
@@ -1908,6 +2086,9 @@ function renderSidebar(){
         <div class="row">
           <button class="btn small" id="wopdoor">🚪 ＋ Tür</button>
           <button class="btn small" id="wopwin">🪟 ＋ Fenster</button>
+        </div>
+        <div class="row">
+          <button class="btn small" id="wallsplit" title="Teilt diese Wand in der Mitte — es entsteht eine neue Ecke">＋ Ecke einfügen</button>
         </div>
         <div class="row">
           <button class="btn green small" id="walllv">＋ LV-Position</button>
@@ -2037,6 +2218,19 @@ function wireSidebar(r){
       el.onclick=()=>openLvDialog(el.dataset.lvopen);
     });
     on('#walldesel','onclick',()=>{ sel={roomId:focusRoomId, wall:null, vertex:null}; renderAll(); });
+    on('#wallsplit','onclick',()=>{                       // Wand teilen → neue Ecke
+      if(eckeEinfuegen(r, sel.wall)){
+        sel={roomId:r.id, wall:null, vertex:sel.wall+1};
+        syncSharedDoors(); save(); renderAll();
+      }
+    });
+    on('#eckedel','onclick',()=>{                          // Ecke entfernen
+      if(eckeLoeschen(r, sel.vertex)){
+        sel={roomId:r.id, wall:null, vertex:null};
+        syncSharedDoors(); save(); renderAll();
+      }
+    });
+    on('#eckedesel','onclick',()=>{ sel={roomId:focusRoomId, wall:null, vertex:null}; renderAll(); });
     // Tür/Fenster direkt auf der gewählten Wand anlegen (sucht die freie Lücke)
     const addOnWall=type=>{
       const o=placeOpening(r, sel.wall, type, null);
@@ -2120,6 +2314,14 @@ function wireSidebar(r){
         sel.objId=null; save(); renderAll();
       });
       on('#objrot','onclick',()=>{ selObj.rot=((selObj.rot||0)+90)%360; save(); renderAll(); });
+      on('#segadd','onclick',()=>{                        // Segment teilen
+        if(sel.objSeg!=null && segmentEinfuegen(selObj, sel.objSeg)){ save(); renderAll(); }
+      });
+      on('#segdel','onclick',()=>{                        // Segment entfernen
+        if(sel.objSeg!=null && segmentLoeschen(selObj, sel.objSeg)){
+          sel={...sel, objSeg:null, objH:null}; save(); renderAll();
+        }
+      });
       wireFotos('objfoto', selObj, 'fotos');              // Fotos am Objekt
     }
     const selOp = sel.openId ? (r.openings||[]).find(o=>o.id===sel.openId) : null;
