@@ -186,6 +186,7 @@
   </div>
   <div class="spacer"></div>
   <div id="btchip"><span class="dot"></span><span id="btchiptext">Laser: getrennt</span></div>
+  <button class="tb" id="cloudbtn" title="Projekt mit Grundriss und Fotos in Airtable speichern oder von dort laden">Projekt ⇅</button>
   <button class="tb" id="lvimport" title="LV-Positionen aus Airtable importieren">LV-Import</button>
   <button class="tb" id="exportcsv" title="CSV im magicplan-Format exportieren">CSV-Export</button>
   <button class="tb" id="printbtn">Drucken / PDF</button>
@@ -337,6 +338,33 @@
   <div class="dfoot"><button class="btn" data-close>Schließen</button></div>
 </dialog>
 
+<!-- Projekt-Austausch über Airtable -->
+<dialog id="dlgCloud">
+  <div class="dhead">Projekt in Airtable <button data-close>✕</button></div>
+  <div class="dbody">
+    <p class="hint" style="margin-bottom:8px">Legt den kompletten Grundriss samt Fotos an einer Baustelle ab —
+      und lädt ihn auf einem anderen Gerät wieder ein. Der Plan landet als <code>aufmass.json</code> im Feld
+      <b>Aufmaß JSON</b>, jedes Foto einzeln im Feld <b>Aufmaß Fotos</b>.</p>
+    <div class="row"><label>Zugriffstoken</label><input id="clToken" type="password" placeholder="pat…" autocomplete="off"></div>
+    <div class="row"><label></label><label class="hint" style="display:flex;gap:5px;align-items:center"><input type="checkbox" id="clRemember"> Token auf diesem Gerät merken</label></div>
+    <div class="row"><label>Base-ID</label><input id="clBase" type="text" placeholder="app…"></div>
+    <div class="row">
+      <button class="btn primary" id="clLoadSites">Baustellen laden</button>
+      <button class="btn small" id="clForget" title="Gespeicherten Token von diesem Gerät löschen">Token löschen</button>
+    </div>
+    <div class="row" id="clModes" style="margin-top:4px">
+      <button class="btn" id="clModeLoad">📥 Projekt laden</button>
+      <button class="btn" id="clModeSave">📤 Projekt speichern</button>
+    </div>
+    <div class="row"><label>Suche</label><input id="clFilter" type="text" placeholder="Baustelle filtern …"></div>
+    <p class="hint" id="clStatus" style="white-space:pre-line"></p>
+    <div id="clList"></div>
+    <p class="hint" style="margin-top:10px">Der Token braucht die Scopes <code>data.records:read</code> <b>und</b>
+      <code>data.records:write</code> sowie Zugriff auf die Base. Er wird nur lokal gespeichert (nicht im Projekt-Backup).</p>
+  </div>
+  <div class="dfoot"><button class="btn" data-close>Schließen</button></div>
+</dialog>
+
 <!-- Hilfe -->
 <dialog id="dlgHelp">
   <div class="dhead">Hilfe <button data-close>✕</button></div>
@@ -363,7 +391,7 @@
       <li><b>Winkelkontrolle:</b> Ecken, die <b>keinen rechten Winkel</b> bilden, werden mit einem <b>roten Viertelkreis</b> und der Gradzahl markiert.</li>
       <li><b>Objekte:</b> In der Raumansicht unter „Objekte“ <b>▭ Fläche</b> oder <b>╱ Linie</b> wählen und im Raum aufziehen (z. B. Podest, Belagsfläche, Sockelleiste). Objekte sind anwählbar, verschiebbar und über Griffe oder Maßeingabe/Laser anpassbar; sie wandern beim Verschieben des Raums mit.</li>
       <li><b>Sanierungs-Symbole:</b> Unter „Objekte“ stehen <b>1-K</b>, <b>2-K</b>, <b>4-K</b> (Kammer-Schleusen, dargestellt als Rechteck mit Kammerteilung) und <b>RFA</b> bereit — Button wählen, dann Position im Raum anklicken. Symbole lassen sich verschieben, in 90°-Schritten drehen und in Breite/Tiefe anpassen.</li>
-      <li><b>Linien mit Knickpunkten:</b> Auf die Linie ziehen verschiebt sie als Ganzes. Eine <b>Ecke</b> anklicken wählt sie aus; links <b>„＋ Ecke einfügen“</b> setzt eine neue Ecke daneben, <b>„Ecke löschen“</b> entfernt sie wieder. Angezeigt und bemaßt wird immer die <b>Gesamtlänge</b>; die Längeneingabe skaliert die ganze Linie.</li>
+      <li><b>Linien mit Knickpunkten:</b> Auf die Linie ziehen verschiebt sie als Ganzes. Bei ausgewählter Linie teilt <b>„＋ Ecke einfügen“</b> den längsten Abschnitt; ist eine <b>Ecke</b> angeklickt, entsteht die neue daneben und <b>„Ecke löschen“</b> entfernt sie wieder. Angezeigt und bemaßt wird immer die <b>Gesamtlänge</b>; die Längeneingabe skaliert die ganze Linie.</li>
       <li><b>Anwählen, dann ziehen:</b> Ecken und Wände werden mit dem ersten Klick nur ausgewählt — die grün eingefärbte Zone zeigt, wo du zum Ziehen zufassen kannst. Klick ins Leere wählt wieder ab.</li>
       <li><b>Türen/Fenster:</b> Wand auswählen, dann „+ Tür“ / „+ Fenster“. Danach Tür/Fenster direkt im Plan <b>anklicken</b>: Ziehen verschiebt sie entlang der Wand, die weißen Endgriffe ändern die Breite, das Seitenpanel zeigt Maße und Abstand. Flächen werden automatisch von der Wandfläche abgezogen. Bei Türen lassen sich <b>Anschlag ⇄</b> (Angelpunkt links/rechts) und <b>Aufschlag ⇅</b> (Öffnungsrichtung in den Raum) umschalten — das Symbol zeigt Türblatt und Schwenkbogen.</li>
       <li><b>Türen in geteilten Wänden:</b> Liegen zwei Wände bündig aufeinander, wird eine Tür automatisch in beide Räume übernommen. Breite/Höhe ändern wirkt auf beide Seiten, Löschen entfernt sie ebenfalls beidseitig.</li>
@@ -373,6 +401,16 @@
       <li><b>CSV-Export</b> erzeugt eine Datei im magicplan-Format („… ITS Statistiken.csv“) mit den Blöcken <i>ATTRIBUTE DER RÄUME</i> und <i>Attribute des Objekts</i> — direkt kompatibel mit deiner Excel-Pipeline (<code>/magicplan-pipeline</code>).</li>
       <li><b>Drucken/PDF</b> erzeugt einen maßbeschrifteten Plan je Etage plus Raum- und LV-Tabellen (im Druckdialog „Als PDF speichern“).</li>
       <li><b>Backup</b> sichert alle Projekte als JSON-Datei (auch zum Übertragen aufs iPad).</li>
+    </ul>
+    <h3 style="margin-bottom:4px">Projekt ⇅ (Austausch über Airtable)</h3>
+    <ul style="padding-left:18px; margin-bottom:10px">
+      <li><b>Projekt speichern</b> legt den aktuellen Grundriss an einer Baustelle ab: der Plan als
+        <code>aufmass-JJJJ-MM-TT.json</code> im Feld <b>Aufmaß JSON</b>, jedes Foto einzeln im Feld
+        <b>Aufmaß Fotos</b>. Ein vorhandener Stand wird nach Rückfrage ersetzt.</li>
+      <li><b>Projekt laden</b> zeigt nur die Baustellen, an denen ein Aufmaß liegt — auswählen, und Plan
+        samt Fotos landen auf diesem Gerät. Ein gleichnamiges Projekt wird nach Rückfrage überschrieben.</li>
+      <li>So kommt das Aufmaß vom iPad an den Rechner (und zurück), ohne Datei-Hin-und-Her. Der Token
+        braucht dafür zusätzlich das Schreibrecht <code>data.records:write</code>.</li>
     </ul>
     <h3 style="margin-bottom:4px">iPhone / iPad</h3>
     <p>Safari unterstützt kein Bluetooth im Browser. Installiere die kostenlose Browser-App <b>„Bluefy“</b> aus dem App Store und öffne diese Datei dort (z. B. über OneDrive-Link) — dann funktioniert auch die Laser-Anbindung auf iOS.</p>
@@ -1877,9 +1915,16 @@ function eckeLoeschen(r, i){
   return true;
 }
 /* ---------- Linien: Ecken einfügen/löschen ---------- */
-// Neue Ecke zwischen der gewählten und der nächsten Ecke (bei der letzten: davor)
+// Neue Ecke: ohne Auswahl im längsten Segment, sonst neben der gewählten Ecke
 function eckeInLinieEinfuegen(g, k){
-  const i = k<g.points.length-1 ? k : k-1;
+  let i;
+  if(k==null){
+    i=0; let best=-1;
+    for(let j=0;j<g.points.length-1;j++){
+      const d=dist(g.points[j], g.points[j+1]);
+      if(d>best){ best=d; i=j; }
+    }
+  } else i = k<g.points.length-1 ? k : k-1;
   if(i<0) return null;
   const a=g.points[i], b=g.points[i+1];
   g.points.splice(i+1, 0, {x:mm((a.x+b.x)/2), y:mm((a.y+b.y)/2)});
@@ -1991,10 +2036,10 @@ function renderSidebar(){
           <div class="row"><label>Gesamtlänge (m)</label><input class="laser objdim" data-f="len" value="${fmt(L,3)}"></div>
           <div class="stat"><span>Punkte</span><b>${selObj.points.length}</b></div>
           <div class="row">
-            <button class="btn small" id="ptadd" ${sel.objH==null?'disabled title="Erst eine Ecke anklicken"':''}>＋ Ecke einfügen</button>
+            <button class="btn small" id="ptadd" title="Neue Ecke einfügen — im längsten Abschnitt bzw. neben der gewählten Ecke">＋ Ecke einfügen</button>
             <button class="btn small danger" id="ptdel" ${sel.objH==null?'disabled title="Erst eine Ecke anklicken"':''}>Ecke löschen</button>
           </div>
-          <p class="hint">${sel.objH!=null?`Ecke ${sel.objH+1} von ${selObj.points.length} ausgewählt — nochmal anfassen zum Ziehen. „＋ Ecke einfügen“ setzt eine neue Ecke zur nächsten hin.`:'Auf die Linie ziehen verschiebt sie. Ecke anklicken zum Auswählen.'}</p>
+          <p class="hint">${sel.objH!=null?`Ecke ${sel.objH+1} von ${selObj.points.length} ausgewählt — nochmal anfassen zum Ziehen. Die neue Ecke entsteht daneben.`:'Auf die Linie ziehen verschiebt sie. „＋ Ecke einfügen“ teilt den längsten Abschnitt; Ecke anklicken zum Auswählen.'}</p>
           ${btns}
           <p class="hint">Ziehen auf der Linie verschiebt sie. Ecken ziehen rastet auf 45°, die Längeneingabe skaliert die ganze Linie. Entf = Objekt löschen, Esc = abwählen.</p></div>`;
       }
@@ -2267,8 +2312,7 @@ function wireSidebar(r){
         sel.objId=null; save(); renderAll();
       });
       on('#objrot','onclick',()=>{ selObj.rot=((selObj.rot||0)+90)%360; save(); renderAll(); });
-      on('#ptadd','onclick',()=>{                         // neue Ecke neben der gewählten
-        if(sel.objH==null) return;
+      on('#ptadd','onclick',()=>{                         // neue Ecke — auch ohne gewählte Ecke
         const neu=eckeInLinieEinfuegen(selObj, sel.objH);
         if(neu!=null){ sel={...sel, objH:neu}; save(); renderAll(); }
       });
@@ -3025,6 +3069,279 @@ $('#atPasteOk').onclick=()=>{
   const res=importLvRows(rows);
   atStatus(`Übernommen: ${res.neu} neu, ${res.upd} aktualisiert (${res.gesamt} Zeilen).`);
 };
+
+/* ================= Projekt-Austausch über Airtable =================
+   Der Grundriss liegt als aufmass-JJJJ-MM-TT.json im Feld „Aufmaß JSON" der Baustelle,
+   jedes Foto einzeln als foto_<id>.jpg im Feld „Aufmaß Fotos". Die Foto-ID im Dateinamen
+   ordnet die Bilder beim Laden wieder ihren Räumen/Wänden/Objekten/LV-Positionen zu.
+   So bleibt die JSON-Datei klein und die Fotos sind in Airtable einzeln sichtbar. */
+const AT_F_JSON='Aufmaß JSON';        // Feldnamen — zum Lesen der Datensätze
+const AT_F_FOTOS='Aufmaß Fotos';
+// Der Upload-Endpunkt nimmt die Feld-ID zuverlässiger als den Namen (der Umlaut steckt im
+// URL-Pfad). Läuft die App gegen eine andere Base, greift der Name als Rückfallebene.
+const AT_FID_JSON='fldNQYYSScwqhV3uv';
+const AT_FID_FOTOS='fldIkF374JaY9YOqV';
+const AT_MAXBYTES=4.7*1024*1024;      // Airtable nimmt max. 5 MB je Datei
+const dlgCloud=$('#dlgCloud');
+let clSites=null;                     // [{id, name, json:Anhang|null, fotos:[Anhang]}]
+let clMode='load';                    // load | save
+let clBusy=false;
+
+/* Alle Foto-Arrays eines Projekts: Raum, Wand, Objekt, Tür/Fenster, LV-Position */
+function fotoListen(p){
+  const out=[];
+  (p.rooms||[]).forEach(r=>{
+    if(r.fotos) out.push(r.fotos);
+    Object.values(r.wallFotos||{}).forEach(l=>{ if(Array.isArray(l)) out.push(l); });
+    (r.objects||[]).forEach(g=>{ if(g.fotos) out.push(g.fotos); });
+    (r.openings||[]).forEach(o=>{ if(o.fotos) out.push(o.fotos); });
+  });
+  (p.attrs||[]).forEach(a=>{ if(a.fotos) out.push(a.fotos); });
+  return out;
+}
+const alleFotos = p => fotoListen(p).reduce((a,l)=>a.concat(l), []);
+
+function b64VonText(s){                              // UTF-8-sicher, auch bei großen Dateien
+  const by=new TextEncoder().encode(s);
+  let bin='';
+  for(let i=0;i<by.length;i+=0x8000) bin+=String.fromCharCode.apply(null, by.subarray(i, i+0x8000));
+  return btoa(bin);
+}
+const blobZuDataUrl = b => new Promise((res,rej)=>{
+  const r=new FileReader();
+  r.onload=()=>res(r.result);
+  r.onerror=()=>rej(new Error('Bilddatei nicht lesbar'));
+  r.readAsDataURL(b);
+});
+
+const clTok = () => $('#clToken').value.trim();
+const clBas = () => $('#clBase').value.trim()||AT_BASE_DEFAULT;
+function clStatus(msg, err){
+  const el=$('#clStatus'); if(!el) return;
+  el.textContent=msg||'';
+  el.style.color=err?'var(--danger)':'var(--muted)';
+}
+const clFehler = err => /failed to fetch|networkerror|load failed/i.test(err.message)
+  ? 'Verbindung zu Airtable fehlgeschlagen — offline, oder der Browser blockiert die Anfrage.'
+  : err.message;
+
+async function atPatch(base, recId, token, fields){
+  const res=await fetch(`https://api.airtable.com/v0/${base}/${encodeURIComponent(recId)}`, {
+    method:'PATCH', headers:{Authorization:'Bearer '+token, 'Content-Type':'application/json'},
+    body:JSON.stringify({fields})});
+  if(!res.ok){
+    const t=await res.text().catch(()=>'');
+    const err=new Error(`Airtable ${res.status}${res.status===403
+      ? ' — der Token darf an dieser Base nicht schreiben. Fehlt der Scope „data.records:write"?' : ''}\n${t.slice(0,180)}`);
+    err.status=res.status;
+    throw err;
+  }
+  return res.json();
+}
+async function atUpload(base, recId, feld, token, datei){
+  const url=`https://content.airtable.com/v0/${base}/${encodeURIComponent(recId)}/${encodeURIComponent(feld)}/uploadAttachment`;
+  const res=await fetch(url, {method:'POST', headers:{Authorization:'Bearer '+token, 'Content-Type':'application/json'},
+    body:JSON.stringify({contentType:datei.typ, filename:datei.name, file:datei.b64})});
+  if(!res.ok){
+    const t=await res.text().catch(()=>'');
+    const err=new Error(`„${datei.name}" konnte nicht hochgeladen werden (${res.status})\n${t.slice(0,180)}`);
+    err.status=res.status;
+    throw err;
+  }
+  return res.json();
+}
+// Erst über die Feld-ID, bei 403/404 einmal über den Feldnamen — welcher Weg trägt,
+// merkt sich atFeldWeg für den Rest des Vorgangs (sonst 2 Fehlversuche je Foto).
+let atFeldWeg=null;                   // null = unbekannt, 'id' | 'name'
+async function atUploadFeld(base, recId, token, feldId, feldName, datei){
+  if(atFeldWeg==='name') return atUpload(base, recId, feldName, token, datei);
+  try{
+    const r=await atUpload(base, recId, feldId, token, datei);
+    atFeldWeg='id';
+    return r;
+  }catch(err){
+    if(atFeldWeg==='id' || (err.status!==403 && err.status!==404)) throw err;
+    const r=await atUpload(base, recId, feldName, token, datei);   // Fehler hier fliegt durch
+    atFeldWeg='name';
+    return r;
+  }
+}
+
+async function clLadeBaustellen(){
+  const token=clTok(), base=clBas();
+  if(!token){ clStatus('Bitte zuerst einen Zugriffstoken eintragen.', true); return; }
+  try{
+    clBusy=true; renderClList(); clStatus('Lade Baustellen …');
+    const recs=await atAll(base, AT_T_SITES, token, ['Title', AT_F_JSON, AT_F_FOTOS],
+      n=>clStatus(`Lade Baustellen … ${n}`));
+    clSites=recs.map(r=>{
+      const f=r.fields||{};
+      return {id:r.id, name:String(f.Title||'(ohne Titel)').trim()||'(ohne Titel)',
+        json:(f[AT_F_JSON]||[])[0]||null, fotos:f[AT_F_FOTOS]||[]};
+    }).sort((a,b)=>a.name.localeCompare(b.name,'de'));
+    if($('#clRemember').checked){ localStorage.setItem(AT_TOKEN_KEY, token); localStorage.setItem(AT_BASE_KEY, base); }
+    const mit=clSites.filter(s=>s.json).length;
+    clStatus(`${clSites.length} Baustellen — ${mit} mit gespeichertem Aufmaß.`);
+  }catch(err){
+    clSites=null;
+    clStatus(clFehler(err), true);
+  }finally{ clBusy=false; renderClList(); }
+}
+// Speicherdatum steckt im Dateinamen (aufmass-2026-07-31.json) — dann muss die Liste nichts laden
+function clStand(s){
+  const m=/(\d{4})-(\d{2})-(\d{2})/.exec((s.json&&s.json.filename)||'');
+  return m?`${m[3]}.${m[2]}.${m[1]}`:'';
+}
+function renderClList(){
+  const el=$('#clList'); if(!el) return;
+  $('#clModeLoad').classList.toggle('primary', clMode==='load');
+  $('#clModeSave').classList.toggle('primary', clMode==='save');
+  if(!clSites){ el.innerHTML=''; return; }
+  const f=($('#clFilter').value||'').trim().toLowerCase();
+  const liste=clSites.filter(s=>(!f || s.name.toLowerCase().includes(f)) && (clMode==='save' || s.json));
+  if(!liste.length){
+    el.innerHTML=`<p class="hint" style="margin-top:8px">${clMode==='load'
+      ? 'Keine Baustelle mit gespeichertem Aufmaß gefunden.'
+      : 'Keine Baustelle gefunden.'}</p>`;
+    return;
+  }
+  el.innerHTML=`<div class="panel" style="margin-top:8px;max-height:260px;overflow:auto">
+    ${liste.map(s=>{
+      const stand=clStand(s);
+      const info=s.json
+        ? `Aufmaß${stand?' vom '+stand:''} · ${s.fotos.length} Foto(s)`
+        : 'noch kein Aufmaß';
+      return `<div class="stat" style="align-items:center">
+        <span>${esc(s.name)} <span class="hint">· ${info}</span></span>
+        <button class="btn small ${clMode==='save'?'':'primary'}" data-clrec="${s.id}" ${clBusy?'disabled':''}>${
+          clMode==='load' ? 'Laden' : (s.json?'Ersetzen':'Speichern')}</button>
+      </div>`;
+    }).join('')}
+  </div>`;
+  el.querySelectorAll('[data-clrec]').forEach(b=>{
+    b.onclick=()=>{
+      const s=clSites.find(x=>x.id===b.dataset.clrec);
+      if(s) (clMode==='load'?cloudLaden:cloudSpeichern)(s);
+    };
+  });
+}
+
+/* Speichern: alten Stand am Datensatz entfernen, dann Plan und Fotos einzeln hochladen */
+async function cloudSpeichern(s){
+  if(clBusy) return;
+  const token=clTok(), base=clBas(), p=proj();
+  const fotos=alleFotos(p).filter(f=>f && typeof f.src==='string' && f.src.startsWith('data:'));
+  if(s.json && !confirm(`Bei „${s.name}" liegt bereits ein Aufmaß${clStand(s)?' vom '+clStand(s):''} `+
+    `(${s.fotos.length} Fotos).\n\nEs wird durch „${p.name}" ersetzt. Fortfahren?`)) return;
+  clBusy=true; renderClList();
+  let darfSchreiben=false;
+  try{
+    const klon=JSON.parse(JSON.stringify(p));
+    alleFotos(klon).forEach(f=>{ f.src=''; });          // Bilddaten gehen als Anhänge mit
+    const b64=b64VonText(JSON.stringify({app:'grundriss-aufmass', version:1,
+      gespeichert:new Date().toISOString(), baustelle:s.name, fotos:fotos.length, projekt:klon}));
+    if(b64.length*0.75>AT_MAXBYTES) throw new Error('Die Projektdatei ist größer als 5 MB — Airtable nimmt sie nicht an.');
+    // Der PATCH läuft immer — er räumt den alten Stand weg und beweist nebenbei,
+    // dass der Token schreiben darf. Scheitert danach der Upload, liegt es am Feld.
+    clStatus(s.json||s.fotos.length ? 'Alten Stand entfernen …' : 'Schreibzugriff prüfen …');
+    await atPatch(base, s.id, token, {[AT_F_JSON]:[], [AT_F_FOTOS]:[]});
+    darfSchreiben=true;
+    clStatus('Projektdatei hochladen …');
+    await atUploadFeld(base, s.id, token, AT_FID_JSON, AT_F_JSON,
+      {name:`aufmass-${new Date().toISOString().slice(0,10)}.json`, typ:'application/json', b64});
+    for(let i=0;i<fotos.length;i++){
+      clStatus(`Foto ${i+1} von ${fotos.length} hochladen …`);
+      const src=fotos[i].src, komma=src.indexOf(',');
+      const typ=(/^data:([^;,]+)/.exec(src)||[,'image/jpeg'])[1];
+      const ext=typ.split('/')[1].replace('jpeg','jpg').replace(/[^a-z0-9]/g,'')||'jpg';
+      const roh=src.slice(komma+1);
+      if(roh.length*0.75>AT_MAXBYTES){ clStatus(`Foto ${i+1} ist zu groß und wird übersprungen …`); continue; }
+      await atUploadFeld(base, s.id, token, AT_FID_FOTOS, AT_F_FOTOS, {name:`foto_${fotos[i].id}.${ext}`, typ, b64:roh});
+    }
+    const fertig=`„${p.name}" bei „${s.name}" gespeichert — Plan + ${fotos.length} Foto(s).`;
+    clStatus(fertig);
+    clBusy=false;
+    await clLadeBaustellen();                            // Liste zeigt danach den neuen Stand
+    if(clSites) clStatus(fertig);                        // Erfolgsmeldung nicht überschreiben
+  }catch(err){
+    // Schreiben ging, Hochladen nicht → nicht der Token, sondern das Anhangfeld
+    clStatus(darfSchreiben && (err.status===403||err.status===404)
+      ? `${err.message}\n\nDer Token darf an dieser Baustelle schreiben — Airtable findet aber das Anhangfeld nicht. `+
+        `Heißen die Felder in „Baustellen" noch „${AT_F_JSON}" und „${AT_F_FOTOS}"?`
+      : clFehler(err), true);
+  }finally{ clBusy=false; renderClList(); }
+}
+
+/* Laden: Projektdatei holen, Fotos anhand der ID im Dateinamen wieder einhängen */
+async function cloudLaden(s){
+  if(clBusy || !s.json) return;
+  clBusy=true; renderClList();
+  try{
+    clStatus('Lade Projektdatei …');
+    const r=await fetch(s.json.url);
+    if(!r.ok) throw new Error('Projektdatei nicht abrufbar ('+r.status+') — Liste neu laden und noch einmal versuchen.');
+    const d=await r.json();
+    const p=d.projekt||d;
+    if(!p || !Array.isArray(p.rooms) || !Array.isArray(p.floors))
+      throw new Error('Die Datei enthält kein gültiges Projekt.');
+    if(!p.floors.length) p.floors=[{id:uid(), name:'Erdgeschoss'}];
+    const alt=db.projects.findIndex(x=>x.id===p.id);
+    if(!confirm(alt>=0
+      ? `Projekt „${p.name}" ist auf diesem Gerät vorhanden und wird komplett ersetzt.\n\nFortfahren?`
+      : `Projekt „${p.name}" laden? (${p.rooms.length} Räume, ${s.fotos.length} Fotos)`)){
+      clStatus('Abgebrochen.'); return;
+    }
+    const byId={};
+    s.fotos.forEach(a=>{
+      const m=/^foto[_-](.+?)\.[a-z0-9]+$/i.exec(a.filename||'');
+      if(m) byId[m[1]]=a;
+    });
+    const ziele=alleFotos(p);
+    let ok=0;
+    for(let i=0;i<ziele.length;i++){
+      clStatus(`Lade Fotos … ${i+1} von ${ziele.length}`);
+      const a=byId[ziele[i].id];
+      if(!a) continue;
+      try{
+        const bild=await fetch(a.url);
+        if(bild.ok){ ziele[i].src=await blobZuDataUrl(await bild.blob()); ok++; }
+      }catch(e){ /* einzelnes Foto fehlt — der Rest wird trotzdem geladen */ }
+    }
+    fotoListen(p).forEach(l=>{                            // Fotos ohne Bilddaten nicht mitschleppen
+      const rein=l.filter(f=>f.src);
+      if(rein.length!==l.length) l.splice(0, l.length, ...rein);
+    });
+    if(alt>=0) db.projects[alt]=p; else db.projects.push(p);
+    db.activeProjectId=p.id;
+    assignLvColors(p); syncLvTexts(p);
+    save();
+    activeFloorId=p.floors[0].id; focusRoomId=null; sel={roomId:null, wall:null, vertex:null};
+    renderAll(); zoomFit();
+    clStatus(`„${p.name}" geladen — ${p.rooms.length} Räume, ${ok} von ${ziele.length} Foto(s).`);
+  }catch(err){
+    clStatus(clFehler(err), true);
+  }finally{ clBusy=false; renderClList(); }
+}
+
+$('#cloudbtn').onclick=()=>{
+  const tok=localStorage.getItem(AT_TOKEN_KEY)||'';
+  $('#clToken').value=tok;
+  $('#clRemember').checked=!!tok;
+  $('#clBase').value=localStorage.getItem(AT_BASE_KEY)||AT_BASE_DEFAULT;
+  clSites=null; clMode='load'; clBusy=false; $('#clFilter').value='';
+  renderClList(); clStatus('');
+  dlgCloud.showModal();
+  if(tok) clLadeBaustellen();                             // Token da → Liste gleich holen
+};
+$('#clLoadSites').onclick=clLadeBaustellen;
+$('#clForget').onclick=()=>{
+  localStorage.removeItem(AT_TOKEN_KEY);
+  $('#clToken').value=''; $('#clRemember').checked=false;
+  clStatus('Gespeicherter Token gelöscht.');
+};
+$('#clModeLoad').onclick=()=>{ clMode='load'; renderClList(); };
+$('#clModeSave').onclick=()=>{ clMode='save'; renderClList(); };
+$('#clFilter').oninput=renderClList;
 
 /* ================= Bluetooth ================= */
 const LEICA_SVC='3ab10100-f831-4395-b29d-570977d5bf94';
