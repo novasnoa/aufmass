@@ -4297,35 +4297,35 @@ function btDisconnect(){
   try{ if(bt.device&&bt.device.gatt.connected) bt.device.gatt.disconnect(); }catch(e){}
   setBtStatus(false,'getrennt');
 }
-/* Bosch schickt je Messung mehrere Werte, und vor der Entfernung steht eine
-   fortlaufende Zählzahl. Deshalb werden bei Bosch alle Werte eines Schubs gesammelt
-   und erst am Ende der letzte übernommen — die Zählzahl fällt damit weg.
-   Leica meldet nur den Messwert, dort bleibt es bei der einfachen Doppelsperre. */
-let btSchub=null;
+/* Bosch schickt vor der Entfernung eine fortlaufende Zählzahl.
+   Erkennungsmerkmal ohne Zwischenspeichern: Eine Zählzahl ist eine ganze Zahl, die
+   die vorige um genau 1 erhöht. Alles andere — jeder Wert mit Nachkommastellen —
+   geht unverzüglich durch. Dieses Verfahren kann also nie den Messwert verschlucken.
+   (Ein Sammelfenster hatte ich versucht; bei einem Gerät, das laufend sendet, kam
+   damit gar nichts mehr an.) */
+let letzteZaehlzahl=null;
 function handleMeasurement(m, src){
   m=Math.round(m*1000)/1000;
+  let vielleichtZaehler=false;
   if(src==='Bosch'){
-    // Fenster beim ERSTEN Wert öffnen und fest ablaufen lassen. Würde es bei jedem
-    // weiteren Wert neu gestartet, käme bei einem Gerät, das laufend sendet, nie
-    // etwas an.
-    if(!btSchub){
-      btSchub={werte:[]};
-      btSchub.timer=setTimeout(()=>{
-        const w=(btSchub&&btSchub.werte)||[]; btSchub=null;
-        if(!w.length) return;
-        const genommen=w[w.length-1];
-        btLog(w.length>1
-          ? `Schub (${w.length} Werte): ${w.map(fmt3).join(' · ')} → übernommen ${fmt3(genommen)} m`
-          : `Messwert (Bosch): ${fmt3(genommen)} m`);
-        messwertUebernehmen(genommen);
-      }, 220);
+    const ganz = Math.abs(m-Math.round(m))<1e-9;
+    if(ganz && m>=1 && m<=9999){
+      if(letzteZaehlzahl!=null && Math.round(m)===letzteZaehlzahl+1){
+        letzteZaehlzahl=Math.round(m);          // Kette bestätigt → sicher die Zählzahl
+        btLog(`Zählzahl ${letzteZaehlzahl} übersprungen`);
+        return;
+      }
+      letzteZaehlzahl=Math.round(m);
+      vielleichtZaehler=true;                   // erste ganze Zahl: durchlassen, aber nicht sperren
     }
-    btSchub.werte.push(m);
-    return;
+    // Die Kette NICHT bei Messwerten zurücksetzen — zwischen zwei Zählzahlen liegt ja
+    // immer eine Entfernung. Sonst wäre jede Zählzahl wieder „die erste".
   }
   const now=Date.now();
-  if(now-bt.lastAt<250) return;   // Doppel-Notifications ausfiltern
-  bt.lastAt=now;
+  if(!vielleichtZaehler){
+    if(now-bt.lastAt<250) return;               // Doppel-Notifications ausfiltern
+    bt.lastAt=now;                              // eine mögliche Zählzahl sperrt NICHT,
+  }                                             // damit die Entfernung sie gleich ersetzt
   btLog(`Messwert (${src}): ${fmt3(m)} m`);
   messwertUebernehmen(m);
 }
@@ -4333,7 +4333,14 @@ function messwertUebernehmen(m){
   const bv=$('#btvalue'); if(bv) bv.textContent=fmt3(m)+' m';
   if(mode==='draw' && draft.points.length && draft.dir){ addSegment(m); return; }
   const ae=document.activeElement;
-  const target=(ae && ae.matches && ae.matches('input.laser')) ? ae : lastLaserInput;
+  let target=(ae && ae.matches && ae.matches('input.laser')) ? ae : lastLaserInput;
+  // Nach dem Eintragen baut die Seitenleiste neu auf — das gemerkte Feld ist dann ein
+  // totes Element. Über seine ID holen wir das frische zurück, sonst ginge jeder
+  // unmittelbar folgende Messwert (bei Bosch die eigentliche Entfernung) verloren.
+  if(target && !document.body.contains(target) && target.id){
+    const frisch=document.getElementById(target.id);
+    if(frisch && frisch.matches('input.laser')){ target=frisch; lastLaserInput=frisch; }
+  }
   if(target && document.body.contains(target)){
     target.value=fmt3(m);
     target.dispatchEvent(new Event('change'));
