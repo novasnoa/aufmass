@@ -4305,17 +4305,22 @@ let btSchub=null;
 function handleMeasurement(m, src){
   m=Math.round(m*1000)/1000;
   if(src==='Bosch'){
-    if(!btSchub) btSchub={werte:[], timer:null};
+    // Fenster beim ERSTEN Wert öffnen und fest ablaufen lassen. Würde es bei jedem
+    // weiteren Wert neu gestartet, käme bei einem Gerät, das laufend sendet, nie
+    // etwas an.
+    if(!btSchub){
+      btSchub={werte:[]};
+      btSchub.timer=setTimeout(()=>{
+        const w=(btSchub&&btSchub.werte)||[]; btSchub=null;
+        if(!w.length) return;
+        const genommen=w[w.length-1];
+        btLog(w.length>1
+          ? `Schub (${w.length} Werte): ${w.map(fmt3).join(' · ')} → übernommen ${fmt3(genommen)} m`
+          : `Messwert (Bosch): ${fmt3(genommen)} m`);
+        messwertUebernehmen(genommen);
+      }, 220);
+    }
     btSchub.werte.push(m);
-    clearTimeout(btSchub.timer);
-    btSchub.timer=setTimeout(()=>{
-      const w=btSchub.werte; btSchub=null;
-      const genommen=w[w.length-1];
-      btLog(w.length>1
-        ? `Schub (${w.length} Werte): ${w.map(fmt3).join(' · ')} → übernommen ${fmt3(genommen)} m`
-        : `Messwert (Bosch): ${fmt3(genommen)} m`);
-      messwertUebernehmen(genommen);
-    }, 220);
     return;
   }
   const now=Date.now();
