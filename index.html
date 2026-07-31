@@ -1,0 +1,3308 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Grundriss &amp; Aufmaß</title>
+<style>
+  :root{
+    --bg:#f4f5f7; --panel:#ffffff; --ink:#1c2330; --muted:#6b7484;
+    --accent:#2f6fed; --accent2:#0ea06f; --danger:#d64545; --line:#dfe3ea;
+    --canvas:#fafbfc;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--ink); background:var(--bg); overflow:hidden;}
+  button{font:inherit; cursor:pointer;}
+  input,select,textarea{font:inherit;}
+
+  #topbar{display:flex; align-items:center; gap:8px; padding:8px 12px; background:#1c2330; color:#fff; height:52px;}
+  #topbar .logo{font-weight:700; letter-spacing:.3px; margin-right:6px; white-space:nowrap;}
+  #topbar select{background:#2a3345; color:#fff; border:1px solid #3a465e; border-radius:6px; padding:5px 8px; max-width:180px;}
+  .tabs{display:flex; gap:4px; margin-left:8px;}
+  .tabs button{background:transparent; color:#aab4c8; border:none; padding:7px 12px; border-radius:6px;}
+  .tabs button.active{background:#2f6fed; color:#fff;}
+  #topbar .spacer{flex:1;}
+  .tb{background:#2a3345; color:#fff; border:1px solid #3a465e; border-radius:6px; padding:6px 10px; white-space:nowrap;}
+  .tb:hover{background:#374460;}
+  #btchip{display:flex; align-items:center; gap:6px; background:#2a3345; border-radius:14px; padding:4px 10px; font-size:12px; color:#aab4c8;}
+  #btchip .dot{width:9px; height:9px; border-radius:50%; background:#77808f;}
+  #btchip.on .dot{background:#2fd08a;}
+  #btchip.on{color:#c9f3df;}
+
+  #layout{display:flex; height:calc(100% - 52px);}
+  #sidebar{width:308px; min-width:308px; background:var(--panel); border-right:1px solid var(--line); overflow-y:auto; padding:10px;}
+  .panel{border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:10px; background:#fff;}
+  .panel h3{font-size:12px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin-bottom:8px;}
+  .row{display:flex; gap:6px; align-items:center; margin-bottom:6px; flex-wrap:wrap;}
+  .row label{font-size:12px; color:var(--muted); min-width:86px;}
+  .row input[type=text],.row input[type=search],.row input:not([type]),.row select,.row textarea{flex:1; min-width:60px; border:1px solid var(--line); border-radius:6px; padding:5px 7px;}
+  .row textarea{resize:vertical; line-height:1.35; overflow:hidden;}
+  input.laser{border:1px solid var(--line); border-radius:6px; padding:5px 7px; width:84px; text-align:right;}
+  input.laser:focus{outline:2px solid var(--accent2); border-color:var(--accent2); background:#f0fbf7;}
+  .hint{font-size:11px; color:var(--muted);}
+  .btn{border:1px solid var(--line); background:#f6f7f9; border-radius:7px; padding:6px 10px;}
+  .btn:hover{background:#eceef2;}
+  .btn.primary{background:var(--accent); border-color:var(--accent); color:#fff;}
+  .btn.green{background:var(--accent2); border-color:var(--accent2); color:#fff;}
+  .btn.danger{background:#fff; border-color:#f0c4c4; color:var(--danger);}
+  .btn.small{padding:3px 8px; font-size:12px;}
+  .btn.active{outline:2px solid var(--accent);}
+  .stat{display:flex; justify-content:space-between; font-size:13px; padding:2px 0;}
+  .stat b{font-variant-numeric:tabular-nums;}
+  .biglaser{font-size:26px; font-weight:700; text-align:center; padding:4px 0; font-variant-numeric:tabular-nums;}
+  #btlog{max-height:130px; overflow:auto; font:11px/1.5 ui-monospace,Consolas,monospace; background:#f6f7f9; border-radius:6px; padding:6px; white-space:pre-wrap; word-break:break-all;}
+
+  #main{flex:1; position:relative; background:var(--canvas);}
+  #canvas{width:100%; height:100%; display:block; touch-action:none; cursor:default;}
+  #canvas.draw{cursor:crosshair;}
+  #zoombar{position:absolute; right:14px; bottom:14px; display:flex; flex-direction:column; gap:6px;}
+  #zoombar button{width:38px; height:38px; border-radius:8px; border:1px solid var(--line); background:#fff; font-size:17px; box-shadow:0 1px 4px rgba(0,0,0,.08);}
+  #crumb{position:absolute; left:14px; top:12px; display:flex; align-items:center; gap:8px;
+    background:#fff; border:1px solid var(--line); border-radius:8px; padding:6px 12px;
+    box-shadow:0 1px 4px rgba(0,0,0,.08); font-size:13px;}
+  #crumb b{color:var(--accent);}
+  #crumb button{border:1px solid var(--line); background:#f6f7f9; border-radius:6px; padding:3px 10px; font-size:12px;}
+  #crumb button:hover{background:#eceef2;}
+  #drawhint{position:absolute; left:50%; transform:translateX(-50%); top:12px; background:#1c2330; color:#fff; padding:7px 14px; border-radius:8px; font-size:13px; display:none; box-shadow:0 2px 8px rgba(0,0,0,.2); text-align:center;}
+  #drawhint b{color:#8fe3bd;}
+
+  /* LV-Ansicht */
+  #lvview{flex:1; overflow:auto; padding:14px; display:none;}
+  #lvview table{border-collapse:collapse; width:100%; background:#fff; border:1px solid var(--line); border-radius:8px;}
+  #lvview th,#lvview td{border-bottom:1px solid var(--line); padding:6px 9px; text-align:left; font-size:13px; white-space:nowrap;}
+  #lvview th{background:#f0f2f5; position:sticky; top:0; font-size:12px;}
+  #lvview td.num{text-align:right; font-variant-numeric:tabular-nums;}
+  #lvview tr:hover td{background:#f6f9ff;}
+
+  dialog{border:none; border-radius:12px; padding:0; max-width:min(560px,94vw); width:520px; box-shadow:0 10px 40px rgba(0,0,0,.25);}
+  dialog::backdrop{background:rgba(20,25,35,.45);}
+  dialog .dhead{padding:12px 16px; background:#1c2330; color:#fff; font-weight:600; display:flex; justify-content:space-between;}
+  dialog .dhead button{background:none; border:none; color:#aab4c8; font-size:18px;}
+  dialog .dbody{padding:14px 16px; max-height:70vh; overflow:auto;}
+  dialog .dfoot{padding:10px 16px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:8px;}
+  /* Vorschlagsliste für LV-Nummer / Kurztext */
+  .sugwrap{position:relative; flex:1; display:flex; min-width:60px;}
+  .sugbox{position:absolute; left:0; right:0; top:calc(100% + 2px); z-index:9; background:#fff;
+    border:1px solid var(--line); border-radius:7px; box-shadow:0 6px 18px rgba(0,0,0,.14);
+    max-height:200px; overflow:auto; display:none;}
+  .sugbox.on{display:block;}
+  .sugbox .it{display:flex; gap:10px; justify-content:space-between; align-items:flex-start;
+    padding:5px 9px; font-size:13px; line-height:1.35; cursor:pointer;}
+  .sugbox .it.sel, .sugbox .it:hover{background:#eaf1ff;}
+  .sugbox .it span{color:var(--muted);}
+  /* LV-Nummer bleibt einzeilig, Kurztext bricht mehrzeilig um statt abgeschnitten zu werden */
+  .sugbox .it .num{white-space:nowrap; flex:0 0 auto; font-variant-numeric:tabular-nums;}
+  .sugbox .it .txt{white-space:normal; overflow-wrap:anywhere; min-width:0;}
+  .sugbox .empty{padding:6px 9px; font-size:12px; color:var(--muted);}
+  /* Langtext-Einblendung beim Verweilen auf einem Vorschlag */
+  #lvtip{position:fixed; z-index:60; display:none; max-width:min(430px,62vw); max-height:52vh; overflow:hidden;
+    background:#1c2330; color:#fff; border-radius:9px; padding:9px 11px; font-size:12px; line-height:1.5;
+    white-space:pre-wrap; box-shadow:0 10px 30px rgba(0,0,0,.35); pointer-events:none;}
+  #lvtip.on{display:block;}
+  #lvtip b{display:block; margin-bottom:4px; color:#8fe3bd; font-variant-numeric:tabular-nums;}
+  /* Fotos an einer LV-Position */
+  .fotos{display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;}
+  .fotos .fw{position:relative; width:74px; height:74px; border-radius:8px; overflow:hidden;
+    border:1px solid var(--line); background:#f2f4f7;}
+  .fotos .fw img{width:100%; height:100%; object-fit:cover; display:block; cursor:zoom-in;}
+  .fotos .fw button{position:absolute; top:2px; right:2px; width:19px; height:19px; line-height:1;
+    border:none; border-radius:50%; background:rgba(20,25,35,.68); color:#fff; font-size:12px; padding:0;}
+  .fotos .fw button:hover{background:var(--danger);}
+  .fotos.small{gap:6px;}
+  .fotos.small .fw{width:58px; height:58px;}
+  #dlgFotoView{width:auto; max-width:96vw;}
+  #dlgFotoView img{max-width:92vw; max-height:80vh; display:block; border-radius:8px;}
+  /* LV-Katalog editieren */
+  .lvrow{display:grid; grid-template-columns:22px 118px 1fr 44px; gap:8px; align-items:center;
+    padding:4px 0; border-bottom:1px solid var(--line);}
+  .lvrow.off{opacity:.45;}
+  .lvrow b{font-variant-numeric:tabular-nums; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .lvrow input[type=text]{width:100%; border:1px solid var(--line); border-radius:6px; padding:4px 6px;}
+  .lvrow .use{font-size:11px; color:var(--muted); text-align:right;}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:6px 14px;}
+  .checks{display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin:4px 0;}
+  .checks label{font-size:13px; display:flex; gap:5px; align-items:center;}
+  fieldset{border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin:8px 0;}
+  legend{font-size:12px; color:var(--muted); padding:0 4px;}
+
+  /* ---------- Druck / PDF: A4 mit Kopf- und Fußzeile ---------- */
+  #printarea{display:none;}
+  @page{ size:A4 portrait; margin:0; }
+  .psheet{position:relative; width:210mm; height:297mm; overflow:hidden;
+    page-break-after:always; break-after:page; background:#fff;
+    font:9pt/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color:#1c2330;
+    /* sonst druckt Chrome die beigen Bänder nicht mit */
+    -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+  .psheet:last-child{page-break-after:auto; break-after:auto;}
+  .phead{position:absolute; left:0; right:0; top:0; height:17mm;}
+  .phead .band{position:absolute; left:0; top:5mm; height:10mm; right:52mm; background:#dfccaf;}
+  .phead img{position:absolute; right:10mm; top:2mm; height:13mm;}
+  .pfoot{position:absolute; left:0; right:0; bottom:0; height:14mm; background:#dfccaf;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 12mm; color:#5d5d5b; font-size:9pt;}
+  .pbody{position:absolute; left:12mm; right:12mm; top:20mm; bottom:17mm;}
+  .ptitle{font-size:11pt; font-weight:700; margin-bottom:1mm;}
+  .ptitle small{display:block; font-size:9pt; font-weight:400; color:#555; margin-top:0.5mm;}
+  .pstats{font-size:9pt; color:#6b6b6b; text-align:right; letter-spacing:.2px;}
+  .phead2{font-size:11pt; font-weight:700; margin-bottom:1.5mm;}
+  .pcols{display:flex; gap:6mm; align-items:flex-start;}
+  .psheet svg{width:100%; height:auto; display:block;}
+  .psheet table{border-collapse:collapse; width:100%; font-size:9pt;}
+  .psheet th,.psheet td{border-bottom:1px solid #d8d8d8; padding:1.1mm 1.4mm; text-align:left;}
+  .psheet th{background:#f0ece4; border-bottom:1px solid #b9ac93;}
+  .psheet td.num,.psheet th.num{text-align:right; font-variant-numeric:tabular-nums;}
+  .pfotos{display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:5mm; height:100%;}
+  .pfoto{border:1px solid #e2e2e0; overflow:hidden; background:#fff;
+    display:flex; flex-direction:column;}
+  .pfoto .tag{flex:0 0 auto; background:#f2f2f0; border-bottom:1px solid #e2e2e0;
+    color:#44443f; font-size:9pt; padding:1.1mm 2.4mm;
+    display:flex; align-items:center; gap:1.6mm; white-space:nowrap; overflow:hidden;}
+  .pfoto .tag i{color:#a9a9a2; font-style:normal;}
+  .pfoto .tag em{font-style:normal; color:#8a8a83;}
+  .pfoto .bild{flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:1.5mm;}
+  .pfoto .bild img{max-width:100%; max-height:100%; object-fit:contain;}
+  /* Maßverweise unter dem Plan, wenn die Zahl nicht an die Wand passt */
+  .prefs{display:flex; flex-wrap:wrap; gap:1.5mm 5mm; font-size:9pt; color:#333; margin-top:1.5mm;}
+  .prefs b{font-weight:600;}
+  @media print{
+    html,body{overflow:visible; background:#fff; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+    #topbar,#layout,#lvview,#drawhint{display:none !important;}
+    #printarea{display:block;}
+    .psheet{box-shadow:none;}
+  }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <span class="logo">📐 Grundriss &amp; Aufmaß</span>
+  <select id="projsel" title="Projekt"></select>
+  <button class="tb" id="projnew" title="Neues Projekt">＋</button>
+  <div class="tabs">
+    <button id="tabplan" class="active">Plan</button>
+    <button id="tablv">LV-Positionen</button>
+  </div>
+  <div class="spacer"></div>
+  <div id="btchip"><span class="dot"></span><span id="btchiptext">Laser: getrennt</span></div>
+  <button class="tb" id="lvimport" title="LV-Positionen aus Airtable importieren">LV-Import</button>
+  <button class="tb" id="exportcsv" title="CSV im magicplan-Format exportieren">CSV-Export</button>
+  <button class="tb" id="printbtn">Drucken / PDF</button>
+  <button class="tb" id="backupbtn" title="Projektdaten als JSON sichern/laden">Backup</button>
+  <button class="tb" id="helpbtn">?</button>
+</div>
+
+<div id="layout">
+  <aside id="sidebar"></aside>
+  <div id="main">
+    <svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div id="crumb"></div>
+    <div id="zoombar">
+      <button id="zin" title="Vergrößern">＋</button>
+      <button id="zout" title="Verkleinern">−</button>
+      <button id="zfit" title="Alles anzeigen">⌂</button>
+    </div>
+    <div id="drawhint"></div>
+  </div>
+  <div id="lvview"></div>
+</div>
+
+<div id="printarea"></div>
+
+<!-- Vorlagen-Dialog -->
+<dialog id="dlgTemplate">
+  <div class="dhead">Raum aus Vorlage <button data-close>✕</button></div>
+  <div class="dbody">
+    <div class="row"><label>Form</label>
+      <select id="tplShape">
+        <option value="rect">Rechteck</option>
+        <option value="lform">L-Form</option>
+      </select>
+    </div>
+    <div id="tplFields"></div>
+    <div class="row"><label>Raumname</label><input id="tplName" type="text" placeholder="z. B. Wohnzimmer"></div>
+    <div class="row"><label>Raumhöhe (m)</label><input id="tplHeight" class="laser" value="2,50"></div>
+    <p class="hint">Tipp: Feld anklicken und Messung am Laser auslösen — der Wert wird direkt eingetragen.</p>
+  </div>
+  <div class="dfoot">
+    <button class="btn" data-close>Abbrechen</button>
+    <button class="btn primary" id="tplOk">Platzieren</button>
+  </div>
+</dialog>
+
+<!-- LV-Dialog -->
+<dialog id="dlgLv">
+  <div class="dhead"><span id="lvDlgTitle">LV-Position</span> <button data-close>✕</button></div>
+  <div class="dbody">
+    <div class="row"><label>LV Position</label>
+      <span class="sugwrap"><input id="lvPos" type="text" autocomplete="off" placeholder="z. B. 01.02.0030"><div class="sugbox" id="lvPosSug"></div></span>
+    </div>
+    <div class="row"><label>Kurztext</label>
+      <span class="sugwrap"><textarea id="lvKurz" rows="2" autocomplete="off" placeholder="z. B. Wände spachteln"></textarea><div class="sugbox" id="lvKurzSug"></div></span>
+    </div>
+    <div class="row"><label>Raum</label><select id="lvRoom"></select></div>
+    <div class="row"><label>Objekt</label><select id="lvObj"></select></div>
+    <div class="grid2">
+      <div class="row"><label>Menge/Faktor</label><input id="lvMenge" class="laser" value="1"></div>
+      <div class="row"><label>Einheit</label>
+        <select id="lvEinheit">
+          <option value="Flache">Fläche (m²)</option>
+          <option value="Lange">Länge (m)</option>
+          <option value="Stuck">Stück (Stück/h)</option>
+          <option value="Volumen">Volumen (m³)</option>
+        </select>
+      </div>
+      <div class="row"><label>Länge in m</label><input id="lvL" class="laser"></div>
+      <div class="row"><label>Breite in m</label><input id="lvB" class="laser"></div>
+      <div class="row"><label>Höhe in m</label><input id="lvH" class="laser"></div>
+      <div class="row"><label>Umfang in m</label><input id="lvU" class="laser"></div>
+      <div class="row"><label>Durchmesser</label><input id="lvD" class="laser"></div>
+    </div>
+    <div class="row" style="margin-top:6px">
+      <button class="btn small" id="lvFromRoom">Höhe + Umfang aus Raum übernehmen</button>
+    </div>
+    <fieldset><legend>Flächenrichtungen (bei Einheit „Fläche“)</legend>
+      <div class="checks">
+        <label><input type="checkbox" id="lvVorn">Vorn</label>
+        <label><input type="checkbox" id="lvOben">Oben</label>
+        <label><input type="checkbox" id="lvLinks">Links</label>
+        <label><input type="checkbox" id="lvRechts">Rechts</label>
+        <label><input type="checkbox" id="lvHinten">Hinten</label>
+        <label><input type="checkbox" id="lvUnten">Unten</label>
+      </div>
+    </fieldset>
+    <fieldset><legend>Automatik-Flags (wie magicplan)</legend>
+      <div class="checks" style="grid-template-columns:1fr">
+        <label><input type="checkbox" id="lvNutzGrund">Nutze Grundfläche als Fläche</label>
+        <label><input type="checkbox" id="lvNutzAnsicht">Nutze Ansichtsfläche als Fläche</label>
+        <label><input type="checkbox" id="lvNutzUmfang">Nutze Umfang als Länge</label>
+      </div>
+    </fieldset>
+    <div class="row" style="margin-top:8px"><button class="btn small" id="lvFotoAdd">📷 ＋ Fotos</button>
+      <span class="hint" id="lvFotoInfo"></span></div>
+    <div class="fotos" id="lvFotos"></div>
+  </div>
+  <div class="dfoot">
+    <button class="btn" data-close>Abbrechen</button>
+    <button class="btn primary" id="lvOk">Speichern</button>
+  </div>
+  <!-- im Dialog, sonst läge die Einblendung hinter der modalen Ebene -->
+  <div id="lvtip"></div>
+</dialog>
+
+<!-- LV-Katalog editieren -->
+<dialog id="dlgLvEdit">
+  <div class="dhead">LV editieren <button data-close>✕</button></div>
+  <div class="dbody">
+    <p class="hint" style="margin-bottom:8px">Häkchen entfernen = die Position erscheint <b>nicht mehr in den
+      Auswahllisten</b> (z. B. weil sie im Aufmaß keine Rolle spielt). Bereits eingetragene LV-Positionen
+      bleiben unverändert. Der Kurztext lässt sich hier direkt ändern.</p>
+    <div class="row">
+      <input id="lvEditSearch" type="search" placeholder="Suchen (Nummer oder Text)">
+      <button class="btn small" id="lvEditAll">Alle ein</button>
+      <button class="btn small" id="lvEditNone">Alle aus</button>
+    </div>
+    <p class="hint" id="lvEditCount"></p>
+    <div id="lvEditList" style="max-height:50vh; overflow:auto"></div>
+  </div>
+  <div class="dfoot"><button class="btn primary" data-close>Fertig</button></div>
+</dialog>
+
+<!-- LV-Import aus Airtable -->
+<dialog id="dlgImport">
+  <div class="dhead">LV-Positionen importieren <button data-close>✕</button></div>
+  <div class="dbody">
+    <p class="hint" style="margin-bottom:8px">Holt die LV-Positionen einer Baustelle aus Airtable in dieses
+      Projekt — als Auswahlliste (LV-Nummer + Kurztext + Einheit) für den LV-Dialog.</p>
+    <div class="row"><label>Zugriffstoken</label><input id="atToken" type="password" placeholder="pat…" autocomplete="off"></div>
+    <div class="row"><label></label><label class="hint" style="display:flex;gap:5px;align-items:center"><input type="checkbox" id="atRemember"> Token auf diesem Gerät merken</label></div>
+    <div class="row"><label>Base-ID</label><input id="atBase" type="text" placeholder="app…"></div>
+    <div class="row">
+      <button class="btn primary" id="atLoad">Baustellen laden</button>
+      <button class="btn small" id="atForget" title="Gespeicherten Token von diesem Gerät löschen">Token löschen</button>
+    </div>
+    <p class="hint" id="atStatus"></p>
+    <div id="atList"></div>
+    <details style="margin-top:10px"><summary class="hint" style="cursor:pointer">Kein Airtable-Zugriff? Liste einfügen</summary>
+      <p class="hint">Je Zeile: <code>LV-Nummer;Kurztext;Einheit;Menge;Langtext</code> (Semikolon oder Tab,
+        Menge und Langtext optional)</p>
+      <textarea id="atPaste" rows="5" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:6px" placeholder="01.02.0030;Wände spachteln;m²"></textarea>
+      <button class="btn small" id="atPasteOk" style="margin-top:6px">Einfügen übernehmen</button>
+    </details>
+    <p class="hint" style="margin-top:10px">Token erstellen: airtable.com → Builder Hub → <b>Personal access tokens</b>,
+      Scopes <code>data.records:read</code> und Zugriff auf die Base. Der Token wird nur lokal gespeichert
+      (nicht im Projekt-Backup).</p>
+  </div>
+  <div class="dfoot"><button class="btn" data-close>Schließen</button></div>
+</dialog>
+
+<!-- Hilfe -->
+<dialog id="dlgHelp">
+  <div class="dhead">Hilfe <button data-close>✕</button></div>
+  <div class="dbody" style="font-size:13px; line-height:1.6">
+    <h3 style="margin-bottom:4px">Laser verbinden (Bluetooth)</h3>
+    <ol style="padding-left:18px; margin-bottom:10px">
+      <li>Bluetooth am Messgerät einschalten (Leica DISTO: BT-Symbol; Bosch GLM: Bluetooth-Taste).</li>
+      <li>In der Seitenleiste <b>„Leica verbinden“</b> oder <b>„Bosch verbinden“</b> klicken und das Gerät auswählen.</li>
+      <li>Ein Eingabefeld mit grünem Rand anklicken (Wandlänge, Raumhöhe, LV-Maße …) und die Messung am Gerät auslösen — der Wert springt direkt ins Feld.</li>
+      <li>Beim <b>Raum zeichnen</b>: Richtung mit Maus/Finger vorgeben und am Laser messen — die Wand wird mit exakter Länge gesetzt.</li>
+    </ol>
+    <h3 style="margin-bottom:4px">Etagen- und Raumansicht</h3>
+    <ul style="padding-left:18px; margin-bottom:10px">
+      <li><b>Etagenansicht:</b> Übersicht aller Räume der Etage. Raum <b>ziehen</b> = auf der Etage verschieben, Raum <b>anklicken</b> = hineinzoomen.</li>
+      <li><b>Magnetisches Einrasten:</b> Beim Ziehen von Räumen, Wänden oder Ecken springen nahe Wände automatisch bündig aneinander (Räume: ab ca. 25 cm Abstand, Wände/Ecken: ab ca. 15–20 cm).</li>
+      <li><b>Raumansicht:</b> Der gewählte Raum ist im Fokus, Nachbarräume bleiben ausgegraut sichtbar. Hier werden Wände, Ecken, Türen/Fenster und Maße bearbeitet. Klick auf einen Nachbarraum wechselt direkt dorthin. Zurück über den Button oben links (oder Esc).</li>
+    </ul>
+    <h3 style="margin-bottom:4px">Zeichnen</h3>
+    <ul style="padding-left:18px; margin-bottom:10px">
+      <li><b>Raum zeichnen:</b> Klicken setzt Eckpunkte (rastet auf 45°/90° ein). Länge auch per Tastatur eingeben und mit <b>Enter</b> bestätigen. Doppelklick oder Klick auf den Startpunkt schließt den Raum.</li>
+      <li><b>Vorlage:</b> Rechteck oder L-Form mit Maßen ausfüllen und per Klick platzieren.</li>
+      <li><b>Wand anpassen:</b> Raum anklicken, dann Wand oder Maßzahl anklicken → Länge in der Seitenleiste ändern (oder Laser). Wände lassen sich mit gedrückter Taste auch direkt verschieben (parallel zur Wandrichtung eingerastet).</li>
+      <li><b>Ecken ziehen:</b> Beim ausgewählten Raum die Eckpunkte anfassen und ziehen — sie lassen sich stufenlos (millimetergenau) setzen und richten sich an den Nachbarecken rechtwinklig aus.</li>
+      <li><b>Winkelkontrolle:</b> Ecken, die <b>keinen rechten Winkel</b> bilden, werden mit einem <b>roten Viertelkreis</b> und der Gradzahl markiert.</li>
+      <li><b>Objekte:</b> In der Raumansicht unter „Objekte“ <b>▭ Fläche</b> oder <b>╱ Linie</b> wählen und im Raum aufziehen (z. B. Podest, Belagsfläche, Sockelleiste). Objekte sind anwählbar, verschiebbar und über Griffe oder Maßeingabe/Laser anpassbar; sie wandern beim Verschieben des Raums mit.</li>
+      <li><b>Sanierungs-Symbole:</b> Unter „Objekte“ stehen <b>1-K</b>, <b>2-K</b>, <b>4-K</b> (Kammer-Schleusen, dargestellt als Rechteck mit Kammerteilung) und <b>RFA</b> bereit — Button wählen, dann Position im Raum anklicken. Symbole lassen sich verschieben, in 90°-Schritten drehen und in Breite/Tiefe anpassen.</li>
+      <li><b>Linien mit Knickpunkten:</b> <b>Doppelklick</b> auf eine Linie fügt an der Klickstelle einen Punkt ein, der sich ziehen lässt — so entstehen Polylinien. Angezeigt und bemaßt wird immer die <b>Gesamtlänge</b> aller Segmente; die Längeneingabe skaliert die ganze Linie.</li>
+      <li><b>Türen/Fenster:</b> Wand auswählen, dann „+ Tür“ / „+ Fenster“. Danach Tür/Fenster direkt im Plan <b>anklicken</b>: Ziehen verschiebt sie entlang der Wand, die weißen Endgriffe ändern die Breite, das Seitenpanel zeigt Maße und Abstand. Flächen werden automatisch von der Wandfläche abgezogen. Bei Türen lassen sich <b>Anschlag ⇄</b> (Angelpunkt links/rechts) und <b>Aufschlag ⇅</b> (Öffnungsrichtung in den Raum) umschalten — das Symbol zeigt Türblatt und Schwenkbogen.</li>
+      <li><b>Türen in geteilten Wänden:</b> Liegen zwei Wände bündig aufeinander, wird eine Tür automatisch in beide Räume übernommen. Breite/Höhe ändern wirkt auf beide Seiten, Löschen entfernt sie ebenfalls beidseitig.</li>
+    </ul>
+    <h3 style="margin-bottom:4px">Export</h3>
+    <ul style="padding-left:18px; margin-bottom:10px">
+      <li><b>CSV-Export</b> erzeugt eine Datei im magicplan-Format („… ITS Statistiken.csv“) mit den Blöcken <i>ATTRIBUTE DER RÄUME</i> und <i>Attribute des Objekts</i> — direkt kompatibel mit deiner Excel-Pipeline (<code>/magicplan-pipeline</code>).</li>
+      <li><b>Drucken/PDF</b> erzeugt einen maßbeschrifteten Plan je Etage plus Raum- und LV-Tabellen (im Druckdialog „Als PDF speichern“).</li>
+      <li><b>Backup</b> sichert alle Projekte als JSON-Datei (auch zum Übertragen aufs iPad).</li>
+    </ul>
+    <h3 style="margin-bottom:4px">iPhone / iPad</h3>
+    <p>Safari unterstützt kein Bluetooth im Browser. Installiere die kostenlose Browser-App <b>„Bluefy“</b> aus dem App Store und öffne diese Datei dort (z. B. über OneDrive-Link) — dann funktioniert auch die Laser-Anbindung auf iOS.</p>
+  </div>
+  <div class="dfoot"><button class="btn primary" data-close>Schließen</button></div>
+</dialog>
+
+<!-- Fotoquelle wählen -->
+<dialog id="dlgFotoSrc" style="width:340px">
+  <div class="dhead">Foto hinzufügen <button data-close>✕</button></div>
+  <div class="dbody">
+    <div class="row"><button class="btn primary" id="fotoCam" style="flex:1; padding:12px">📷 Kamera</button></div>
+    <div class="row"><button class="btn" id="fotoFile" style="flex:1; padding:12px">🖼️ Gespeichertes Foto</button></div>
+    <p class="hint">Auf iPhone/iPad öffnet „Kamera“ direkt die Kamera. Am PC ohne Kamera-App erscheint die
+      Dateiauswahl. Mehrfachauswahl ist möglich.</p>
+  </div>
+  <div class="dfoot"><button class="btn" data-close>Abbrechen</button></div>
+</dialog>
+
+<!-- Foto groß -->
+<dialog id="dlgFotoView">
+  <div class="dhead">Foto <button data-close>✕</button></div>
+  <div class="dbody" style="padding:10px"><img id="fotoBig" alt=""></div>
+  <div class="dfoot"><button class="btn primary" data-close>Schließen</button></div>
+</dialog>
+
+<input type="file" id="fotoInFile" accept="image/*" multiple style="display:none">
+<input type="file" id="fotoInCam" accept="image/*" capture="environment" style="display:none">
+<input type="file" id="importfile" accept=".json" style="display:none">
+
+<script>
+'use strict';
+/* ================= Utilities ================= */
+const $ = s => document.querySelector(s);
+const uid = () => Math.random().toString(36).slice(2,10) + Math.random().toString(36).slice(2,6);
+function parseNum(s){
+  if(typeof s === 'number') return s;
+  if(s == null) return NaN;
+  s = String(s).trim().replace(/\s*m$/i,'').replace(',', '.');
+  return s === '' ? NaN : parseFloat(s);
+}
+// Number.isFinite: leere Maße kommen als NaN, nach localStorage-Roundtrip als null —
+// das globale isFinite(null) wäre true und null.toFixed() würde crashen
+function fmt(n, d=2){ return Number.isFinite(n) ? n.toFixed(d).replace('.', ',') : ''; }
+const fmt3 = n => fmt(n,3);
+const dist = (a,b) => Math.hypot(b.x-a.x, b.y-a.y);
+// Kein Raster-Einrasten mehr: nur auf Millimeter runden (verhindert Fließkomma-Reste)
+const mm = v => Math.round(v*1000)/1000;
+function polyArea(pts){
+  let s=0;
+  for(let i=0;i<pts.length;i++){ const a=pts[i], b=pts[(i+1)%pts.length]; s += a.x*b.y - b.x*a.y; }
+  return Math.abs(s)/2;
+}
+function polyPerimeter(pts){
+  let s=0;
+  for(let i=0;i<pts.length;i++) s += dist(pts[i], pts[(i+1)%pts.length]);
+  return s;
+}
+function centroid(pts){
+  let x=0,y=0; pts.forEach(p=>{x+=p.x;y+=p.y;});
+  return {x:x/pts.length, y:y/pts.length};
+}
+function bboxOf(ptsArr){
+  let minx=Infinity,miny=Infinity,maxx=-Infinity,maxy=-Infinity;
+  ptsArr.forEach(p=>{minx=Math.min(minx,p.x);miny=Math.min(miny,p.y);maxx=Math.max(maxx,p.x);maxy=Math.max(maxy,p.y);});
+  return {minx,miny,maxx,maxy};
+}
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+/* ================= Datenmodell ================= */
+const LS='grundriss-aufmass-v1';
+let db;
+function load(){
+  try{ const d = JSON.parse(localStorage.getItem(LS)); if(d && d.projects && d.projects.length) return d; }catch(e){}
+  return null;
+}
+function seed(){
+  const pid=uid(), fid=uid(), rid=uid();
+  return {
+    activeProjectId: pid,
+    projects:[{
+      id:pid, name:'Beispielprojekt',
+      floors:[{id:fid, name:'Erdgeschoss'}],
+      rooms:[{ id:rid, floorId:fid, name:'Wohnzimmer', height:2.5,
+        points:[{x:0,y:0},{x:4.5,y:0},{x:4.5,y:3.8},{x:0,y:3.8}],
+        openings:[{id:uid(), wall:0, offset:1.6, width:0.885, height:2.0, sill:0, type:'door'}] }],
+      attrs:[]
+    }]
+  };
+}
+db = load() || seed();
+// Migration: alte 2-Punkt-Linien (x1/y1/x2/y2) → Polylinien (points-Array)
+db.projects.forEach(p=>(p.rooms||[]).forEach(r=>(r.objects||[]).forEach(g=>{
+  if(g.type==='line' && !g.points){
+    g.points=[{x:g.x1,y:g.y1},{x:g.x2,y:g.y2}];
+    delete g.x1; delete g.y1; delete g.x2; delete g.y2;
+  }
+})));
+// Migration: Objektnummern gibt es nur für LV-verknüpfte Objekte/Öffnungen —
+// fortlaufend fürs ganze Projekt (raumweise Nummern konnten sich beim Verschieben doppeln)
+db.projects.forEach(p=>{
+  const linked=new Set((p.attrs||[]).map(a=>a.objId).filter(Boolean));
+  const all=[];
+  (p.rooms||[]).forEach(r=>[...(r.objects||[]), ...(r.openings||[])].forEach(g=>all.push(g)));
+  all.forEach(g=>{ if(g.nr && !linked.has(g.id)) delete g.nr; });
+  const used=new Set();
+  let n=0;
+  (p.rooms||[]).forEach(r=>Object.values(r.wallNr||{}).forEach(v=>{   // Wandnummern belegen mit
+    if(v){ used.add(v); n=Math.max(n, v); }
+  }));
+  all.forEach(g=>{                              // Doppelnummern aus Alt-Daten auflösen
+    if(!g.nr) return;
+    if(used.has(g.nr)) delete g.nr;
+    else { used.add(g.nr); n=Math.max(n, g.nr); }
+  });
+  all.forEach(g=>{ if(linked.has(g.id) && !g.nr) g.nr=++n; });
+});
+function save(){
+  try{ localStorage.setItem(LS, JSON.stringify(db)); }
+  catch(e){
+    // Fotos können den localStorage füllen — verständlich melden statt still zu scheitern
+    alert('Speichern fehlgeschlagen: Der lokale Speicher des Browsers ist voll.\n\n'+
+      'Bitte über „Backup“ sichern und einige Fotos entfernen — sonst gehen neue Eingaben verloren.');
+    throw e;
+  }
+}
+function lineLen(g){ let s=0; for(let i=0;i<g.points.length-1;i++) s+=dist(g.points[i],g.points[i+1]); return s; }
+// Objektnummern laufen projektweit — sonst gäbe es beim Verschieben in andere Räume Doppelungen.
+// Wände zählen mit: auch sie bekommen eine Nummer, sobald ihnen eine LV-Position zugeordnet ist.
+const nextObjNr = () => proj().rooms.reduce((m,r)=>{
+  const a=[...(r.objects||[]), ...(r.openings||[])].reduce((k,g)=>Math.max(k, g.nr||0), m);
+  return Object.values(r.wallNr||{}).reduce((k,v)=>Math.max(k, v||0), a);
+}, 0)+1;
+const wallNrOf = (r,i) => r ? (r.wallNr||{})[i] : null;
+/* Was eine LV-Position bezeichnet: Objekt, nummerierte Wand oder der Raum selbst */
+function lvZielText(a, leerBeiRaum){
+  const r=roomById(a.roomId);
+  if(a.objId){
+    const og=r?(((r.objects||[]).find(g=>g.id===a.objId))||((r.openings||[]).find(o=>o.id===a.objId))):null;
+    return og?objAnzeige(og):'– gelöscht –';
+  }
+  if(a.wall!=null){
+    const nr=wallNrOf(r, a.wall);
+    return nr?('#'+nr):('Wand '+(a.wall+1));
+  }
+  return leerBeiRaum?'':'Raum';
+}
+const objLabel = g => g ? (g.type==='door'?'Tür':g.type==='window'?'Fenster':(g.name||'')) : '';
+// Flächen und Linien tragen Standardnamen („Fläche 1", „Linie 2") — die zeigen wir nicht an,
+// dort genügt die Objektnummer. Symbole, Türen und Fenster behalten ihre Bezeichnung.
+const objStdName = g => g && (g.type==='rect'||g.type==='line')
+  && /^(fläche|flaeche|linie)\s*\d*$/i.test(String(g.name||'').trim());
+function objAnzeige(g){
+  if(!g) return '';
+  const nr=g.nr?'#'+g.nr:'';
+  const name=objStdName(g)?'':objLabel(g);
+  return [nr, name].filter(Boolean).join(' ');
+}
+/* 24 Farben für LV-Positionen: jede neue LV-Position bekommt der Reihe nach eine Farbe
+   (persistiert in p.lvColors = { "<LV-Text>": Farbindex }, bleibt damit stabil) */
+const LVCOLORS=[
+  '#e53935','#d81b60','#8e24aa','#5e35b1','#3949ab','#1e88e5',
+  '#039be5','#00acc1','#00897b','#43a047','#7cb342','#c0ca33',
+  '#fdd835','#ffb300','#fb8c00','#f4511e','#6d4c41','#757575',
+  '#546e7a','#ec407a','#7e57c2','#26a69a','#9ccc65','#ff7043'
+];
+function txtOn(c){ const n=parseInt(c.slice(1),16); return (0.299*(n>>16&255)+0.587*(n>>8&255)+0.114*(n&255))>150?'#1c2330':'#fff'; }
+function assignLvColors(p){
+  p.lvColors=p.lvColors||{};
+  const add=lv=>{ if(lv && p.lvColors[lv]==null) p.lvColors[lv]=Object.keys(p.lvColors).length%LVCOLORS.length; };
+  (p.attrs||[]).forEach(a=>add(a.lv));
+  Object.keys(p.lvTexts||{}).forEach(add);   // auch importierte, noch ungenutzte Positionen
+}
+const lvColor=(p,lv)=> (lv && p.lvColors && p.lvColors[lv]!=null) ? LVCOLORS[p.lvColors[lv]%LVCOLORS.length] : null;
+// Einheiten: intern bleiben die magicplan-Schreibweisen (Flache/Lange/Stuck) — die CSV-Pipeline
+// erwartet sie genau so. Angezeigt wird deutsch korrekt.
+const EINH_LABEL={Flache:'Fläche', Lange:'Länge', Stuck:'Stück', Volumen:'Volumen'};
+const einhTxt = e => EINH_LABEL[e] || e || '';
+/* Einheiten-Erkennung: alle gebräuchlichen Schreibweisen auf die vier internen Einheiten abbilden.
+   Verglichen wird normalisiert (klein, ohne Leer-/Satzzeichen, ² → 2, Umlaute ausgeschrieben). */
+const EINH_ALIAS={
+  Flache:['m2','qm','quadratmeter','quadratmtr','sqm','flaeche','flaechenmass','fl'],
+  Lange:['m','lfm','lfdm','lfdmeter','laufmeter','laufendermeter','lm','lmtr','mtr','meter',
+         'laenge','lng','cm','mm','dm','km'],
+  Volumen:['m3','cbm','kubikmeter','kubik','volumen','rauminhalt','cbmeter'],
+  Stuck:['st','stk','stck','stueck','stkzahl','stueckzahl','stkl','anz','anzahl','pos','psch',
+         'pausch','pauschal','pauschale','pauschalpreis','h','std','stunde','stunden','stundenlohn',
+         'tag','tage','at','arbeitstag','satz','set','paar','ea','pcs','pce','piece','pieces']
+};
+function mapEinheit(s){
+  const t=String(s||'').toLowerCase().trim()
+    .replace(/²/g,'2').replace(/³/g,'3')
+    .replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue').replace(/ß/g,'ss')
+    .replace(/[\s.,;:_\-/\\^()]/g,'');
+  if(!t) return '';
+  for(const ziel in EINH_ALIAS) if(EINH_ALIAS[ziel].includes(t)) return ziel;
+  return '';
+}
+// Einheit aus der Mengenklammer eines Kurztextes lesen: „… (60 St)" → Stuck
+function einheitAusKurz(kurz){
+  const m=String(kurz||'').match(/\(([^()]*)\)\s*$/);
+  if(!m) return '';
+  return mapEinheit(m[1].replace(/^[\d.,\s]+/,''));
+}
+// Menge aus der Mengenklammer lesen: „… (137,5 lfm)" → 137.5
+function mengeAusKurz(kurz){
+  const m=String(kurz||'').match(/\(\s*([\d.,]+)\s*[^()]*\)\s*$/);
+  if(!m) return NaN;
+  let t=m[1];
+  if(t.includes(',') && t.includes('.')) t=t.replace(/\./g,'');   // 1.234,5
+  return parseNum(t);
+}
+// Vorgesehene Menge laut LV (aus dem Import bzw. aus der Mengenklammer)
+function lvSollWert(lv){
+  const p=proj();
+  const v=(p.lvSoll||{})[lv];
+  if(Number.isFinite(v)) return v;
+  return mengeAusKurz((p.lvTexts||{})[lv]);
+}
+// LV-Nummern natürlich sortieren: 1 < 2 < 10, auch bei 01.02.0030 < 01.10.0010
+const lvCmp=(a,b)=>String(a||'').localeCompare(String(b||''), 'de', {numeric:true, sensitivity:'base'});
+/* LV-Nummer ↔ Kurztext: projektweites Wörterbuch (p.lvTexts), aus bestehenden Positionen nachgezogen */
+function syncLvTexts(p){
+  p.lvTexts=p.lvTexts||{};
+  (p.attrs||[]).forEach(a=>{ if(a.lv && a.kurz && !p.lvTexts[a.lv]) p.lvTexts[a.lv]=a.kurz; });
+  // Fehlende Einheiten/Mengen aus der Mengenklammer nachziehen (Alt-Importe)
+  p.lvUnits=p.lvUnits||{}; p.lvSoll=p.lvSoll||{};
+  Object.entries(p.lvTexts).forEach(([lv,k])=>{
+    if(!p.lvUnits[lv]){ const e=einheitAusKurz(k); if(e) p.lvUnits[lv]=e; }
+    if(!Number.isFinite(p.lvSoll[lv])){ const m=mengeAusKurz(k); if(Number.isFinite(m)) p.lvSoll[lv]=m; }
+  });
+}
+db.projects.forEach(assignLvColors);
+db.projects.forEach(syncLvTexts);
+const proj = () => db.projects.find(p=>p.id===db.activeProjectId) || db.projects[0];
+
+/* UI-Zustand (nicht persistiert) */
+let view='plan';
+let mode='select';               // select | draw | place
+let sel={roomId:null, wall:null, vertex:null};
+let focusRoomId=null;            // gesetzt = Raumansicht (nur dieser Raum sichtbar)
+let activeFloorId = proj().floors[0].id;
+let draft={points:[], cursor:null, dir:null, typed:''};
+let placing=null;                // {points, name, height}
+let vb={x:-2,y:-2,w:14,h:10};
+let lastHeight=2.5;
+let lastLaserInput=null;
+
+/* Raum-Statistik */
+function roomStats(r){
+  const area=polyArea(r.points), per=polyPerimeter(r.points);
+  let winA=0, doorA=0;
+  (r.openings||[]).forEach(o=>{ const a=(o.width||0)*(o.height||0); if(o.type==='window') winA+=a; else doorA+=a; });
+  const wallA=Math.max(0, per*(r.height||0) - winA - doorA);
+  return {area, per, winA, doorA, wallA, vol:area*(r.height||0)};
+}
+const floorRooms = () => proj().rooms.filter(r=>r.floorId===activeFloorId);
+const roomById = id => proj().rooms.find(r=>r.id===id);
+function floorName(fid){ const f=proj().floors.find(f=>f.id===fid); return f?f.name:''; }
+
+/* ================= SVG-Canvas ================= */
+const svg=$('#canvas');
+function svgPoint(e){
+  const pt=svg.createSVGPoint(); pt.x=e.clientX; pt.y=e.clientY;
+  const m=svg.getScreenCTM(); if(!m) return {x:0,y:0};
+  const p=pt.matrixTransform(m.inverse());
+  return {x:p.x, y:p.y};
+}
+function wallPoints(r,i){ return [r.points[i], r.points[(i+1)%r.points.length]]; }
+
+function pointInPoly(pt, pts){
+  let inside=false;
+  for(let i=0,j=pts.length-1;i<pts.length;j=i++){
+    if(((pts[i].y>pt.y)!==(pts[j].y>pt.y)) &&
+       (pt.x < (pts[j].x-pts[i].x)*(pt.y-pts[i].y)/(pts[j].y-pts[i].y)+pts[i].x)) inside=!inside;
+  }
+  return inside;
+}
+function openingMarks(r, lbl){
+  let out='';
+  (r.openings||[]).forEach(o=>{
+    const [a,b]=wallPoints(r,o.wall); const L=dist(a,b); if(L<0.01) return;
+    const ux=(b.x-a.x)/L, uy=(b.y-a.y)/L;
+    const t0=Math.max(0,Math.min(o.offset, L-o.width));
+    const p0={x:a.x+ux*t0, y:a.y+uy*t0}, p1={x:a.x+ux*(t0+o.width), y:a.y+uy*(t0+o.width)};
+    out+=`<line x1="${p0.x}" y1="${p0.y}" x2="${p1.x}" y2="${p1.y}" stroke="var(--canvas)" stroke-width="0.2" />`;
+    if(o.type==='door'){
+      const s=o.swing||1;
+      const H=o.hinge?p1:p0;                                   // Angelpunkt (Anschlag)
+      const T=o.hinge?p0:p1;                                   // Schließkante
+      const tip={x:H.x-uy*s*o.width, y:H.y+ux*s*o.width};      // Türblatt 90° geöffnet
+      out+=`<line x1="${p0.x}" y1="${p0.y}" x2="${p1.x}" y2="${p1.y}" stroke="#8a93a5" stroke-width="0.02"/>`;
+      // Verknüpfte Tür (geteilte Wand): Symbol nur in dem Raum zeichnen, in den sie aufschlägt —
+      // sonst erscheinen zwei Türsymbole für dieselbe physische Tür.
+      const probe={x:H.x+(tip.x-H.x)*0.5, y:H.y+(tip.y-H.y)*0.5};
+      if(o.link && !pointInPoly(probe, r.points)) return;
+      const cz=(T.x-H.x)*(tip.y-H.y)-(T.y-H.y)*(tip.x-H.x);
+      out+=`<line x1="${H.x}" y1="${H.y}" x2="${tip.x}" y2="${tip.y}" stroke="#5a6475" stroke-width="0.045"/>`;
+      out+=`<path d="M ${T.x} ${T.y} A ${o.width} ${o.width} 0 0 ${cz>0?1:0} ${tip.x} ${tip.y}" fill="none" stroke="#8a93a5" stroke-width="0.02" stroke-dasharray="0.08 0.06"/>`;
+      out+=`<circle cx="${H.x}" cy="${H.y}" r="0.035" fill="#5a6475"/>`;
+    } else {
+      out+=`<line x1="${p0.x}" y1="${p0.y}" x2="${p1.x}" y2="${p1.y}" stroke="#4d90d6" stroke-width="0.08"/>`;
+    }
+  });
+  // Nummern-Plaketten LV-verknüpfter Türen/Fenster (mittig auf der Öffnung)
+  (r.openings||[]).forEach(o=>{
+    if(!o.nr) return;
+    const [a,b]=wallPoints(r,o.wall); const L=dist(a,b); if(L<0.01) return;
+    const ux=(b.x-a.x)/L, uy=(b.y-a.y)/L;
+    const t0=Math.max(0,Math.min(o.offset, L-o.width));
+    const bm={x:a.x+ux*(t0+o.width/2), y:a.y+uy*(t0+o.width/2)};
+    const badge=objBadge(o, bm.x, bm.y, lbl||0.2, false);
+    if(badge) out+=`<g style="pointer-events:none">${badge}</g>`;
+  });
+  return out;
+}
+
+/* Bemaßung: lesbarer Winkel in Grad für Text parallel zur Linie (nie über Kopf) */
+function readAngle(a,b){
+  let A=Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI;
+  if(A>90) A-=180; else if(A<=-90) A+=180;
+  return A;
+}
+/* Architektur-Maßlinie: Maßhilfslinien, Maßlinie, 45°-Schrägstriche, Maßzahl parallel zur Linie.
+   a,b = Wandpunkte, nx/ny = nach außen zeigende Normale, lbl = Skalierungsfaktor. */
+function dimSvg(a, b, nx, ny, lbl, opts){
+  opts=opts||{};
+  const col=opts.color||'#8a93a5', sw=opts.sw||0.018;
+  const off=opts.off!=null?opts.off:lbl*2.0;
+  const L=dist(a,b); if(L<0.001) return '';
+  const ux=(b.x-a.x)/L, uy=(b.y-a.y)/L;
+  const A={x:a.x+nx*off, y:a.y+ny*off}, B={x:b.x+nx*off, y:b.y+ny*off};
+  const ov=lbl*0.35, gap=Math.min(lbl*0.35, off*0.35);   // Überstand / Abstand der Hilfslinien
+  const ts=lbl*0.22;                                     // halbe Länge der Schrägstriche
+  const da=opts.data||'';
+  let s='';
+  s+=`<line x1="${a.x+nx*gap}" y1="${a.y+ny*gap}" x2="${a.x+nx*(off+ov)}" y2="${a.y+ny*(off+ov)}" stroke="${col}" stroke-width="${sw}"/>`;
+  s+=`<line x1="${b.x+nx*gap}" y1="${b.y+ny*gap}" x2="${b.x+nx*(off+ov)}" y2="${b.y+ny*(off+ov)}" stroke="${col}" stroke-width="${sw}"/>`;
+  s+=`<line x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}" stroke="${col}" stroke-width="${sw}"${da}/>`;
+  if(da) s+=`<line x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}" stroke="transparent" stroke-width="${lbl*0.6}"${da}/>`;
+  const dx=(ux+nx)*ts*0.71, dy=(uy+ny)*ts*0.71;
+  s+=`<line x1="${A.x-dx}" y1="${A.y-dy}" x2="${A.x+dx}" y2="${A.y+dy}" stroke="${col}" stroke-width="${sw*2.2}"/>`;
+  s+=`<line x1="${B.x-dx}" y1="${B.y-dy}" x2="${B.x+dx}" y2="${B.y+dy}" stroke="${col}" stroke-width="${sw*2.2}"/>`;
+  // Maßzahl mittig AUF der Maßlinie, mitgedreht; Halo in Hintergrundfarbe überschreibt die Linie
+  const ang=readAngle(a,b);
+  const tx=(A.x+B.x)/2, ty=(A.y+B.y)/2;
+  const halo=opts.halo||'#fafbfc';
+  const txt=fmt(L,2);
+  // Druck: 9 pt anstreben, bei Enge auf 7 pt herunter, sonst nummerierter Verweis
+  const passt=f=>txt.length*f*0.58 <= L*0.95;
+  let fs=Math.max(opts.fs||lbl*0.85, opts.fsPref||0);
+  let verweis=false;
+  if(opts.refs && !passt(fs)){
+    if(opts.minFs && passt(opts.minFs)) fs=opts.minFs;
+    else { verweis=true; fs=Math.max(opts.minFs||0, fs); }
+  }
+  if(verweis){
+    const nr=opts.refs.length+1;
+    opts.refs.push({nr, txt});
+    const rr=fs*0.62;
+    s+=`<circle cx="${tx}" cy="${ty}" r="${rr}" fill="${halo}" stroke="${col}" stroke-width="${sw*1.4}"${da}/>`;
+    s+=`<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="central" font-size="${fs*0.82}" fill="${opts.tcol||col}" font-weight="700"${da}>${nr}</text>`;
+    return s;
+  }
+  s+=`<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="middle" font-size="${fs}" fill="${opts.tcol||col}" stroke="${halo}" stroke-width="${fs*0.35}" stroke-linejoin="round" paint-order="stroke"${opts.bold?' font-weight="700"':''} transform="rotate(${ang} ${tx} ${ty})"${da}>${txt}</text>`;
+  return s;
+}
+/* Maßketten-Segmente einer Wand: an den Kanten von Türen/Fenstern unterteilt.
+   Liefert Punktpaare [p,q] entlang der Wand (ohne Öffnungen: ein Segment = ganze Wand). */
+function wallChainCuts(r,i){
+  const [a,b]=wallPoints(r,i); const L=dist(a,b); if(L<0.01) return [[a,b]];
+  const u={x:(b.x-a.x)/L, y:(b.y-a.y)/L};
+  const cuts=[0];
+  (r.openings||[]).filter(o=>o.wall===i)
+    .map(o=>{ const t0=Math.max(0,Math.min(o.offset,L-o.width)); return [t0,t0+o.width]; })
+    .sort((p,q)=>p[0]-q[0])
+    .forEach(([s,e])=>{
+      if(s>cuts[cuts.length-1]+0.001) cuts.push(s);
+      if(e>cuts[cuts.length-1]+0.001) cuts.push(Math.min(e,L));
+    });
+  if(L>cuts[cuts.length-1]+0.001) cuts.push(L);
+  const P=t=>({x:a.x+u.x*t, y:a.y+u.y*t});
+  const segs=[];
+  for(let k=0;k<cuts.length-1;k++) segs.push([P(cuts[k]),P(cuts[k+1])]);
+  return segs;
+}
+function orthoSnap(fix, q){
+  const dx=q.x-fix.x, dy=q.y-fix.y, L=Math.hypot(dx,dy);
+  if(L<0.03) return q;
+  let ang=Math.atan2(dy,dx);
+  const s=Math.round(ang/(Math.PI/4))*(Math.PI/4);
+  if(Math.abs(ang-s)<0.12){
+    const Lr=mm(L);
+    return {x:mm(fix.x+Math.cos(s)*Lr), y:mm(fix.y+Math.sin(s)*Lr)};
+  }
+  return q;
+}
+/* Alle LV-Farben eines Objekts (eine je verknüpfter LV-Position, Reihenfolge der attrs) */
+function objLvColors(g){
+  const p=proj();
+  const seen=new Set(), cols=[];
+  (p.attrs||[]).forEach(a=>{
+    if(a.objId===g.id && a.lv && !seen.has(a.lv)){
+      seen.add(a.lv);
+      const c=lvColor(p,a.lv); if(c) cols.push(c);
+    }
+  });
+  return cols;
+}
+/* Runde Nummern-Plakette */
+function badgeSvg(x, y, rr, col, txt, dat){
+  dat=dat||'';
+  return `<circle cx="${x}" cy="${y}" r="${rr}" fill="${col}" stroke="#fff" stroke-width="${rr*0.12}"${dat}/>`+
+    `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" font-size="${rr*1.1}" font-weight="700" fill="${txtOn(col)}"${dat}>${txt}</text>`;
+}
+/* Nummern-Plakette: nur für Objekte/Öffnungen, die einer LV-Position zugeordnet sind */
+function objBadge(g, x, y, lbl, interactive){
+  const p=proj();
+  const a=(p.attrs||[]).find(t=>t.objId===g.id && t.lv);
+  if(!a || !g.nr) return '';
+  const col=lvColor(p, a.lv) || '#8a93a5';
+  const dat=interactive?` data-obj="${g.id}" style="cursor:move"`:'';
+  return badgeSvg(x, y, Math.max(lbl*0.62, 0.09), col, g.nr||'', dat);
+}
+/* Nummern-Plaketten der Wände, denen eine LV-Position zugeordnet ist (innen an der Wandmitte) */
+function wallMarks(r, lbl){
+  const p=proj();
+  let out='';
+  const c=centroid(r.points), n=r.points.length;
+  for(let i=0;i<n;i++){
+    const nr=wallNrOf(r,i); if(!nr) continue;
+    const a=(p.attrs||[]).find(x=>x.roomId===r.id && x.wall===i && x.lv); if(!a) continue;
+    const [A,B]=wallPoints(r,i), L=dist(A,B); if(L<0.05) continue;
+    const mx=(A.x+B.x)/2, my=(A.y+B.y)/2;
+    let nx=-(B.y-A.y)/L, ny=(B.x-A.x)/L;
+    if((mx+nx*0.1-c.x)**2+(my+ny*0.1-c.y)**2 > (mx-nx*0.1-c.x)**2+(my-ny*0.1-c.y)**2){nx=-nx;ny=-ny;}
+    const rr=Math.max(lbl*0.62, 0.09);
+    out+=badgeSvg(mx+nx*rr*1.5, my+ny*rr*1.5, rr, lvColor(p, a.lv)||'#8a93a5', nr);
+  }
+  return out ? `<g style="pointer-events:none">${out}</g>` : '';
+}
+/* Objekte im Raum: rechteckige Flächen und Linien */
+function objMarks(r, lbl, interactive){
+  let out='';
+  (r.objects||[]).forEach(g=>{
+    const isSel = interactive && sel.objId===g.id;
+    if(g.type==='rect'){
+      // Füllung in LV-Farbe; mehrere LV-Positionen → diagonales Streifenmuster
+      const cols=objLvColors(g);
+      let fill='#f2b23e', stroke='#c98a2b', fillOp=isSel?0.35:0.18;
+      if(cols.length===1){ fill=cols[0]; stroke=cols[0]; fillOp=isSel?0.45:0.28; }
+      else if(cols.length>1){
+        const sw=0.18;
+        out+=`<pattern id="strp${g.id}" patternUnits="userSpaceOnUse" width="${sw*cols.length}" height="1" patternTransform="rotate(45)">${cols.map((c,i)=>`<rect x="${i*sw}" y="0" width="${sw}" height="1" fill="${c}"/>`).join('')}</pattern>`;
+        fill=`url(#strp${g.id})`; stroke=cols[0]; fillOp=isSel?0.55:0.4;
+      }
+      out+=`<rect x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" fill="${fill}" fill-opacity="${fillOp}" stroke="${isSel?'#2f6fed':stroke}" stroke-width="${isSel?0.05:0.03}" stroke-dasharray="0.1 0.06"${interactive?` data-obj="${g.id}" style="cursor:move"`:''}/>`;
+      out+=objBadge(g, g.x+g.w+lbl*0.45, g.y-lbl*0.45, lbl, interactive);
+      if(isSel){
+        const hs=lbl*0.35;
+        [[g.x,g.y,0],[g.x+g.w,g.y,1],[g.x+g.w,g.y+g.h,2],[g.x,g.y+g.h,3]].forEach(([px,py,k])=>{
+          out+=`<rect x="${px-hs}" y="${py-hs}" width="${2*hs}" height="${2*hs}" fill="#fff" stroke="#2f6fed" stroke-width="${lbl*0.08}" data-obj="${g.id}" data-objh="${k}" style="cursor:nwse-resize"/>`;
+        });
+      }
+    } else if(g.type==='sym'){
+      const cx=g.x+g.w/2, cy=g.y+g.h/2;
+      const st=isSel?'#2f6fed':'#0e7d5c';
+      out+=`<g transform="rotate(${g.rot||0} ${cx} ${cy})">`;
+      out+=`<rect x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" fill="#e6f6ef" fill-opacity="0.9" stroke="${st}" stroke-width="${isSel?0.06:0.04}"${interactive?` data-obj="${g.id}" style="cursor:move"`:''}/>`;
+      if(g.sub==='rfa'){
+        const rr=Math.min(g.w,g.h)*0.3;
+        out+=`<circle cx="${cx}" cy="${cy}" r="${rr}" fill="none" stroke="${st}" stroke-width="0.035" style="pointer-events:none"/>`;
+        out+=`<line x1="${cx-rr}" y1="${cy}" x2="${cx+rr}" y2="${cy}" stroke="${st}" stroke-width="0.03" style="pointer-events:none"/>`;
+        out+=`<line x1="${cx}" y1="${cy-rr}" x2="${cx}" y2="${cy+rr}" stroke="${st}" stroke-width="0.03" style="pointer-events:none"/>`;
+      } else {
+        const k=(SYMDEFS[g.sub]||{}).k||1;
+        for(let i=1;i<k;i++){
+          const xx=g.x+g.w*i/k;
+          out+=`<line x1="${xx}" y1="${g.y}" x2="${xx}" y2="${g.y+g.h}" stroke="${st}" stroke-width="0.035" style="pointer-events:none"/>`;
+        }
+        for(let i=0;i<k;i++){
+          const x0=g.x+g.w*i/k, x1=g.x+g.w*(i+1)/k;
+          out+=`<line x1="${x0}" y1="${g.y+g.h}" x2="${x1}" y2="${g.y}" stroke="${st}" stroke-width="0.02" style="pointer-events:none"/>`;
+        }
+      }
+      out+=`</g>`;
+      const W=(g.rot||0)%180?g.h:g.w, H=(g.rot||0)%180?g.w:g.h;
+      out+=objBadge(g, cx+W/2+lbl*0.45, cy-H/2-lbl*0.45, lbl, interactive);
+      if(isSel){
+        // Eckgriffe am sichtbaren Umriss (auch bei 90°/270° gedrehten Symbolen)
+        const vx=cx-W/2, vy=cy-H/2, hs=lbl*0.35;
+        [[vx,vy,0],[vx+W,vy,1],[vx+W,vy+H,2],[vx,vy+H,3]].forEach(([px,py,k])=>{
+          out+=`<rect x="${px-hs}" y="${py-hs}" width="${2*hs}" height="${2*hs}" fill="#fff" stroke="#2f6fed" stroke-width="${lbl*0.08}" data-obj="${g.id}" data-objh="${k}" style="cursor:nwse-resize"/>`;
+        });
+      }
+    } else {
+      // Linie in LV-Farbe; mehrere LV-Positionen → farblich abwechselnde Streifen entlang der Linie
+      const cols=objLvColors(g);
+      const ptsStr=g.points.map(p=>p.x+','+p.y).join(' ');
+      const dat=interactive?` data-obj="${g.id}" style="cursor:move"`:'';
+      if(isSel) out+=`<polyline points="${ptsStr}" fill="none" stroke="#2f6fed" stroke-width="0.11" opacity="0.55"/>`;
+      if(cols.length>1){
+        const seg=0.3;
+        cols.forEach((c,i)=>{
+          out+=`<polyline points="${ptsStr}" fill="none" stroke="${c}" stroke-width="0.05" stroke-dasharray="${seg} ${Math.round((cols.length-1)*seg*100)/100}" stroke-dashoffset="${Math.round(i*seg*100)/100}"${dat}/>`;
+        });
+      } else {
+        out+=`<polyline points="${ptsStr}" fill="none" stroke="${cols[0]||'#7a4fd0'}" stroke-width="0.05"${dat}/>`;
+      }
+      if(interactive)
+        out+=`<polyline points="${ptsStr}" fill="none" stroke="transparent" stroke-width="0.35" data-obj="${g.id}" style="cursor:move"/>`;
+      // Nummern-Plakette mittig auf dem mittleren Segment
+      const mi=Math.floor((g.points.length-1)/2);
+      const ma=g.points[mi], mb=g.points[Math.min(mi+1,g.points.length-1)];
+      out+=objBadge(g, (ma.x+mb.x)/2, (ma.y+mb.y)/2, lbl, interactive);
+      if(isSel){
+        const hs=lbl*0.35;
+        g.points.forEach((pt,k)=>{
+          out+=`<rect x="${pt.x-hs}" y="${pt.y-hs}" width="${2*hs}" height="${2*hs}" fill="#fff" stroke="#2f6fed" stroke-width="${lbl*0.08}" data-obj="${g.id}" data-objh="${k}" style="cursor:pointer"/>`;
+        });
+      }
+    }
+  });
+  return interactive ? out : (out ? `<g style="pointer-events:none">${out}</g>` : '');
+}
+/* Nicht rechte Winkel rot markieren: Viertelkreis-Bogen + Gradzahl an der Ecke */
+function angleMarks(r, lbl){
+  let out='';
+  const n=r.points.length;
+  for(let i=0;i<n;i++){
+    const p=r.points[i], prev=r.points[(i-1+n)%n], next=r.points[(i+1)%n];
+    const L1=dist(p,prev), L2=dist(p,next);
+    if(L1<0.05||L2<0.05) continue;
+    const u1={x:(prev.x-p.x)/L1, y:(prev.y-p.y)/L1}, u2={x:(next.x-p.x)/L2, y:(next.y-p.y)/L2};
+    const ang=Math.acos(Math.max(-1,Math.min(1, u1.x*u2.x+u1.y*u2.y)))*180/Math.PI;
+    if(Math.abs(ang-90)<0.5) continue;                       // rechter Winkel → keine Markierung
+    const rr=Math.min(lbl*1.5, L1*0.3, L2*0.3);
+    const A={x:p.x+u1.x*rr, y:p.y+u1.y*rr}, B={x:p.x+u2.x*rr, y:p.y+u2.y*rr};
+    const cz=u1.x*u2.y-u1.y*u2.x;                            // Drehrichtung des Bogens
+    out+=`<path d="M ${A.x} ${A.y} A ${rr} ${rr} 0 0 ${cz>0?1:0} ${B.x} ${B.y}" fill="none" stroke="var(--danger)" stroke-width="${lbl*0.1}"/>`;
+    const bx=u1.x+u2.x, by=u1.y+u2.y, bl=Math.hypot(bx,by)||1;
+    const tx=p.x+bx/bl*rr*1.75, ty=p.y+by/bl*rr*1.75;
+    out+=`<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="middle" font-size="${lbl*0.7}" fill="var(--danger)" font-weight="700">${fmt(ang,1)}°</text>`;
+  }
+  return out ? `<g style="pointer-events:none">${out}</g>` : '';
+}
+function focusRoom(id){
+  focusRoomId=id;
+  sel={roomId:id, wall:null, vertex:null};
+  mode='select';
+  renderAll(); zoomFit();
+}
+function exitRoom(){
+  focusRoomId=null;
+  sel={roomId:null, wall:null, vertex:null};
+  renderAll(); zoomFit();
+}
+function renderCanvas(){
+  let fr=focusRoomId?roomById(focusRoomId):null;
+  if(focusRoomId && !fr){ focusRoomId=null; sel={roomId:null,wall:null,vertex:null}; }
+  // Raumansicht: Nachbarräume ausgegraut dahinter, fokussierter Raum zuletzt (oben)
+  const rooms=fr?[...floorRooms().filter(x=>x.id!==fr.id), fr]:floorRooms();
+  const lbl=Math.max(0.14, Math.min(0.6, vb.w/55));
+  let out=`<defs>
+    <pattern id="grid" width="1" height="1" patternUnits="userSpaceOnUse">
+      <path d="M 1 0 L 0 0 0 1" fill="none" stroke="#e6e9ee" stroke-width="0.015"/>
+    </pattern>
+  </defs>
+  <rect x="${vb.x-50}" y="${vb.y-50}" width="${vb.w+100}" height="${vb.h+100}" fill="url(#grid)" data-bg="1"/>`;
+
+  rooms.forEach(r=>{
+    const selR = r.id===sel.roomId;
+    const dim = fr && r.id!==fr.id;
+    const d = r.points.map((p,i)=>(i?'L':'M')+p.x+' '+p.y).join(' ')+' Z';
+    if(dim) out+='<g opacity="0.35">';
+    out+=`<path d="${d}" fill="${selR?'#e8f0fe':'#fdfcf8'}" stroke="#2b3345" stroke-width="0.12" stroke-linejoin="miter" data-roomid="${r.id}"${dim?' style="cursor:pointer"':''}/>`;
+    out+=openingMarks(r, lbl);
+    out+=wallMarks(r, lbl);
+    out+=objMarks(r, lbl, !!(fr && selR));
+    if(!dim) out+=angleMarks(r, lbl);
+    const c=centroid(r.points), st=roomStats(r);
+    out+=`<text x="${c.x}" y="${c.y}" text-anchor="middle" font-size="${lbl}" fill="#2b3345" style="pointer-events:none">
+      <tspan x="${c.x}" dy="-0.1">${esc(r.name)}</tspan>
+      <tspan x="${c.x}" dy="${lbl*1.25}" fill="#6b7484" font-size="${lbl*0.85}">${fmt(st.area,2)} m²</tspan></text>`;
+    if(dim){ out+='</g>'; return; }
+    if(selR){
+      r.points.forEach((a,i)=>{
+        const b=r.points[(i+1)%r.points.length], L=dist(a,b);
+        const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+        let nx=-(b.y-a.y)/L, ny=(b.x-a.x)/L;
+        const c2=centroid(r.points);
+        if((mx+nx*0.1-c2.x)**2+(my+ny*0.1-c2.y)**2 < (mx-nx*0.1-c2.x)**2+(my-ny*0.1-c2.y)**2){nx=-nx;ny=-ny;}
+        const isSelW = sel.wall===i;
+        out+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${isSelW?'#2f6fed':'transparent'}" stroke-width="${isSelW?0.16:0.4}" data-roomid="${r.id}" data-wall="${i}" style="cursor:pointer" ${isSelW?'':'opacity="0.5"'}/>`;
+        const dopts={color:isSelW?'#2f6fed':'#8a93a5', tcol:isSelW?'#2f6fed':'#4a5468', bold:isSelW, fs:lbl*0.9,
+          data:` data-roomid="${r.id}" data-wall="${i}" style="cursor:pointer"`};
+        const segs=wallChainCuts(r,i);
+        if(segs.length>1){
+          // Wand mit Türen/Fenstern: Maßkette (Abstand – Öffnung – Abstand) + Gesamtmaß in zweiter Reihe
+          segs.forEach(([p,q])=>{ out+=dimSvg(p, q, nx, ny, lbl, {...dopts, fs:lbl*0.8}); });
+          out+=dimSvg(a, b, nx, ny, lbl, {...dopts, off:lbl*3.4});
+        } else {
+          out+=dimSvg(a, b, nx, ny, lbl, dopts);
+        }
+        const isSelV = sel.vertex===i;
+        out+=`<circle cx="${a.x}" cy="${a.y}" r="${lbl*(isSelV?0.55:0.35)}" fill="${isSelV?'#2f6fed':'#2b3345'}" stroke="#fff" stroke-width="${lbl*0.12}" data-roomid="${r.id}" data-vertex="${i}" style="cursor:move"/>`;
+        out+=`<circle cx="${a.x}" cy="${a.y}" r="${lbl*1.1}" fill="transparent" data-roomid="${r.id}" data-vertex="${i}" style="cursor:move"/>`;
+      });
+      // Türen/Fenster anwählbar: Hitzone, Auswahl-Markierung und Breiten-Griffe
+      (r.openings||[]).forEach(o=>{
+        const [a,b]=wallPoints(r,o.wall); const L=dist(a,b); if(L<0.01) return;
+        const ux=(b.x-a.x)/L, uy=(b.y-a.y)/L;
+        const t0=Math.max(0,Math.min(o.offset,L-o.width));
+        const q0={x:a.x+ux*t0, y:a.y+uy*t0}, q1={x:a.x+ux*(t0+o.width), y:a.y+uy*(t0+o.width)};
+        const isSelO = sel.openId===o.id;
+        if(isSelO){
+          out+=`<line x1="${q0.x}" y1="${q0.y}" x2="${q1.x}" y2="${q1.y}" stroke="#2f6fed" opacity="0.55" stroke-width="0.24" data-open="${o.id}" style="cursor:move"/>`;
+          const mx=(q0.x+q1.x)/2, my=(q0.y+q1.y)/2;
+          const oang=readAngle(q0,q1), otx=mx-uy*lbl*1.6, oty=my+ux*lbl*1.6;
+          out+=`<text x="${otx}" y="${oty}" text-anchor="middle" dominant-baseline="middle" font-size="${lbl*0.85}" fill="#2f6fed" font-weight="700" transform="rotate(${oang} ${otx} ${oty})" style="pointer-events:none">${fmt(o.width,2)}</text>`;
+          const hs=lbl*0.38;
+          [[q0,0],[q1,1]].forEach(([q,k])=>{
+            out+=`<rect x="${q.x-hs}" y="${q.y-hs}" width="${2*hs}" height="${2*hs}" fill="#fff" stroke="#2f6fed" stroke-width="${lbl*0.1}" data-open="${o.id}" data-openend="${k}" style="cursor:pointer"/>`;
+          });
+        } else {
+          out+=`<line x1="${q0.x}" y1="${q0.y}" x2="${q1.x}" y2="${q1.y}" stroke="transparent" stroke-width="0.35" data-open="${o.id}" style="cursor:pointer"/>`;
+        }
+      });
+    }
+  });
+
+  if(mode==='draw' && draft.points.length){
+    const d=draft.points.map((p,i)=>(i?'L':'M')+p.x+' '+p.y).join(' ');
+    out+=`<path d="${d}" fill="none" stroke="#2f6fed" stroke-width="0.08" stroke-dasharray="0.15 0.1"/>`;
+    draft.points.forEach((p,i)=>{ out+=`<circle cx="${p.x}" cy="${p.y}" r="${lbl*0.4}" fill="${i===0?'#0ea06f':'#2f6fed'}"/>`; });
+    if(draft.cursor){
+      const a=draft.points[draft.points.length-1], b=draft.cursor;
+      out+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#0ea06f" stroke-width="0.06"/>`;
+      const L=dist(a,b);
+      const dang=readAngle(a,b), drad=dang*Math.PI/180;
+      const dtx=(a.x+b.x)/2+Math.sin(drad)*lbl, dty=(a.y+b.y)/2-Math.cos(drad)*lbl;
+      out+=`<text x="${dtx}" y="${dty}" text-anchor="middle" dominant-baseline="middle" font-size="${lbl}" fill="#0ea06f" font-weight="700" transform="rotate(${dang} ${dtx} ${dty})">${fmt(L,2)} m</text>`;
+    }
+  }
+  if(drag && (drag.kind==='newrect'||drag.kind==='newline') && drag.cur){
+    const lbl2=Math.max(0.14, Math.min(0.6, vb.w/55));
+    if(drag.kind==='newrect'){
+      const x=Math.min(drag.start.x,drag.cur.x), y=Math.min(drag.start.y,drag.cur.y);
+      const w=Math.abs(drag.cur.x-drag.start.x), h=Math.abs(drag.cur.y-drag.start.y);
+      out+=`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#f2b23e" fill-opacity="0.25" stroke="#2f6fed" stroke-width="0.04" stroke-dasharray="0.1 0.06"/>`;
+      out+=`<text x="${x+w/2}" y="${y+h/2}" text-anchor="middle" font-size="${lbl2*0.8}" fill="#2f6fed" font-weight="700">${fmt(w,2)}×${fmt(h,2)}</text>`;
+    } else {
+      out+=`<line x1="${drag.start.x}" y1="${drag.start.y}" x2="${drag.cur.x}" y2="${drag.cur.y}" stroke="#2f6fed" stroke-width="0.05"/>`;
+      const L=Math.hypot(drag.cur.x-drag.start.x, drag.cur.y-drag.start.y);
+      const nang=readAngle(drag.start,drag.cur), nrad=nang*Math.PI/180;
+      const ntx=(drag.start.x+drag.cur.x)/2+Math.sin(nrad)*lbl2*0.6, nty=(drag.start.y+drag.cur.y)/2-Math.cos(nrad)*lbl2*0.6;
+      out+=`<text x="${ntx}" y="${nty}" text-anchor="middle" dominant-baseline="middle" font-size="${lbl2*0.8}" fill="#2f6fed" font-weight="700" transform="rotate(${nang} ${ntx} ${nty})">${fmt(L,2)} m</text>`;
+    }
+  }
+  if(mode==='place' && placing && placing.at){
+    const c=centroid(placing.points);
+    const d=placing.points.map((p,i)=>(i?'L':'M')+(p.x-c.x+placing.at.x)+' '+(p.y-c.y+placing.at.y)).join(' ')+' Z';
+    out+=`<path d="${d}" fill="#e8f0fe" stroke="#2f6fed" stroke-width="0.1" opacity="0.8"/>`;
+  }
+  svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+  svg.innerHTML=out;
+  svg.classList.toggle('draw', mode==='draw'||mode==='place'||mode==='objrect'||mode==='objline'||mode==='objsym'||mode==='addopen');
+}
+
+function zoomFit(){
+  const fr=focusRoomId?roomById(focusRoomId):null;
+  const rooms=fr?[fr]:floorRooms();
+  const rect=svg.getBoundingClientRect();
+  const ratio=rect.height/Math.max(1,rect.width);
+  if(!rooms.length){ vb={x:-2,y:-2,w:16,h:16*ratio}; renderCanvas(); return; }
+  const bb=bboxOf(rooms.flatMap(r=>r.points));
+  const pad=1.5;
+  let w=bb.maxx-bb.minx+pad*2, h=bb.maxy-bb.miny+pad*2;
+  if(h/w>ratio) w=h/ratio; else h=w*ratio;
+  vb={x:(bb.minx+bb.maxx)/2-w/2, y:(bb.miny+bb.maxy)/2-h/2, w, h};
+  renderCanvas();
+}
+function zoomBy(f, cx, cy){
+  cx=cx??vb.x+vb.w/2; cy=cy??vb.y+vb.h/2;
+  const w=vb.w*f, h=vb.h*f;
+  vb={x:cx-(cx-vb.x)*f, y:cy-(cy-vb.y)*f, w, h};
+  renderCanvas();
+}
+
+/* ---------- Magnetisches Einrasten ---------- */
+// Kandidaten: parallele Wände anderer Räume in der Nähe von Segment a1→b1.
+// Liefert Korrekturvektoren (senkrecht zur fremden Wand), die die Wände bündig machen.
+function segSnapCandidates(a1, b1, others, thresh){
+  const out=[];
+  const L1=dist(a1,b1); if(L1<0.05) return out;
+  const d1={x:(b1.x-a1.x)/L1, y:(b1.y-a1.y)/L1};
+  others.forEach(o=>{
+    const n=o.points.length;
+    for(let j=0;j<n;j++){
+      const a2=o.points[j], b2=o.points[(j+1)%n];
+      const L2=dist(a2,b2); if(L2<0.05) continue;
+      const d2={x:(b2.x-a2.x)/L2, y:(b2.y-a2.y)/L2};
+      if(Math.abs(d1.x*d2.y-d1.y*d2.x)>0.06) continue;          // nicht (nahezu) parallel
+      const nx=-d2.y, ny=d2.x;
+      const dd=(a1.x-a2.x)*nx+(a1.y-a2.y)*ny;                    // Abstand der Wandlinien
+      if(Math.abs(dd)>thresh || Math.abs(dd)<0.0005) continue;
+      const t1=(a1.x-a2.x)*d2.x+(a1.y-a2.y)*d2.y;                // Überlappung entlang der Wand
+      const t2=(b1.x-a2.x)*d2.x+(b1.y-a2.y)*d2.y;
+      if(Math.min(Math.max(t1,t2),L2)-Math.max(Math.min(t1,t2),0) < 0.05) continue;
+      out.push({dx:-nx*dd, dy:-ny*dd, mag:Math.abs(dd)});
+    }
+  });
+  return out;
+}
+// Senkrecht auftreffende Wände (T-Stoß): Wandende rastet bündig auf die fremde Wandlinie.
+// Liefert Korrekturvektoren senkrecht zur fremden Wand, damit die Wände sauber anschließen.
+function perpSnapCandidates(a1, b1, others, thresh){
+  const out=[];
+  const L1=dist(a1,b1); if(L1<0.05) return out;
+  const d1={x:(b1.x-a1.x)/L1, y:(b1.y-a1.y)/L1};
+  others.forEach(o=>{
+    const n=o.points.length;
+    for(let j=0;j<n;j++){
+      const a2=o.points[j], b2=o.points[(j+1)%n];
+      const L2=dist(a2,b2); if(L2<0.05) continue;
+      const d2={x:(b2.x-a2.x)/L2, y:(b2.y-a2.y)/L2};
+      if(Math.abs(d1.x*d2.x+d1.y*d2.y)>0.08) continue;           // nicht (nahezu) senkrecht
+      const nx=-d2.y, ny=d2.x;
+      [a1,b1].forEach(p=>{
+        const dd=(p.x-a2.x)*nx+(p.y-a2.y)*ny;                    // Abstand des Wandendes zur fremden Wandlinie
+        if(Math.abs(dd)>thresh || Math.abs(dd)<0.0005) return;
+        const t=(p.x-a2.x)*d2.x+(p.y-a2.y)*d2.y;                 // Auftreffpunkt entlang der fremden Wand
+        if(t<-0.05 || t>L2+0.05) return;                         // trifft das Wandsegment nicht
+        out.push({dx:-nx*dd, dy:-ny*dd, mag:Math.abs(dd)});
+      });
+    }
+  });
+  return out;
+}
+// Beste Korrektur für ein ganzes Polygon: kleinste Verschiebung, plus eine
+// zweite (nahezu orthogonale) für sauberes Eck-Andocken.
+function magneticDelta(points, others, thresh){
+  let cands=[];
+  const n=points.length;
+  for(let i=0;i<n;i++){
+    cands.push(...segSnapCandidates(points[i], points[(i+1)%n], others, thresh));
+    cands.push(...perpSnapCandidates(points[i], points[(i+1)%n], others, thresh));
+  }
+  if(!cands.length) return {dx:0, dy:0};
+  cands.sort((a,b)=>a.mag-b.mag);
+  const first=cands[0];
+  let dx=first.dx, dy=first.dy;
+  const u1={x:first.dx/first.mag, y:first.dy/first.mag};
+  const second=cands.find(c=>Math.abs(u1.x*(c.dx/c.mag)+u1.y*(c.dy/c.mag))<0.3);
+  if(second){ dx+=second.dx; dy+=second.dy; }
+  return {dx, dy};
+}
+// Punkt an Ecken/Wänden anderer Räume einrasten (für Ecken-Drag).
+function snapPointToOthers(pt, others, vt, et){
+  for(const o of others) for(const q of o.points)
+    if(Math.hypot(pt.x-q.x, pt.y-q.y)<vt) return {x:q.x, y:q.y};
+  for(const o of others){
+    const n=o.points.length;
+    for(let j=0;j<n;j++){
+      const a=o.points[j], b=o.points[(j+1)%n], L=dist(a,b); if(L<0.05) continue;
+      const t=((pt.x-a.x)*(b.x-a.x)+(pt.y-a.y)*(b.y-a.y))/(L*L);
+      if(t<0||t>1) continue;
+      const px=a.x+(b.x-a.x)*t, py=a.y+(b.y-a.y)*t;
+      if(Math.hypot(pt.x-px, pt.y-py)<et) return {x:px, y:py};
+    }
+  }
+  return null;
+}
+
+/* ---------- Türen in geteilten Wänden synchron halten ---------- */
+function doorAbsSeg(r,o){
+  const [a,b]=wallPoints(r,o.wall); const L=dist(a,b); if(L<0.01) return null;
+  const u={x:(b.x-a.x)/L, y:(b.y-a.y)/L};
+  const t0=Math.max(0, Math.min(o.offset, L-o.width));
+  return {p0:{x:a.x+u.x*t0, y:a.y+u.y*t0}, p1:{x:a.x+u.x*(t0+o.width), y:a.y+u.y*(t0+o.width)}};
+}
+// Spiegelt Tür D aus Raum R in den Raum, dessen Wand deckungsgleich unter der Tür liegt.
+function pushDoorToPartner(R,D){
+  if(D.type!=='door') return;
+  const seg=doorAbsSeg(R,D); if(!seg) return;
+  const eps=0.04;
+  // Absolute Lage von Anschlag (Angelpunkt) und Aufschlagseite der Tür
+  const [wa,wb]=wallPoints(R,D.wall); const wl=dist(wa,wb);
+  const u1={x:(wb.x-wa.x)/wl, y:(wb.y-wa.y)/wl};
+  const Hd=D.hinge?seg.p1:seg.p0;
+  const sAbs={x:-u1.y*(D.swing||1), y:u1.x*(D.swing||1)};
+  const rooms=proj().rooms.filter(x=>x.floorId===R.floorId && x.id!==R.id);
+  for(const S of rooms){
+    const n=S.points.length;
+    for(let j=0;j<n;j++){
+      const a2=S.points[j], b2=S.points[(j+1)%n];
+      const L2=dist(a2,b2); if(L2<0.05) continue;
+      const u2={x:(b2.x-a2.x)/L2, y:(b2.y-a2.y)/L2};
+      const dl=pt=>Math.abs((pt.x-a2.x)*(-u2.y)+(pt.y-a2.y)*u2.x);
+      if(dl(seg.p0)>eps || dl(seg.p1)>eps) continue;          // Tür liegt nicht auf dieser Wandlinie
+      const t0=(seg.p0.x-a2.x)*u2.x+(seg.p0.y-a2.y)*u2.y;
+      const t1=(seg.p1.x-a2.x)*u2.x+(seg.p1.y-a2.y)*u2.y;
+      const lo=Math.min(t0,t1), hi=Math.max(t0,t1);
+      if(lo<-0.02 || hi>L2+0.02) continue;                     // außerhalb des Wandsegments
+      if(!D.link) D.link=uid();
+      let P=(S.openings||[]).find(x=>x.link===D.link && x.id!==D.id);
+      if(!P){
+        // vorhandene, noch unverknüpfte Tür an gleicher Stelle übernehmen statt doppeln
+        P=(S.openings||[]).find(x=>x.type==='door' && !x.link && x.wall===j && Math.abs(x.offset-lo)<0.1);
+        if(P) P.link=D.link;
+      }
+      // Anschlag/Aufschlag lagerichtig übertragen (gleiche physische Tür in beiden Räumen)
+      const pp0={x:a2.x+u2.x*lo, y:a2.y+u2.y*lo}, pp1={x:a2.x+u2.x*hi, y:a2.y+u2.y*hi};
+      const pHinge=(Math.hypot(pp0.x-Hd.x,pp0.y-Hd.y)<=Math.hypot(pp1.x-Hd.x,pp1.y-Hd.y))?0:1;
+      const pSwing=((-u2.y)*sAbs.x+u2.x*sAbs.y)>=0?1:-1;
+      if(!P){
+        P={id:uid(), link:D.link, wall:j, offset:Math.round(lo*1000)/1000, width:D.width, height:D.height, sill:0, type:'door', hinge:pHinge, swing:pSwing};
+        S.openings=S.openings||[]; S.openings.push(P);
+      } else {
+        P.wall=j; P.offset=Math.round(lo*1000)/1000; P.width=D.width; P.height=D.height;
+        P.hinge=pHinge; P.swing=pSwing;
+      }
+      return;
+    }
+  }
+}
+function syncSharedDoors(){
+  proj().rooms.forEach(R=>(R.openings||[]).forEach(D=>pushDoorToPartner(R,D)));
+}
+// Tür samt verknüpfter Partner-Tür im Nachbarraum löschen
+function deleteOpeningEverywhere(r,opId){
+  const o=(r.openings||[]).find(x=>x.id===opId);
+  const ids=[opId];
+  if(o && o.link){
+    proj().rooms.forEach(rr=>{
+      (rr.openings||[]).forEach(x=>{ if(x.link===o.link) ids.push(x.id); });
+      rr.openings=(rr.openings||[]).filter(x=>x.link!==o.link);
+    });
+  } else {
+    r.openings=(r.openings||[]).filter(x=>x.id!==opId);
+  }
+  dropLvFor(ids);   // verknüpfte LV-Positionen mit löschen
+}
+
+/* ---------- Interaktion ---------- */
+let drag=null; // {kind:'pan'|'room', start, orig, moved}
+let lastObjTap=null; // Doppelklick-Erkennung für Linien-Objekte
+let pendingSym=null; // zu platzierendes Symbol (Schleusen/RFA)
+let pendingOpenType=null; // zu platzierende Tür/Fenster ('door'|'window')
+let statsOpen=false; // Raum-Statistik in der Seitenleiste auf-/zugeklappt
+const SYMDEFS={
+  '1k':{label:'1-K-Schleuse', w:1.0, h:1.0, k:1},
+  '2k':{label:'2-K-Schleuse', w:2.0, h:1.0, k:2},
+  '4k':{label:'4-K-Schleuse', w:4.0, h:1.0, k:4},
+  'rfa':{label:'RFA', w:1.2, h:1.2, k:0}
+};
+svg.addEventListener('pointerdown', e=>{
+  const p=svgPoint(e);
+  svg.setPointerCapture(e.pointerId);
+  if(mode==='draw'){ handleDrawClick(p); return; }
+  if(mode==='place'){ commitPlace(p); return; }
+  if(mode==='objrect'||mode==='objline'){
+    drag={kind:mode==='objrect'?'newrect':'newline',
+      start:{x:mm(p.x), y:mm(p.y)}, cur:null, moved:false};
+    return;
+  }
+  if(mode==='objsym'){
+    const r=focusRoomId?roomById(focusRoomId):null;
+    const def=pendingSym?SYMDEFS[pendingSym]:null;
+    if(r && def){
+      r.objects=r.objects||[];
+      const g={id:uid(), type:'sym', sub:pendingSym, name:def.label,
+        x:mm(p.x-def.w/2), y:mm(p.y-def.h/2),
+        w:def.w, h:def.h, rot:0};
+      r.objects.push(g); sel.objId=g.id; save();
+    }
+    pendingSym=null; mode='select';
+    renderAll(); updateDrawHint();
+    return;
+  }
+  if(mode==='addopen'){
+    // Tür/Fenster platzieren: nächste Wand des fokussierten Raums an der Klickstelle suchen
+    const r=focusRoomId?roomById(focusRoomId):null;
+    if(r && pendingOpenType){
+      let best={d:Infinity, i:-1, t:0, L:0};
+      r.points.forEach((A,i)=>{
+        const B=r.points[(i+1)%r.points.length], L=dist(A,B); if(L<0.05) return;
+        const tt=Math.max(0, Math.min(1, ((p.x-A.x)*(B.x-A.x)+(p.y-A.y)*(B.y-A.y))/(L*L)));
+        const q={x:A.x+(B.x-A.x)*tt, y:A.y+(B.y-A.y)*tt};
+        const d=Math.hypot(p.x-q.x, p.y-q.y);
+        if(d<best.d) best={d, i, t:tt*L, L};
+      });
+      if(best.i>=0 && best.d<Math.max(0.6, vb.w/25)){
+        const o=placeOpening(r, best.i, pendingOpenType, best.t);
+        if(o){ sel={roomId:r.id, wall:null, vertex:null, openId:o.id}; save(); }
+      }
+    }
+    mode='select'; pendingOpenType=null;
+    renderAll(); updateDrawHint();
+    return;
+  }
+  const t=e.target;
+  if(t.dataset && t.dataset.obj && focusRoomId){
+    const r=roomById(focusRoomId);
+    const g=(r.objects||[]).find(x=>x.id===t.dataset.obj);
+    if(g){
+      // Eigene Doppelklick-Erkennung: das dblclick-Event geht verloren, weil der erste
+      // Klick das SVG neu aufbaut. Zwei Klicks auf dieselbe Linie innerhalb 450 ms = Punkt einfügen.
+      const now=Date.now();
+      if(g.type==='line' && t.dataset.objh===undefined
+         && lastObjTap && lastObjTap.id===g.id && now-lastObjTap.t<450
+         && Math.hypot(p.x-lastObjTap.x, p.y-lastObjTap.y) < Math.max(0.2, vb.w/40)){
+        lastObjTap=null;
+        if(insertLineVertex(g, p)){
+          sel={roomId:focusRoomId, wall:null, vertex:null, objId:g.id};
+          save(); renderAll();
+        }
+        return;
+      }
+      lastObjTap={id:g.id, t:now, x:p.x, y:p.y};
+      if(sel.objId!==g.id){ sel={roomId:focusRoomId, wall:null, vertex:null, objId:g.id}; renderAll(); }
+      if(t.dataset.objh!==undefined) drag={kind:'objh', room:r, g, h:+t.dataset.objh, moved:false};
+      else drag={kind:'objmove', room:r, g, start:p, orig:JSON.parse(JSON.stringify(g)), moved:false};
+      return;
+    }
+  }
+  if(t.dataset && t.dataset.open && focusRoomId){
+    const r=roomById(focusRoomId);
+    const o=(r.openings||[]).find(x=>x.id===t.dataset.open);
+    if(o){
+      if(sel.openId!==o.id){ sel={roomId:focusRoomId, wall:null, vertex:null, openId:o.id}; renderAll(); }
+      const [a,b]=wallPoints(r,o.wall); const L=dist(a,b);
+      const u={x:(b.x-a.x)/L, y:(b.y-a.y)/L};
+      const tc=(p.x-a.x)*u.x+(p.y-a.y)*u.y;
+      if(t.dataset.openend!==undefined){
+        drag={kind:'openend', room:r, o, end:+t.dataset.openend, moved:false};
+      } else {
+        drag={kind:'open', room:r, o, grab:tc-Math.max(0,Math.min(o.offset,L-o.width)), moved:false};
+      }
+      return;
+    }
+  }
+  if(t.dataset && t.dataset.vertex!==undefined){
+    const i=+t.dataset.vertex;
+    sel={roomId:t.dataset.roomid, wall:null, vertex:i};
+    const r=roomById(sel.roomId);
+    drag={kind:'vertex', room:r, idx:i, start:p, orig:{...r.points[i]}, moved:false};
+    renderAll(); return;
+  }
+  if(t.dataset && t.dataset.wall!==undefined){
+    const i=+t.dataset.wall;
+    sel={roomId:t.dataset.roomid, wall:i, vertex:null};
+    const r=roomById(sel.roomId);
+    drag={kind:'wall', room:r, idx:i, start:p,
+      origA:{...r.points[i]}, origB:{...r.points[(i+1)%r.points.length]}, moved:false};
+    renderAll(); return;
+  }
+  if(t.dataset && t.dataset.roomid && !focusRoomId){
+    // Etagenansicht: Ziehen verschiebt den Raum, Klick ohne Bewegung zoomt hinein
+    const r=roomById(t.dataset.roomid);
+    drag={kind:'room', start:p, orig:r.points.map(q=>({...q})),
+      origObjs:JSON.parse(JSON.stringify(r.objects||[])), room:r, moved:false};
+    return;
+  }
+  // Raumansicht: Klick auf ausgegrauten Nachbarraum merken → wechselt bei Klick ohne Bewegung
+  const pendingRoom=(focusRoomId && t.dataset && t.dataset.roomid && t.dataset.roomid!==focusRoomId) ? t.dataset.roomid : null;
+  drag={kind:'pan', start:{x:e.clientX,y:e.clientY}, orig:{...vb}, moved:false, pendingRoom};
+});
+svg.addEventListener('pointermove', e=>{
+  const p=svgPoint(e);
+  if(mode==='draw'){ draft.cursor=snapDir(p); renderCanvas(); updateDrawHint(); return; }
+  if(mode==='place'){ if(placing){placing.at=p; renderCanvas();} return; }
+  if(!drag) return;
+  if(drag.kind==='pan'){
+    const scale=vb.w/svg.getBoundingClientRect().width;
+    const dx=(e.clientX-drag.start.x)*scale, dy=(e.clientY-drag.start.y)*scale;
+    if(Math.abs(dx)+Math.abs(dy)>0.02) drag.moved=true;
+    vb.x=drag.orig.x-dx; vb.y=drag.orig.y-dy; renderCanvas();
+  } else if(drag.kind==='room'){
+    let dx=p.x-drag.start.x, dy=p.y-drag.start.y;
+    dx=mm(dx); dy=mm(dy);
+    if(Math.abs(dx)+Math.abs(dy)>0.01) drag.moved=true;
+    let pts=drag.orig.map(q=>({x:q.x+dx, y:q.y+dy}));
+    // Magnet: an Wänden der anderen Räume bündig einrasten
+    const others=floorRooms().filter(x=>x.id!==drag.room.id);
+    const m=magneticDelta(pts, others, 0.25);
+    if(m.dx||m.dy) pts=pts.map(q=>({x:q.x+m.dx, y:q.y+m.dy}));
+    drag.room.points=pts;
+    // Objekte wandern mit dem Raum mit
+    const tx=dx+m.dx, ty=dy+m.dy;
+    drag.room.objects=(drag.origObjs||[]).map(g=>g.points
+      ? {...g, points:g.points.map(pt=>({x:pt.x+tx, y:pt.y+ty}))}
+      : {...g, x:g.x+tx, y:g.y+ty});
+    renderCanvas();
+  } else if(drag.kind==='vertex'){
+    const r=drag.room, i=drag.idx, n=r.points.length;
+    let nx=drag.orig.x+(p.x-drag.start.x), ny=drag.orig.y+(p.y-drag.start.y);
+    nx=mm(nx); ny=mm(ny);
+    // Rechtwinkel-Einrasten an den Nachbarecken
+    const prev=r.points[(i-1+n)%n], next=r.points[(i+1)%n];
+    [prev,next].forEach(q=>{
+      if(Math.abs(nx-q.x)<0.09) nx=q.x;
+      if(Math.abs(ny-q.y)<0.09) ny=q.y;
+    });
+    // Magnet: an Ecken/Wänden der Nachbarräume einrasten
+    const vOthers=floorRooms().filter(x=>x.id!==r.id);
+    const snapped=snapPointToOthers({x:nx, y:ny}, vOthers, 0.15, 0.12);
+    if(snapped){ nx=snapped.x; ny=snapped.y; }
+    if(Math.hypot(nx-drag.orig.x, ny-drag.orig.y)>0.01) drag.moved=true;
+    r.points[i]={x:nx, y:ny};
+    renderCanvas();
+  } else if(drag.kind==='wall'){
+    const r=drag.room, i=drag.idx, n=r.points.length;
+    const A=drag.origA, B=drag.origB;
+    const L=Math.hypot(B.x-A.x, B.y-A.y); if(L<1e-6) return;
+    const nx=-(B.y-A.y)/L, ny=(B.x-A.x)/L;   // Wandnormale
+    let s=(p.x-drag.start.x)*nx + (p.y-drag.start.y)*ny;
+    s=mm(s);
+    if(Math.abs(s)>0.001) drag.moved=true;
+    let A2={x:A.x+nx*s, y:A.y+ny*s}, B2={x:B.x+nx*s, y:B.y+ny*s};
+    // Magnet: bündig an parallele Wände anderer Räume springen (bzw. senkrecht anschließen)
+    const wOthers=floorRooms().filter(x=>x.id!==r.id);
+    const cands=[...segSnapCandidates(A2, B2, wOthers, 0.2), ...perpSnapCandidates(A2, B2, wOthers, 0.2)];
+    if(cands.length){
+      cands.sort((a,b)=>a.mag-b.mag);
+      A2={x:A2.x+cands[0].dx, y:A2.y+cands[0].dy};
+      B2={x:B2.x+cands[0].dx, y:B2.y+cands[0].dy};
+    }
+    r.points[i]=A2;
+    r.points[(i+1)%n]=B2;
+    renderCanvas();
+  } else if(drag.kind==='open'){
+    // Öffnung entlang der Wand verschieben — über Ecken hinweg auch auf andere Wände
+    const o=drag.o, r=drag.room;
+    let near={d:Infinity, i:o.wall, t:0};
+    r.points.forEach((A,i)=>{
+      const B=r.points[(i+1)%r.points.length], LL=dist(A,B); if(LL<0.05) return;
+      const tt=Math.max(0, Math.min(1, ((p.x-A.x)*(B.x-A.x)+(p.y-A.y)*(B.y-A.y))/(LL*LL)));
+      const q={x:A.x+(B.x-A.x)*tt, y:A.y+(B.y-A.y)*tt};
+      const d=Math.hypot(p.x-q.x, p.y-q.y);
+      if(d<near.d) near={d, i, t:tt*LL};
+    });
+    if(near.i!==o.wall){
+      // Wandwechsel nur, wenn dort eine passende Lücke frei ist
+      const nt=fitOpening(r, o, near.i, near.t-o.width/2);
+      if(nt!=null){
+        o.wall=near.i; o.offset=nt; drag.grab=o.width/2; drag.moved=true;
+        pushDoorToPartner(r,o); renderCanvas();
+      }
+    } else {
+      const [a,b]=wallPoints(r,o.wall); const L=dist(a,b);
+      const u={x:(b.x-a.x)/L, y:(b.y-a.y)/L};
+      let t=mm((p.x-a.x)*u.x+(p.y-a.y)*u.y - drag.grab);
+      // Nachbaröffnungen begrenzen die Bewegung (kein Überlappen)
+      const lim=openLimits(r,o);
+      t=Math.max(lim.lo, Math.min(t, Math.min(L, lim.hi)-o.width));
+      if(Math.abs(t-o.offset)>0.001){
+        drag.moved=true; o.offset=t;
+        pushDoorToPartner(r,o);
+        renderCanvas();
+      }
+    }
+  } else if(drag.kind==='openend'){
+    // Breite über Endgriff ändern (der andere Rand bleibt stehen), begrenzt durch Nachbarn
+    const o=drag.o, r=drag.room;
+    const [a,b]=wallPoints(r,o.wall); const L=dist(a,b);
+    const u={x:(b.x-a.x)/L, y:(b.y-a.y)/L};
+    let t=mm((p.x-a.x)*u.x+(p.y-a.y)*u.y);
+    const lim=openLimits(r,o);
+    const t0=Math.max(0,Math.min(o.offset,L-o.width)), t1=t0+o.width;
+    if(drag.end===0){
+      const nt0=Math.max(lim.lo, Math.min(t, t1-OPEN_MINW));
+      if(Math.abs(nt0-t0)>0.001){ o.offset=mm(nt0); o.width=mm(t1-nt0); drag.moved=true; }
+    } else {
+      const nt1=Math.min(Math.min(L, lim.hi), Math.max(t, t0+OPEN_MINW));
+      if(Math.abs(nt1-t1)>0.001){ o.offset=mm(t0); o.width=mm(nt1-t0); drag.moved=true; }
+    }
+    if(drag.moved){ pushDoorToPartner(r,o); renderCanvas(); }
+  } else if(drag.kind==='newrect'||drag.kind==='newline'){
+    let q={x:mm(p.x), y:mm(p.y)};
+    if(drag.kind==='newline') q=orthoSnap(drag.start, q);
+    drag.cur=q; drag.moved=true;
+    renderCanvas();
+  } else if(drag.kind==='objmove'){
+    const dx=mm(p.x-drag.start.x), dy=mm(p.y-drag.start.y);
+    const g=drag.g, o=drag.orig;
+    if(g.points){ g.points=o.points.map(pt=>({x:pt.x+dx, y:pt.y+dy})); }
+    else { g.x=o.x+dx; g.y=o.y+dy; }
+    if(dx||dy) drag.moved=true;
+    renderCanvas();
+  } else if(drag.kind==='objh'){
+    const g=drag.g;
+    let q={x:mm(p.x), y:mm(p.y)};
+    if(g.type==='rect'){
+      const corners=[[g.x,g.y],[g.x+g.w,g.y],[g.x+g.w,g.y+g.h],[g.x,g.y+g.h]];
+      const opp=corners[(drag.h+2)%4];
+      g.x=Math.min(q.x,opp[0]); g.y=Math.min(q.y,opp[1]);
+      g.w=Math.max(0.05,Math.abs(q.x-opp[0])); g.h=Math.max(0.05,Math.abs(q.y-opp[1]));
+    } else if(g.type==='sym'){
+      // Symbol: im sichtbaren (ggf. gedrehten) Umriss resizen, dann auf w/h zurückrechnen
+      const rot=(g.rot||0)%180;
+      const c={x:g.x+g.w/2, y:g.y+g.h/2};
+      const W=rot?g.h:g.w, H=rot?g.w:g.h;
+      const vx=c.x-W/2, vy=c.y-H/2;
+      const corners=[[vx,vy],[vx+W,vy],[vx+W,vy+H],[vx,vy+H]];
+      const opp=corners[(drag.h+2)%4];
+      const nvx=Math.min(q.x,opp[0]), nvy=Math.min(q.y,opp[1]);
+      const nW=Math.max(0.2,Math.abs(q.x-opp[0])), nH=Math.max(0.2,Math.abs(q.y-opp[1]));
+      g.w=rot?nH:nW; g.h=rot?nW:nH;
+      g.x=nvx+nW/2-g.w/2; g.y=nvy+nH/2-g.h/2;
+    } else {
+      const k=drag.h, pts=g.points;
+      const fix=pts[k-1]||pts[k+1];
+      if(fix) q=orthoSnap(fix,q);
+      pts[k]={x:q.x, y:q.y};
+    }
+    drag.moved=true;
+    renderCanvas();
+  }
+});
+svg.addEventListener('pointerup', e=>{
+  if(drag){
+    if(drag.kind==='room' && !drag.moved && mode==='select'){
+      const id=drag.room.id; drag=null; focusRoom(id); return;
+    }
+    if(drag.kind==='pan' && !drag.moved && mode==='select'){
+      if(drag.pendingRoom){ const id=drag.pendingRoom; drag=null; focusRoom(id); return; }
+      const t=document.elementFromPoint(e.clientX,e.clientY);
+      const ds=(t&&t.dataset)?t.dataset:{};
+      // Klick auf die Fläche des fokussierten Raums zählt als "ins Leere im Raum"
+      const hitOther=ds.wall!==undefined||ds.vertex!==undefined||(ds.roomid&&ds.roomid!==focusRoomId);
+      if(!hitOther){
+        if(focusRoomId){
+          // Klick ins Leere: im Raum → abwählen (Raum bleibt fokussiert), neben dem Raum → zurück zur Etage
+          const fr2=roomById(focusRoomId), q=svgPoint(e);
+          if(fr2 && !pointInPoly(q, fr2.points)){ drag=null; exitRoom(); return; }
+          sel={roomId:focusRoomId, wall:null, vertex:null}; renderAll();
+        }
+        else if(!ds.roomid){ sel={roomId:null, wall:null, vertex:null}; renderAll(); }
+      }
+    }
+    if(drag && (drag.kind==='newrect'||drag.kind==='newline')){
+      const r=focusRoomId?roomById(focusRoomId):null;
+      if(r && drag.cur){
+        r.objects=r.objects||[];
+        if(drag.kind==='newrect'){
+          const x=Math.min(drag.start.x,drag.cur.x), y=Math.min(drag.start.y,drag.cur.y);
+          const w=Math.abs(drag.cur.x-drag.start.x), h=Math.abs(drag.cur.y-drag.start.y);
+          if(w>0.05 && h>0.05){
+            const g={id:uid(), type:'rect', name:'Fläche '+(r.objects.filter(o=>o.type==='rect').length+1), x, y, w, h};
+            r.objects.push(g); sel.objId=g.id; save();
+          }
+        } else {
+          const L=Math.hypot(drag.cur.x-drag.start.x, drag.cur.y-drag.start.y);
+          if(L>0.05){
+            const g={id:uid(), type:'line', name:'Linie '+(r.objects.filter(o=>o.type==='line').length+1),
+              points:[{...drag.start},{...drag.cur}]};
+            r.objects.push(g); sel.objId=g.id; save();
+          }
+        }
+      }
+      mode='select'; drag=null; renderAll(); updateDrawHint(); return;
+    }
+    let refocused=false;
+    if(drag && drag.moved && (drag.kind==='objmove'||drag.kind==='objh')){
+      // In einen anderen Raum geschoben? Dann dort einsortieren und dorthin wechseln
+      const moved=reassignObjectRoom(drag.room, drag.g);
+      if(moved){ focusRoomId=moved.id; sel={roomId:moved.id, wall:null, vertex:null, objId:drag.g.id}; refocused=true; }
+    }
+    if(drag && drag.moved && (drag.kind==='room'||drag.kind==='vertex'||drag.kind==='wall'||drag.kind==='open'||drag.kind==='openend'||drag.kind==='objmove'||drag.kind==='objh')){
+      syncSharedDoors(); save(); renderAll();
+      if(refocused) zoomFit();   // neuen Raum wie beim Raumwechsel zentriert einpassen
+    }
+    drag=null;
+  }
+});
+function insertLineVertex(g, p){
+  const pts=g.points;
+  let best={d:Infinity, idx:0, q:null};
+  for(let i=0;i<pts.length-1;i++){
+    const a=pts[i], b=pts[i+1];
+    const L2=(b.x-a.x)**2+(b.y-a.y)**2; if(L2<1e-6) continue;
+    let t=((p.x-a.x)*(b.x-a.x)+(p.y-a.y)*(b.y-a.y))/L2;
+    t=Math.max(0.05, Math.min(0.95, t));
+    const q={x:a.x+(b.x-a.x)*t, y:a.y+(b.y-a.y)*t};
+    const d=Math.hypot(p.x-q.x, p.y-q.y);
+    if(d<best.d) best={d, idx:i, q};
+  }
+  if(best.q && best.d<0.5){
+    pts.splice(best.idx+1, 0, {x:mm(best.q.x), y:mm(best.q.y)});
+    return true;
+  }
+  return false;
+}
+svg.addEventListener('dblclick', e=>{
+  if(mode==='draw' && draft.points.length>=3){ closeDraft(); return; }
+  // Doppelklick auf eine Linie: Punkt an der Klickstelle einfügen (Gesamtlänge = Summe der Segmente)
+  const t=e.target;
+  if(mode==='select' && focusRoomId && t.dataset && t.dataset.obj){
+    const r=roomById(focusRoomId);
+    const g=(r.objects||[]).find(x=>x.id===t.dataset.obj);
+    if(g && g.type==='line' && insertLineVertex(g, svgPoint(e))){
+      sel={roomId:focusRoomId, wall:null, vertex:null, objId:g.id};
+      save(); renderAll();
+    }
+  }
+});
+svg.addEventListener('wheel', e=>{
+  e.preventDefault();
+  const p=svgPoint(e);
+  zoomBy(e.deltaY>0?1.15:0.87, p.x, p.y);
+},{passive:false});
+$('#zin').onclick=()=>zoomBy(0.8);
+$('#zout').onclick=()=>zoomBy(1.25);
+$('#zfit').onclick=zoomFit;
+
+/* ---------- Zeichnen ---------- */
+function snapDir(p){
+  if(!draft.points.length) return {x:mm(p.x), y:mm(p.y)};
+  const a=draft.points[draft.points.length-1];
+  const dx=p.x-a.x, dy=p.y-a.y, L=Math.hypot(dx,dy);
+  if(L<0.03) return p;
+  let ang=Math.atan2(dy,dx);
+  const snap=Math.round(ang/(Math.PI/4))*(Math.PI/4);
+  if(Math.abs(ang-snap)<0.14) ang=snap;
+  draft.dir={x:Math.cos(ang), y:Math.sin(ang)};
+  const Lr=mm(L);
+  return {x:mm(a.x+Math.cos(ang)*Lr), y:mm(a.y+Math.sin(ang)*Lr)};
+}
+function handleDrawClick(p){
+  const sp=snapDir(p);
+  if(draft.points.length>=3 && dist(sp, draft.points[0]) < vb.w/60){ closeDraft(); return; }
+  draft.points.push(sp);
+  draft.typed='';
+  renderCanvas(); updateDrawHint();
+}
+function addSegment(L){
+  if(!draft.points.length || !draft.dir || !isFinite(L) || L<=0) return;
+  const a=draft.points[draft.points.length-1];
+  draft.points.push({x:a.x+draft.dir.x*L, y:a.y+draft.dir.y*L});
+  draft.typed='';
+  renderCanvas(); updateDrawHint();
+}
+function closeDraft(){
+  if(draft.points.length<3){ cancelModes(); return; }
+  const r={id:uid(), floorId:activeFloorId, name:'Raum '+(proj().rooms.length+1), height:lastHeight, points:draft.points, openings:[]};
+  proj().rooms.push(r); save();
+  cancelModes(); focusRoom(r.id);
+}
+function updateDrawHint(){
+  const h=$('#drawhint');
+  if(mode==='draw'){
+    h.style.display='block';
+    const n=draft.points.length;
+    let txt = n===0 ? 'Ersten Eckpunkt klicken' :
+      `Punkt ${n} gesetzt — Richtung zeigen, dann <b>klicken</b>, <b>Laser auslösen</b> oder Länge tippen`;
+    if(draft.typed) txt += ` &nbsp;|&nbsp; Eingabe: <b>${draft.typed} m</b> (Enter)`;
+    if(n>=3) txt += ' &nbsp;|&nbsp; Doppelklick = schließen';
+    h.innerHTML=txt+' &nbsp;|&nbsp; Esc = abbrechen';
+  } else if(mode==='place'){
+    h.style.display='block';
+    h.innerHTML='Position wählen und <b>klicken</b>, um den Raum zu platzieren &nbsp;|&nbsp; Esc = abbrechen';
+  } else if(mode==='objrect'){
+    h.style.display='block';
+    h.innerHTML='<b>Fläche aufziehen:</b> Ecke anklicken, ziehen, loslassen &nbsp;|&nbsp; Esc = abbrechen';
+  } else if(mode==='objline'){
+    h.style.display='block';
+    h.innerHTML='<b>Linie ziehen:</b> Startpunkt anklicken, ziehen, loslassen (rastet auf 45°) &nbsp;|&nbsp; Esc = abbrechen';
+  } else if(mode==='objsym'){
+    h.style.display='block';
+    h.innerHTML=`<b>${(SYMDEFS[pendingSym]||{}).label||'Symbol'} platzieren:</b> Position im Raum anklicken &nbsp;|&nbsp; Esc = abbrechen`;
+  } else if(mode==='addopen'){
+    h.style.display='block';
+    h.innerHTML=`<b>${pendingOpenType==='door'?'Tür':'Fenster'} platzieren:</b> Wand im Raum anklicken &nbsp;|&nbsp; Esc = abbrechen`;
+  } else h.style.display='none';
+}
+function cancelModes(){
+  mode='select'; draft={points:[],cursor:null,dir:null,typed:''}; placing=null; pendingSym=null; pendingOpenType=null;
+  updateDrawHint(); renderCanvas(); renderSidebar();
+}
+document.addEventListener('keydown', e=>{
+  if(e.target && e.target.matches && e.target.matches('input,textarea,select')) return;
+  if(e.key==='Escape'){
+    if(mode!=='select') cancelModes();
+    else if(sel.wall!=null||sel.vertex!=null||sel.openId||sel.objId){ sel={roomId:focusRoomId, wall:null, vertex:null}; renderAll(); }
+    else if(focusRoomId) exitRoom();
+    return;
+  }
+  if(mode==='draw'){
+    if(/^[0-9]$/.test(e.key)) draft.typed+=e.key;
+    else if(e.key===','||e.key==='.') draft.typed+= draft.typed.includes(',')?'':',';
+    else if(e.key==='Backspace') draft.typed=draft.typed.slice(0,-1);
+    else if(e.key==='Enter'){
+      const L=parseNum(draft.typed);
+      if(isFinite(L)&&L>0) addSegment(L);
+      else if(draft.points.length>=3) closeDraft();
+    }
+    updateDrawHint();
+  } else if(e.key==='Delete'){
+    const r=focusRoomId?roomById(focusRoomId):null;
+    if(r && sel.objId){ r.objects=(r.objects||[]).filter(x=>x.id!==sel.objId); dropLvFor(sel.objId); sel.objId=null; save(); renderAll(); }
+    else if(r && sel.openId){ deleteOpeningEverywhere(r, sel.openId); sel.openId=null; save(); renderAll(); }
+    else if(sel.roomId) deleteRoom(sel.roomId);
+  }
+});
+
+/* ---------- Platzieren (Vorlage) ---------- */
+function commitPlace(p){
+  if(!placing) return;
+  const c=centroid(placing.points);
+  const pts=placing.points.map(q=>({x:mm(q.x-c.x+p.x), y:mm(q.y-c.y+p.y)}));
+  const r={id:uid(), floorId:activeFloorId, name:placing.name||('Raum '+(proj().rooms.length+1)), height:placing.height||2.5, points:pts, openings:[]};
+  proj().rooms.push(r); save();
+  lastHeight=r.height;
+  cancelModes(); focusRoom(r.id);
+}
+
+/* ---------- Öffnungen: Platz, Grenzen, Wandwechsel ---------- */
+const OPEN_MINW=0.3;   // kleinste sinnvolle Öffnungsbreite
+// Freie Lücken einer Wand (Öffnung 'skipId' ausgenommen)
+function wallGaps(r, wallIdx, skipId){
+  const [a,b]=wallPoints(r,wallIdx); const L=dist(a,b);
+  const occ=(r.openings||[]).filter(o=>o.wall===wallIdx && o.id!==skipId)
+    .map(o=>{ const t0=Math.max(0,Math.min(o.offset, L-o.width)); return [t0, t0+o.width]; })
+    .sort((p,q)=>p[0]-q[0]);
+  const gaps=[]; let cur=0;
+  occ.forEach(([s,e])=>{ if(s-cur>0.001) gaps.push([cur,s]); cur=Math.max(cur,e); });
+  if(L-cur>0.001) gaps.push([cur,L]);
+  return {L, gaps, occ};
+}
+// Bewegungs-/Größengrenzen einer Öffnung durch ihre Nachbarn auf derselben Wand
+function openLimits(r, o){
+  const {L, occ}=wallGaps(r, o.wall, o.id);
+  const t0=Math.max(0,Math.min(o.offset, L-o.width)), t1=t0+o.width;
+  let lo=0, hi=L;
+  occ.forEach(([s,e])=>{
+    if(e<=t0+0.0005) lo=Math.max(lo,e);
+    else if(s>=t1-0.0005) hi=Math.min(hi,s);
+  });
+  return {L, lo, hi};
+}
+// Passenden Offset auf einer (anderen) Wand suchen: nächstgelegene freie Lücke
+function fitOpening(r, o, wallIdx, tWanted){
+  const {L, gaps}=wallGaps(r, wallIdx, o.id);
+  const usable=gaps.filter(g=>g[1]-g[0] >= o.width-0.0005);
+  if(!usable.length) return null;
+  let bestT=null, bestD=Infinity;
+  usable.forEach(g=>{
+    const t=Math.max(g[0], Math.min(tWanted, g[1]-o.width));
+    const d=Math.abs(t-tWanted);
+    if(d<bestD){ bestD=d; bestT=t; }
+  });
+  return mm(Math.max(0, Math.min(bestT, L-o.width)));
+}
+// Neue Tür/neues Fenster in die freie Lücke bei tWunsch setzen (null = Wandmitte)
+function placeOpening(r, wallIdx, type, tWunsch){
+  const {L, gaps}=wallGaps(r, wallIdx, null);
+  const want = tWunsch==null ? L/2 : tWunsch;
+  let g=gaps.find(x=>want>=x[0]-0.001 && want<=x[1]+0.001 && (x[1]-x[0])>=OPEN_MINW);
+  if(!g) g=gaps.filter(x=>(x[1]-x[0])>=OPEN_MINW).sort((x,y)=>(y[1]-y[0])-(x[1]-x[0]))[0];
+  if(!g){
+    alert(`Auf dieser Wand ist kein Platz mehr für ${type==='door'?'eine Tür':'ein Fenster'}.\n\nTür/Fenster verschmälern oder verschieben — oder eine andere Wand wählen.`);
+    return null;
+  }
+  const w=mm(Math.min(type==='door'?0.885:1.01, g[1]-g[0]));
+  const o={id:uid(), wall:wallIdx, offset:mm(Math.max(g[0], Math.min(want-w/2, g[1]-w))),
+    width:w, height:type==='door'?2.0:1.25, sill:type==='door'?0:0.9, type};
+  if(type==='door'){ o.hinge=0; o.swing=1; }
+  r.openings=r.openings||[]; r.openings.push(o);
+  pushDoorToPartner(r,o);
+  return o;
+}
+/* Objekt gehört zu dem Raum, in dem es hauptsächlich liegt (Mittelpunkt entscheidet).
+   Liegt es nach dem Verschieben in einem anderen Raum, wandert es dorthin — samt LV-Positionen. */
+function objCenter(g){
+  if(g.points){ const bb=bboxOf(g.points); return {x:(bb.minx+bb.maxx)/2, y:(bb.miny+bb.maxy)/2}; }
+  return {x:g.x+g.w/2, y:g.y+g.h/2};
+}
+function reassignObjectRoom(fromRoom, g){
+  const c=objCenter(g);
+  if(pointInPoly(c, fromRoom.points)) return null;
+  const target=floorRooms().find(x=>x.id!==fromRoom.id && pointInPoly(c, x.points));
+  if(!target) return null;
+  fromRoom.objects=(fromRoom.objects||[]).filter(x=>x.id!==g.id);
+  target.objects=target.objects||[]; target.objects.push(g);
+  proj().attrs.forEach(a=>{ if(a.objId===g.id) a.roomId=target.id; });
+  return target;
+}
+/* LV-Positionen eines gelöschten Objekts/einer Öffnung mit entfernen */
+function dropLvFor(ids){
+  const set=new Set([].concat(ids));
+  const p=proj();
+  p.attrs=p.attrs.filter(a=>!(a.objId && set.has(a.objId)));
+}
+
+/* ---------- Wand / Öffnungen ---------- */
+function setWallLength(r, i, L){
+  const p=r.points, a=p[i], b=p[(i+1)%p.length];
+  const cur=dist(a,b); if(cur<1e-6||!isFinite(L)||L<=0) return;
+  const ux=(b.x-a.x)/cur, uy=(b.y-a.y)/cur;
+  const dx=(L-cur)*ux, dy=(L-cur)*uy;
+  for(let k=i+1;k<p.length;k++){ p[k].x+=dx; p[k].y+=dy; }
+  syncSharedDoors(); save(); renderAll();
+}
+function deleteRoom(id){
+  const r=roomById(id); if(!r) return;
+  if(!confirm(`Raum „${r.name}“ wirklich löschen? Zugehörige LV-Positionen werden mit gelöscht.`)) return;
+  const p=proj();
+  p.rooms=p.rooms.filter(x=>x.id!==id);
+  p.attrs=p.attrs.filter(a=>a.roomId!==id);
+  focusRoomId=null; sel={roomId:null,wall:null,vertex:null};
+  save(); renderAll(); zoomFit();
+}
+
+/* ================= Sidebar ================= */
+/* Liste verknüpfter LV-Positionen (LV-Nummer + Kurztext, Klick = bearbeiten) */
+function lvListHtml(list){
+  if(!list.length) return '';
+  const p=proj();
+  return `<div style="margin-top:8px; border-top:1px solid var(--line); padding-top:6px"><h3>Verknüpfte LV-Positionen</h3>${[...list].sort((a,b)=>lvCmp(a.lv,b.lv)).map(a=>{
+    const c=lvColor(p,a.lv);
+    return `<div class="stat" style="cursor:pointer" data-lvopen="${a.id}" title="LV-Position bearbeiten"><span>${c?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c};margin-right:5px"></span>`:''}${esc(a.lv)}</span><b style="font-weight:400;color:var(--muted)">${esc(a.kurz||'')}</b></div>`;
+  }).join('')}</div>`;
+}
+function renderSidebar(){
+  const p=proj();
+  const fr=focusRoomId?roomById(focusRoomId):null;
+  let html='';
+
+  if(!fr){
+    /* ---------- Etagenansicht ---------- */
+    html+=`<div class="panel"><h3>Etage</h3>
+      <div class="row">
+        <select id="floorsel" style="flex:1">${p.floors.map(f=>`<option value="${f.id}" ${f.id===activeFloorId?'selected':''}>${esc(f.name)}</option>`).join('')}</select>
+        <button class="btn small" id="flooradd" title="Neue Etage">＋</button>
+        <button class="btn small" id="floorren" title="Umbenennen">✎</button>
+        <button class="btn small danger" id="floordel" title="Etage löschen">🗑</button>
+      </div></div>`;
+
+    html+=`<div class="panel"><h3>Neuer Raum</h3>
+      <div class="row">
+        <button class="btn ${mode==='draw'?'active':''}" id="modedraw" style="flex:1">✏️ Frei zeichnen</button>
+        <button class="btn" id="modetpl" style="flex:1">▭ Vorlage</button>
+      </div></div>`;
+
+    const rooms=floorRooms();
+    html+=`<div class="panel"><h3>Räume (${rooms.length})</h3>
+      ${rooms.length? rooms.map(x=>{const s=roomStats(x);return `<div class="stat" style="cursor:pointer" data-selroom="${x.id}"><span>▸ ${esc(x.name)}</span><b>${fmt(s.area,2)} m²</b></div>`;}).join('') : '<p class="hint">Noch keine Räume auf dieser Etage. Oben „Frei zeichnen“ oder „Vorlage“ wählen.</p>'}
+      <p class="hint" style="margin-top:6px">Raum anklicken = hineinzoomen und bearbeiten. Raum ziehen = auf der Etage verschieben.</p>
+    </div>`;
+
+    html+=`<div class="panel"><h3>Laser (Bluetooth)</h3>
+      <div class="row">
+        <button class="btn small" id="btleica" style="flex:1">Leica verbinden</button>
+        <button class="btn small" id="btbosch" style="flex:1">Bosch verbinden</button>
+      </div>
+      <div class="row"><button class="btn small" id="btdisc" style="flex:1">Trennen</button></div>
+      <div class="biglaser" id="btvalue">—</div>
+      <div class="row"><label>Manuell (m)</label><input id="btmanual" placeholder="z. B. 3,42 + Enter" style="flex:1; border:1px solid var(--line); border-radius:6px; padding:5px 7px;"></div>
+      <p class="hint">Grün umrandetes Feld anklicken, dann am Gerät messen → Wert springt ins Feld.</p>
+      <details><summary class="hint">Protokoll-Log</summary><div id="btlog"></div></details>
+    </div>`;
+  } else {
+    /* ---------- Raumansicht: je nach Fokus genau EIN Inhalt ---------- */
+    const r=fr;
+    const objs=r.objects||[], ops=r.openings||[];
+    const selObj=sel.objId?objs.find(o=>o.id===sel.objId):null;
+    const selOp=sel.openId?ops.find(o=>o.id===sel.openId):null;
+
+    if(selObj){
+      /* Objekt im Fokus */
+      const nrTxt=selObj.nr?` #${selObj.nr}`:'';
+      const btns=`<div class="row">
+          <button class="btn green small" id="objlv">＋ LV-Position</button>
+          <button class="btn small" id="objdup">Duplizieren</button>
+          <button class="btn danger small" id="objdel">Entfernen</button>
+        </div>
+        <div class="row">${fotoBtn(selObj.fotos,'objfoto')}</div>
+        ${fotoStrip(selObj.fotos)}`+lvListHtml(p.attrs.filter(a=>a.objId===selObj.id));
+      if(selObj.type==='rect'){
+        html+=`<div class="panel"><h3>▭ Fläche${nrTxt} — ausgewählt</h3>
+          <div class="row"><label>Name</label><input type="text" id="objname" value="${esc(selObj.name||'')}"></div>
+          <div class="row"><label>Länge (m)</label><input class="laser objdim" data-f="w" value="${fmt(selObj.w,3)}"></div>
+          <div class="row"><label>Breite (m)</label><input class="laser objdim" data-f="h" value="${fmt(selObj.h,3)}"></div>
+          <div class="stat"><span>Fläche</span><b>${fmt(selObj.w*selObj.h,3)} m²</b></div>
+          <div class="stat"><span>Umfang</span><b>${fmt(2*(selObj.w+selObj.h),3)} m</b></div>
+          ${btns}
+          <p class="hint">Ziehen verschiebt, Eckgriffe ändern die Größe. Entf = löschen, Esc = abwählen.</p></div>`;
+      } else if(selObj.type==='sym'){
+        html+=`<div class="panel"><h3>▣ ${esc((SYMDEFS[selObj.sub]||{}).label||'Symbol')}${nrTxt} — ausgewählt</h3>
+          <div class="row"><label>Name</label><input type="text" id="objname" value="${esc(selObj.name||'')}"></div>
+          <div class="row"><label>Breite (m)</label><input class="laser objdim" data-f="w" value="${fmt(selObj.w,3)}"></div>
+          <div class="row"><label>Tiefe (m)</label><input class="laser objdim" data-f="h" value="${fmt(selObj.h,3)}"></div>
+          <div class="stat"><span>Drehung</span><b>${selObj.rot||0}°</b></div>
+          <div class="row"><button class="btn small" id="objrot">Drehen ⟳ 90°</button></div>
+          ${btns}
+          <p class="hint">Ziehen verschiebt das Symbol. Entf = löschen, Esc = abwählen.</p></div>`;
+      } else {
+        const L=lineLen(selObj);
+        html+=`<div class="panel"><h3>╱ Linie${nrTxt} — ausgewählt</h3>
+          <div class="row"><label>Name</label><input type="text" id="objname" value="${esc(selObj.name||'')}"></div>
+          <div class="row"><label>Gesamtlänge (m)</label><input class="laser objdim" data-f="len" value="${fmt(L,3)}"></div>
+          <div class="stat"><span>Punkte</span><b>${selObj.points.length}</b></div>
+          ${btns}
+          <p class="hint"><b>Doppelklick</b> auf die Linie fügt einen Punkt ein. Punktgriffe ziehen (rastet auf 45°), Längeneingabe skaliert die ganze Linie. Entf = löschen, Esc = abwählen.</p></div>`;
+      }
+    } else if(selOp){
+      /* Tür/Fenster im Fokus (sind Objekte) */
+      const nrTxt=selOp.nr?` #${selOp.nr}`:'';
+      html+=`<div class="panel"><h3>${selOp.type==='door'?'🚪 Tür':'🪟 Fenster'}${nrTxt} — ausgewählt</h3>
+        <div class="row"><label>Breite (m)</label><input class="laser opfld" data-op="${selOp.id}" data-f="width" value="${fmt(selOp.width,3)}"></div>
+        <div class="row"><label>Höhe (m)</label><input class="laser opfld" data-op="${selOp.id}" data-f="height" value="${fmt(selOp.height,3)}"></div>
+        <div class="row"><label>Abstand (m)</label><input class="laser opfld" data-op="${selOp.id}" data-f="offset" value="${fmt(selOp.offset,3)}"></div>
+        ${selOp.type==='window'?`<div class="row"><label>Brüstung (m)</label><input class="laser opfld" data-op="${selOp.id}" data-f="sill" value="${fmt(selOp.sill,3)}"></div>`:''}
+        ${selOp.type==='door'?`<div class="row">
+          <button class="btn small ophinge" data-op="${selOp.id}" title="Angelpunkt ans andere Ende">Anschlag ⇄</button>
+          <button class="btn small opswing" data-op="${selOp.id}" title="Öffnet zur anderen Seite">Aufschlag ⇅</button>
+        </div>`:''}
+        <div class="row">
+          <button class="btn green small" id="objlv">＋ LV-Position</button>
+          <button class="btn small" id="opdup">Duplizieren</button>
+          <button class="btn danger small opdel" data-op="${selOp.id}">Entfernen</button>
+        </div>
+        <div class="row">${fotoBtn(selOp.fotos,'opfoto')}</div>
+        ${fotoStrip(selOp.fotos)}
+        ${lvListHtml(p.attrs.filter(a=>a.objId===selOp.id))}
+        <p class="hint">Ziehen verschiebt entlang der Wand, die weißen Griffe ändern die Breite. Esc = abwählen.</p>
+      </div>`;
+    } else if(sel.wall!=null){
+      /* Wand im Fokus */
+      const [a,b]=wallPoints(r,sel.wall);
+      html+=`<div class="panel"><h3>Wand ${sel.wall+1}</h3>
+        <div class="row"><label>Länge (m)</label><input class="laser" id="wlen" value="${fmt(dist(a,b),3)}"></div>
+        <div class="row">
+          <button class="btn small" id="wopdoor">🚪 ＋ Tür</button>
+          <button class="btn small" id="wopwin">🪟 ＋ Fenster</button>
+        </div>
+        <div class="row">
+          <button class="btn green small" id="walllv">＋ LV-Position</button>
+          <button class="btn small" id="walldesel" title="Schließt nur die Wand-Ansicht — Raum und Wand bleiben erhalten">Entfernen</button>
+        </div>
+        <div class="row">${fotoBtn((r.wallFotos||{})[sel.wall],'wfoto')}</div>
+        ${fotoStrip((r.wallFotos||{})[sel.wall])}
+        ${lvListHtml(p.attrs.filter(a=>a.roomId===r.id && a.wall===sel.wall))}
+        <p class="hint">Wandlänge ändern verschiebt die nachfolgenden Ecken mit. „Entfernen“ schließt nur diese Ansicht (Esc geht auch).</p></div>`;
+    } else {
+      /* Raum im Fokus */
+      const st=roomStats(r);
+      html+=`<div class="panel"><h3>Raum — ${esc(floorName(r.floorId))}</h3>
+        <div class="row"><button class="btn small" id="backfloor" style="flex:1">← Zurück zur Etage</button></div>
+        <div class="row"><label>Name</label><input type="text" id="rname" value="${esc(r.name)}"></div>
+        <div class="row"><label>Raumhöhe (m)</label><input class="laser" id="rheight" value="${fmt(r.height,2)}"></div>
+        <div class="row" style="margin-top:4px">
+          <button class="btn green small" id="rlv">＋ LV-Position</button>
+          <button class="btn small" id="rdup">Duplizieren</button>
+          <button class="btn danger small" id="rdel">Löschen</button>
+        </div>
+        <div class="row">${fotoBtn(r.fotos,'rfoto')}</div>
+        ${fotoStrip(r.fotos)}
+        <details id="rstats"${statsOpen?' open':''}><summary class="hint" style="cursor:pointer">Statistik anzeigen</summary>
+          <div class="stat"><span>Bodenfläche</span><b>${fmt(st.area,3)} m²</b></div>
+          <div class="stat"><span>Umfang</span><b>${fmt(st.per,3)} m</b></div>
+          <div class="stat"><span>Wandfläche (o. Öffn.)</span><b>${fmt(st.wallA,3)} m²</b></div>
+          <div class="stat"><span>Fensterflächen</span><b>${fmt(st.winA,3)} m²</b></div>
+          <div class="stat"><span>Türflächen</span><b>${fmt(st.doorA,3)} m²</b></div>
+          <div class="stat"><span>Volumen</span><b>${fmt(st.vol,3)} m³</b></div>
+        </details>
+        ${lvListHtml(p.attrs.filter(a=>a.roomId===r.id))}</div>`;
+
+      html+=`<div class="panel"><h3>Objekte (${objs.length+ops.length})</h3>
+        <div class="row">
+          <button class="btn small ${mode==='objrect'?'active':''}" id="objrectbtn" style="flex:1">▭ Fläche</button>
+          <button class="btn small ${mode==='objline'?'active':''}" id="objlinebtn" style="flex:1">╱ Linie</button>
+        </div>
+        <div class="row">
+          <button class="btn small symbtn ${mode==='objsym'&&pendingSym==='1k'?'active':''}" data-sym="1k" title="1-Kammer-Schleuse" style="flex:1">1-K</button>
+          <button class="btn small symbtn ${mode==='objsym'&&pendingSym==='2k'?'active':''}" data-sym="2k" title="2-Kammer-Schleuse" style="flex:1">2-K</button>
+          <button class="btn small symbtn ${mode==='objsym'&&pendingSym==='4k'?'active':''}" data-sym="4k" title="4-Kammer-Schleuse" style="flex:1">4-K</button>
+          <button class="btn small symbtn ${mode==='objsym'&&pendingSym==='rfa'?'active':''}" data-sym="rfa" title="RFA" style="flex:1">RFA</button>
+        </div>
+        <div class="row">
+          <button class="btn small ${mode==='addopen'&&pendingOpenType==='door'?'active':''}" id="opdoorbtn" style="flex:1">🚪 Tür</button>
+          <button class="btn small ${mode==='addopen'&&pendingOpenType==='window'?'active':''}" id="opwinbtn" style="flex:1">🪟 Fenster</button>
+        </div>
+        <p class="hint">Objekt-Typ wählen, dann im Raum aufziehen bzw. platzieren (Tür/Fenster: Wand anklicken). Auswahl per Klick im Plan.</p>
+      </div>`;
+    }
+  }
+
+  $('#sidebar').innerHTML=html;
+  wireSidebar(fr);
+}
+
+function wireSidebar(r){
+  // Panels erscheinen je nach Fokus — jedes Element nur verdrahten, wenn es existiert
+  const on=(s,ev,fn)=>{ const el=$(s); if(el) el[ev]=fn; };
+
+  /* Etagenansicht */
+  on('#floorsel','onchange',e=>{ activeFloorId=e.target.value; focusRoomId=null; sel={roomId:null,wall:null,vertex:null}; renderAll(); zoomFit(); });
+  on('#flooradd','onclick',()=>{
+    const name=prompt('Name der neuen Etage:', proj().floors.length===1?'1. Obergeschoss':'Etage '+(proj().floors.length+1));
+    if(!name) return;
+    const f={id:uid(), name}; proj().floors.push(f); activeFloorId=f.id; focusRoomId=null; sel={roomId:null,wall:null,vertex:null}; save(); renderAll();
+  });
+  on('#floorren','onclick',()=>{
+    const f=proj().floors.find(f=>f.id===activeFloorId);
+    const name=prompt('Etage umbenennen:', f.name); if(name){f.name=name; save(); renderAll();}
+  });
+  on('#floordel','onclick',()=>{
+    const p=proj();
+    if(p.floors.length<=1){ alert('Die letzte Etage kann nicht gelöscht werden.'); return; }
+    const f=p.floors.find(f=>f.id===activeFloorId);
+    if(!confirm(`Etage „${f.name}“ inkl. aller Räume löschen?`)) return;
+    const roomIds=p.rooms.filter(r=>r.floorId===f.id).map(r=>r.id);
+    p.rooms=p.rooms.filter(r=>r.floorId!==f.id);
+    p.attrs=p.attrs.filter(a=>!roomIds.includes(a.roomId));
+    p.floors=p.floors.filter(x=>x.id!==f.id);
+    activeFloorId=p.floors[0].id; focusRoomId=null; sel={roomId:null,wall:null,vertex:null}; save(); renderAll();
+  });
+  on('#modedraw','onclick',()=>{
+    if(mode==='draw'){ cancelModes(); return; }
+    focusRoomId=null;
+    mode='draw'; draft={points:[],cursor:null,dir:null,typed:''}; sel={roomId:null,wall:null,vertex:null};
+    renderAll(); zoomFit(); updateDrawHint();
+  });
+  on('#modetpl','onclick',openTemplateDialog);
+  document.querySelectorAll('[data-selroom]').forEach(el=>{
+    el.onclick=()=>focusRoom(el.dataset.selroom);
+  });
+  on('#backfloor','onclick',exitRoom);
+
+  if(r){
+    /* Raum-Panel */
+    on('#rname','onchange',e=>{ r.name=e.target.value||r.name; save(); renderAll(); });
+    on('#rheight','onchange',e=>{ const v=parseNum(e.target.value); if(isFinite(v)&&v>0){r.height=v; lastHeight=v; save(); renderAll();} });
+    on('#rlv','onclick',()=>openLvDialog(null, r.id));
+    on('#rdel','onclick',()=>deleteRoom(r.id));
+    on('#rdup','onclick',()=>{
+      const bb=bboxOf(r.points);
+      const nr={...JSON.parse(JSON.stringify(r)), id:uid(), name:r.name+' (Kopie)'};
+      const sx=(bb.maxx-bb.minx)+0.5;
+      nr.points=nr.points.map(p=>({x:p.x+sx, y:p.y}));
+      // Kopie erbt keine Tür-Verknüpfungen und keine Objektnummern (LV-Bezug bleibt beim Original)
+      nr.openings.forEach(o=>{ o.id=uid(); delete o.link; delete o.nr; });
+      (nr.objects||[]).forEach(g=>{ g.id=uid(); delete g.nr;
+        if(g.points){ g.points.forEach(pt=>pt.x+=sx); } else { g.x+=sx; } });
+      proj().rooms.push(nr); save(); focusRoom(nr.id);
+    });
+    on('#rstats','ontoggle',e=>{ statsOpen=e.target.open; });
+    wireFotos('rfoto', r, 'fotos');                       // Fotos am Raum
+    if(sel.wall!=null){                                    // Fotos an der gewählten Wand
+      r.wallFotos=r.wallFotos||{};
+      wireFotos('wfoto', r.wallFotos, String(sel.wall));
+    }
+
+    /* Wand-Panel */
+    on('#wlen','onchange',e=>{ const v=parseNum(e.target.value); if(isFinite(v)&&v>0) setWallLength(r,sel.wall,v); });
+    on('#walllv','onclick',()=>{
+      const [a,b]=wallPoints(r,sel.wall);
+      openLvDialog(null, r.id, null, {laenge:dist(a,b), hoehe:r.height, wall:sel.wall});
+    });
+    document.querySelectorAll('[data-lvopen]').forEach(el=>{
+      el.onclick=()=>openLvDialog(el.dataset.lvopen);
+    });
+    on('#walldesel','onclick',()=>{ sel={roomId:focusRoomId, wall:null, vertex:null}; renderAll(); });
+    // Tür/Fenster direkt auf der gewählten Wand anlegen (sucht die freie Lücke)
+    const addOnWall=type=>{
+      const o=placeOpening(r, sel.wall, type, null);
+      if(o){ sel={roomId:r.id, wall:null, vertex:null, openId:o.id}; save(); renderAll(); }
+    };
+    on('#wopdoor','onclick',()=>addOnWall('door'));
+    on('#wopwin','onclick',()=>addOnWall('window'));
+
+    /* Öffnungs-Editoren (Tür/Fenster-Panel) */
+    document.querySelectorAll('.opfld').forEach(inp=>{
+      inp.onchange=()=>{
+        const o=r.openings.find(o=>o.id===inp.dataset.op); if(!o) return;
+        const v=parseNum(inp.value);
+        if(isFinite(v)&&v>=0){ o[inp.dataset.f]=v; pushDoorToPartner(r,o); save(); renderAll(); }
+      };
+    });
+    document.querySelectorAll('.opdel').forEach(btn=>{
+      btn.onclick=()=>{ deleteOpeningEverywhere(r, btn.dataset.op); sel.openId=null; save(); renderAll(); };
+    });
+    document.querySelectorAll('.ophinge').forEach(btn=>{
+      btn.onclick=()=>{ const o=r.openings.find(x=>x.id===btn.dataset.op); if(!o) return;
+        o.hinge=o.hinge?0:1; pushDoorToPartner(r,o); save(); renderAll(); };
+    });
+    document.querySelectorAll('.opswing').forEach(btn=>{
+      btn.onclick=()=>{ const o=r.openings.find(x=>x.id===btn.dataset.op); if(!o) return;
+        o.swing=-(o.swing||1); pushDoorToPartner(r,o); save(); renderAll(); };
+    });
+
+    /* Objekte: Modus-Buttons, Liste, Auswahl-Panel */
+    on('#objrectbtn','onclick',()=>{ mode=(mode==='objrect')?'select':'objrect'; pendingSym=null; pendingOpenType=null; sel.objId=null; renderAll(); updateDrawHint(); });
+    on('#objlinebtn','onclick',()=>{ mode=(mode==='objline')?'select':'objline'; pendingSym=null; pendingOpenType=null; sel.objId=null; renderAll(); updateDrawHint(); });
+    document.querySelectorAll('.symbtn').forEach(btn=>{
+      btn.onclick=()=>{
+        if(mode==='objsym' && pendingSym===btn.dataset.sym){ mode='select'; pendingSym=null; }
+        else { mode='objsym'; pendingSym=btn.dataset.sym; pendingOpenType=null; sel.objId=null; }
+        renderAll(); updateDrawHint();
+      };
+    });
+    const toggleAddOpen=type=>{
+      if(mode==='addopen' && pendingOpenType===type){ mode='select'; pendingOpenType=null; }
+      else { mode='addopen'; pendingOpenType=type; pendingSym=null; sel.objId=null; }
+      renderAll(); updateDrawHint();
+    };
+    on('#opdoorbtn','onclick',()=>toggleAddOpen('door'));
+    on('#opwinbtn','onclick',()=>toggleAddOpen('window'));
+
+    const selObj = sel.objId ? (r.objects||[]).find(o=>o.id===sel.objId) : null;
+    if(selObj){
+      on('#objname','onchange',e=>{ selObj.name=e.target.value; save(); renderAll(); });
+      document.querySelectorAll('.objdim').forEach(inp=>{
+        inp.onchange=()=>{
+          const v=parseNum(inp.value); if(!isFinite(v)||v<=0) return;
+          if(inp.dataset.f==='w') selObj.w=v;
+          else if(inp.dataset.f==='h') selObj.h=v;
+          else{
+            // Gesamtlänge setzen: ganze Polylinie vom Startpunkt aus skalieren
+            const cur=lineLen(selObj)||1;
+            const f=v/cur, p0=selObj.points[0];
+            selObj.points=selObj.points.map(pt=>({
+              x:Math.round((p0.x+(pt.x-p0.x)*f)*1000)/1000,
+              y:Math.round((p0.y+(pt.y-p0.y)*f)*1000)/1000 }));
+          }
+          save(); renderAll();
+        };
+      });
+      on('#objlv','onclick',()=>openLvDialog(null, r.id, selObj.id));
+      on('#objdup','onclick',()=>{
+        const c=JSON.parse(JSON.stringify(selObj)); c.id=uid(); delete c.nr;
+        if(c.points) c.points=c.points.map(pt=>({x:pt.x+0.3, y:pt.y+0.3}));
+        else { c.x+=0.3; c.y+=0.3; }
+        r.objects.push(c);
+        // Verknüpfte LV-Positionen mitkopieren → Kopie bekommt eigene Nummer
+        const p=proj(), linked=p.attrs.filter(a=>a.objId===selObj.id);
+        linked.forEach(a=>p.attrs.push({...a, id:uid(), objId:c.id}));
+        if(linked.length) c.nr=nextObjNr();
+        sel.objId=c.id; save(); renderAll();
+      });
+      on('#objdel','onclick',()=>{
+        r.objects=r.objects.filter(x=>x.id!==selObj.id);
+        dropLvFor(selObj.id);            // verknüpfte LV-Positionen mit löschen
+        sel.objId=null; save(); renderAll();
+      });
+      on('#objrot','onclick',()=>{ selObj.rot=((selObj.rot||0)+90)%360; save(); renderAll(); });
+      wireFotos('objfoto', selObj, 'fotos');              // Fotos am Objekt
+    }
+    const selOp = sel.openId ? (r.openings||[]).find(o=>o.id===sel.openId) : null;
+    if(selOp){
+      wireFotos('opfoto', selOp, 'fotos');                // Fotos an Tür/Fenster
+      on('#objlv','onclick',()=>openLvDialog(null, r.id, selOp.id));
+      on('#opdup','onclick',()=>{
+        const c={...selOp, id:uid()}; delete c.link; delete c.nr;
+        const [a,b]=wallPoints(r,c.wall), L=dist(a,b);
+        c.offset=Math.max(0, Math.min(selOp.offset+selOp.width+0.1, L-c.width));
+        r.openings.push(c); pushDoorToPartner(r,c);
+        // Verknüpfte LV-Positionen mitkopieren → Kopie bekommt eigene Nummer
+        const p=proj(), linked=p.attrs.filter(a=>a.objId===selOp.id);
+        linked.forEach(a=>p.attrs.push({...a, id:uid(), objId:c.id}));
+        if(linked.length) c.nr=nextObjNr();
+        sel={roomId:r.id, wall:null, vertex:null, openId:c.id};
+        save(); renderAll();
+      });
+    }
+  }
+
+  /* Laser (nur Etagenansicht) */
+  on('#btleica','onclick',connectLeica);
+  on('#btbosch','onclick',connectBosch);
+  on('#btdisc','onclick',btDisconnect);
+  on('#btmanual','onkeydown',e=>{
+    if(e.key==='Enter'){ const v=parseNum(e.target.value); if(isFinite(v)&&v>0){ handleMeasurement(v,'manuell'); e.target.value=''; } }
+  });
+  renderBtLog();
+}
+
+/* ================= Vorlagen ================= */
+const dlgTpl=$('#dlgTemplate');
+function tplFieldHtml(){
+  const s=$('#tplShape').value;
+  if(s==='rect'){
+    $('#tplFields').innerHTML=`
+      <div class="row"><label>Länge a (m)</label><input class="laser" id="tA" value="4,00"></div>
+      <div class="row"><label>Breite b (m)</label><input class="laser" id="tB" value="3,00"></div>`;
+  } else {
+    $('#tplFields').innerHTML=`
+      <p class="hint">L-Form: Außenmaß A×B, oben rechts wird C (Breite) × D (Tiefe) ausgespart.</p>
+      <div class="row"><label>Außen A (m)</label><input class="laser" id="tA" value="5,00"></div>
+      <div class="row"><label>Außen B (m)</label><input class="laser" id="tB" value="4,00"></div>
+      <div class="row"><label>Aussparung C</label><input class="laser" id="tC" value="2,00"></div>
+      <div class="row"><label>Aussparung D</label><input class="laser" id="tD" value="1,50"></div>`;
+  }
+}
+function openTemplateDialog(){
+  cancelModes();
+  if(focusRoomId){ focusRoomId=null; sel={roomId:null,wall:null,vertex:null}; renderAll(); zoomFit(); }
+  $('#tplName').value='Raum '+(proj().rooms.length+1);
+  $('#tplHeight').value=fmt(lastHeight,2);
+  tplFieldHtml();
+  dlgTpl.showModal();
+}
+$('#tplShape').onchange=tplFieldHtml;
+$('#tplOk').onclick=()=>{
+  const s=$('#tplShape').value;
+  const A=parseNum($('#tA').value), B=parseNum($('#tB').value);
+  if(!isFinite(A)||!isFinite(B)||A<=0||B<=0){ alert('Bitte gültige Maße eingeben.'); return; }
+  let pts;
+  if(s==='rect') pts=[{x:0,y:0},{x:A,y:0},{x:A,y:B},{x:0,y:B}];
+  else{
+    const C=parseNum($('#tC').value), D=parseNum($('#tD').value);
+    if(!isFinite(C)||!isFinite(D)||C<=0||D<=0||C>=A||D>=B){ alert('Aussparung muss kleiner als das Außenmaß sein.'); return; }
+    pts=[{x:0,y:0},{x:A-C,y:0},{x:A-C,y:D},{x:A,y:D},{x:A,y:B},{x:0,y:B}];
+  }
+  placing={points:pts, name:$('#tplName').value, height:parseNum($('#tplHeight').value)||2.5, at:{x:vb.x+vb.w/2,y:vb.y+vb.h/2}};
+  mode='place';
+  dlgTpl.close(); renderCanvas(); updateDrawHint();
+};
+
+/* ================= LV-Positionen ================= */
+const dlgLv=$('#dlgLv');
+let lvEditId=null;
+let lvPresetWall=null; // Wand-Index, wenn der Dialog aus dem Wand-Panel geöffnet wurde
+function fillLvObjSelect(roomId, objId){
+  const r=roomById(roomId);
+  $('#lvObj').innerHTML='<option value="">– kein Objekt –</option>'+
+    (r?(r.objects||[]):[]).map(g=>`<option value="${g.id}" ${g.id===objId?'selected':''}>${esc(objAnzeige(g)||g.name||'')}</option>`).join('')+
+    (r?(r.openings||[]):[]).map(o=>`<option value="${o.id}" ${o.id===objId?'selected':''}>${o.nr?'#'+o.nr+' ':''}${o.type==='door'?'Tür':'Fenster'} ${fmt(o.width,2)} m</option>`).join('');
+}
+function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
+  const p=proj();
+  lvEditId=attrId;
+  const a=attrId? p.attrs.find(x=>x.id===attrId) : null;
+  $('#lvDlgTitle').textContent=a?'LV-Position bearbeiten':'Neue LV-Position';
+  syncLvTexts(p);
+  $('#lvRoom').innerHTML=p.rooms.map(r=>`<option value="${r.id}" ${(a?a.roomId:presetRoomId)===r.id?'selected':''}>${esc(floorName(r.floorId))} – ${esc(r.name)}</option>`).join('');
+  fillLvObjSelect($('#lvRoom').value, a?a.objId:presetObjId);
+  lvPresetWall=(!a && presetVals && presetVals.wall!=null)?presetVals.wall:null;
+  $('#lvPos').value=a?a.lv:'';
+  $('#lvKurz').value=a?(a.kurz||''):'';
+  $('#lvMenge').value=a?fmt3(a.menge):'1';
+  $('#lvEinheit').value=a?a.einheit:'Flache';
+  $('#lvL').value=a&&isFinite(a.laenge)?fmt3(a.laenge):'';
+  $('#lvB').value=a&&isFinite(a.breite)?fmt3(a.breite):'';
+  $('#lvH').value=a&&isFinite(a.hoehe)?fmt3(a.hoehe):'';
+  $('#lvU').value=a&&isFinite(a.umfang)?fmt3(a.umfang):'';
+  $('#lvD').value=a&&isFinite(a.durchm)?fmt3(a.durchm):'';
+  // Neu aus Objekt/Öffnung: Maße und Einheit vorbelegen
+  if(!a && presetObjId){
+    const r0=roomById(presetRoomId);
+    const g0=r0?((r0.objects||[]).find(g=>g.id===presetObjId)||(r0.openings||[]).find(o=>o.id===presetObjId)):null;
+    if(g0){
+      if(g0.type==='door'||g0.type==='window'){ $('#lvL').value=fmt3(g0.width); $('#lvH').value=fmt3(g0.height); }
+      else if(g0.type==='line'){ $('#lvL').value=fmt3(lineLen(g0)); $('#lvEinheit').value='Lange'; }
+      else { $('#lvL').value=fmt3(g0.w); $('#lvB').value=fmt3(g0.h); }
+    }
+  }
+  // Neu aus Wand: Maße direkt vorbelegen
+  if(!a && presetVals){
+    if(presetVals.laenge!=null) $('#lvL').value=fmt3(presetVals.laenge);
+    if(presetVals.hoehe!=null) $('#lvH').value=fmt3(presetVals.hoehe);
+  }
+  ['Vorn','Oben','Links','Rechts','Hinten','Unten'].forEach(k=>{ $('#lv'+k).checked=a?!!a[k.toLowerCase()]:false; });
+  $('#lvNutzGrund').checked=a?!!a.nutzGrund:false;
+  $('#lvNutzAnsicht').checked=a?!!a.nutzAnsicht:false;
+  $('#lvNutzUmfang').checked=a?!!a.nutzUmfang:false;
+  lvFotos = a ? (a.fotos||[]).map(f=>({...f})) : [];
+  renderLvFotos();
+  lvUmfangInLaenge();       // Umfang-Flag gesetzt → Länge aus dem Raum übernehmen
+  dlgLv.showModal();
+  autoGrow($('#lvKurz'));   // erst im geöffneten Dialog messbar
+}
+// „Nutze Umfang als Länge": Deckenumfang des Raums direkt ins Längenfeld schreiben
+function lvUmfangInLaenge(){
+  if(!$('#lvNutzUmfang').checked) return;
+  const r=roomById($('#lvRoom').value); if(!r) return;
+  $('#lvL').value=fmt3(roomStats(r).per);
+}
+$('#lvNutzUmfang').onchange=lvUmfangInLaenge;
+$('#lvRoom').onchange=()=>{ fillLvObjSelect($('#lvRoom').value, null); lvUmfangInLaenge(); };
+// LV-Nummer ↔ Kurztext: bekannte Paare ergänzen sich gegenseitig (beide Richtungen)
+// Bei bekannter LV-Nummer Kurztext und Einheit der Position übernehmen
+function lvApplyKnown(lv){
+  const p=proj();
+  const k=(p.lvTexts||{})[lv];
+  if(k) $('#lvKurz').value=k;
+  // Einheit folgt der gewählten Position — auch beim Bearbeiten.
+  // Fällt sie in lvUnits aus (Import vor der Alias-Erweiterung), aus der Mengenklammer ableiten.
+  const e=(p.lvUnits||{})[lv] || einheitAusKurz(k);
+  if(e) $('#lvEinheit').value=e;
+}
+/* ---------- Fotos an LV-Positionen ----------
+   Bilder werden verkleinert als JPEG-DataURL im Projekt gespeichert (kommen so auch ins Backup). */
+const dlgFotoSrc=$('#dlgFotoSrc'), dlgFotoView=$('#dlgFotoView');
+let lvFotos=[];                       // Fotos der gerade offenen LV-Position
+const FOTO_MAX=1200, FOTO_Q=0.65;
+function fotoVerkleinern(file){
+  return new Promise((res,rej)=>{
+    const rd=new FileReader();
+    rd.onerror=()=>rej(new Error('Datei nicht lesbar'));
+    rd.onload=()=>{
+      const img=new Image();
+      img.onerror=()=>rej(new Error('Kein gültiges Bild'));
+      img.onload=()=>{
+        const s=Math.min(1, FOTO_MAX/Math.max(img.width, img.height));
+        const w=Math.max(1,Math.round(img.width*s)), h=Math.max(1,Math.round(img.height*s));
+        const c=document.createElement('canvas'); c.width=w; c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        res(c.toDataURL('image/jpeg', FOTO_Q));
+      };
+      img.src=rd.result;
+    };
+    rd.readAsDataURL(file);
+  });
+}
+// Ziel der nächsten Aufnahme — LV-Dialog oder Raum/Wand/Objekt/Öffnung
+let fotoZiel=null;
+function fotoOeffnen(ziel){ fotoZiel=ziel; dlgFotoSrc.showModal(); }
+async function fotosAufnehmen(files){
+  const liste=[...files].filter(f=>/^image\//.test(f.type)||/\.(jpe?g|png|heic|webp)$/i.test(f.name));
+  if(!liste.length || !fotoZiel) return;
+  const info=$('#lvFotoInfo'); if(info && fotoZiel.imDialog) info.textContent=`verarbeite ${liste.length} Foto(s) …`;
+  const neu=[];
+  for(const f of liste){
+    try{ neu.push({id:uid(), src:await fotoVerkleinern(f), ts:Date.now()}); }
+    catch(err){ btLog('Foto: '+err.message); }
+  }
+  if(neu.length) fotoZiel.add(neu);
+}
+/* Thumbnail-Leiste für die Seitenleiste */
+function fotoStrip(list){
+  return `<div class="fotos small">${(list||[]).map(f=>`<div class="fw">
+      <img src="${f.src}" data-fview="${f.id}" alt="Foto">
+      <button data-fdel="${f.id}" title="Foto entfernen">✕</button>
+    </div>`).join('')}</div>`;
+}
+function fotoBtn(list, id){
+  const n=(list||[]).length;
+  return `<button class="btn small" id="${id}">📷 Fotos${n?' ('+n+')':''}</button>`;
+}
+/* Button + Thumbnails eines Trägers verdrahten (ent[key] ist das Foto-Array) */
+function wireFotos(btnId, ent, key){
+  const b=$('#'+btnId); if(!b || !ent) return;
+  b.onclick=()=>fotoOeffnen({add:neu=>{ ent[key]=[...(ent[key]||[]), ...neu]; save(); renderAll(); }});
+  const box=b.closest('.panel');
+  if(!box) return;
+  box.querySelectorAll('[data-fview]').forEach(im=>{
+    im.onclick=()=>{ $('#fotoBig').src=im.src; dlgFotoView.showModal(); };
+  });
+  box.querySelectorAll('[data-fdel]').forEach(x=>{
+    x.onclick=()=>{ ent[key]=(ent[key]||[]).filter(f=>f.id!==x.dataset.fdel); save(); renderAll(); };
+  });
+}
+function renderLvFotos(){
+  const box=$('#lvFotos'); if(!box) return;
+  box.innerHTML=lvFotos.map(f=>`<div class="fw">
+      <img src="${f.src}" data-fotobig="${f.id}" alt="Foto">
+      <button data-fotodel="${f.id}" title="Foto entfernen">✕</button>
+    </div>`).join('');
+  const kb=Math.round(lvFotos.reduce((s,f)=>s+f.src.length*0.75, 0)/1024);
+  $('#lvFotoInfo').textContent=lvFotos.length?`${lvFotos.length} Foto(s) · ca. ${kb} KB`:'';
+  box.querySelectorAll('[data-fotobig]').forEach(im=>{
+    im.onclick=()=>{ $('#fotoBig').src=im.src; dlgFotoView.showModal(); };
+  });
+  box.querySelectorAll('[data-fotodel]').forEach(b=>{
+    b.onclick=()=>{ lvFotos=lvFotos.filter(f=>f.id!==b.dataset.fotodel); renderLvFotos(); };
+  });
+}
+$('#lvFotoAdd').onclick=()=>fotoOeffnen({imDialog:true, add:neu=>{ lvFotos.push(...neu); renderLvFotos(); }});
+$('#fotoCam').onclick=()=>{ dlgFotoSrc.close(); $('#fotoInCam').click(); };
+$('#fotoFile').onclick=()=>{ dlgFotoSrc.close(); $('#fotoInFile').click(); };
+['#fotoInFile','#fotoInCam'].forEach(sel=>{
+  $(sel).onchange=async e=>{ await fotosAufnehmen(e.target.files); e.target.value=''; };
+});
+
+/* Mehrzeiliges Feld an den Inhalt anpassen (statt horizontal zu scrollen) */
+function autoGrow(el){
+  if(!el) return;
+  el.style.height='0px';                                   // erst schrumpfen, damit scrollHeight den Inhalt misst
+  const rahmen=el.offsetHeight-el.clientHeight;             // border-box: Rahmen zählt zur Höhe
+  el.style.height=Math.max(el.scrollHeight+rahmen, 34)+'px';
+}
+/* Bekannte Positionen als Paare (Nummer + Kurztext), nach Nummer sortiert */
+function lvPairs(alle){
+  const p=proj(), m=new Map(), hid=p.lvHidden||{};
+  Object.entries(p.lvTexts||{}).forEach(([lv,k])=>m.set(lv, k||''));
+  (p.attrs||[]).forEach(a=>{ if(a.lv && !m.has(a.lv)) m.set(a.lv, a.kurz||''); });
+  return [...m.entries()].map(([lv,kurz])=>({lv,kurz}))
+    .filter(x=>alle || !hid[x.lv])            // ausgeblendete Positionen nicht vorschlagen
+    .sort((a,b)=>lvCmp(a.lv,b.lv));
+}
+/* Langtext einblenden, wenn der Zeiger auf einem Vorschlag stehen bleibt */
+let lvTipTimer=null;
+function lvTipHide(){ clearTimeout(lvTipTimer); const el=$('#lvtip'); if(el) el.classList.remove('on'); }
+function lvTipShow(anchor, it){
+  const txt=(proj().lvLong||{})[it.lv];
+  if(!txt) return;
+  const el=$('#lvtip');
+  el.innerHTML=`<b>${esc(it.lv)}${it.kurz?' · '+esc(it.kurz):''}</b>${esc(txt)}`;
+  el.classList.add('on');
+  const r=anchor.getBoundingClientRect(), w=el.offsetWidth, h=el.offsetHeight;
+  let x=r.right+12; if(x+w>innerWidth-8) x=Math.max(8, r.left-w-12);
+  let y=Math.min(r.top, innerHeight-h-8);
+  el.style.left=Math.max(8,x)+'px'; el.style.top=Math.max(8,y)+'px';
+}
+/* Eigene Vorschlagsliste (statt datalist) — Filterart je Feld frei wählbar */
+function makeSuggest(inp, box, match, row, onInput){
+  let items=[], idx=-1;
+  const close=()=>{ box.classList.remove('on'); box.innerHTML=''; idx=-1; lvTipHide(); };
+  const paint=()=>{
+    if(!items.length){ close(); return; }
+    box.innerHTML=items.map((it,i)=>{
+      const r=row(it);
+      return `<div class="it${i===idx?' sel':''}" data-i="${i}">`+
+        `<b class="${r.num==='a'?'num':'txt'}">${esc(r.a)}</b>`+
+        `<span class="${r.num==='b'?'num':'txt'}">${esc(r.b)}</span></div>`;
+    }).join('');
+    box.classList.add('on');
+    box.querySelectorAll('[data-i]').forEach(el=>{
+      // mousedown statt click: sonst schließt der blur die Liste vor der Auswahl
+      el.onmousedown=e=>{ e.preventDefault(); choose(items[+el.dataset.i]); };
+      // Verweilen ohne Klick blendet den Langtext ein
+      el.onmouseenter=()=>{ lvTipHide(); lvTipTimer=setTimeout(()=>lvTipShow(el, items[+el.dataset.i]), 550); };
+      el.onmouseleave=lvTipHide;
+    });
+  };
+  const choose=it=>{
+    $('#lvPos').value=it.lv;
+    $('#lvKurz').value=it.kurz;
+    lvApplyKnown(it.lv);
+    autoGrow($('#lvKurz'));
+    close();
+  };
+  const refresh=()=>{
+    const q=inp.value.trim().toLowerCase();
+    items=lvPairs().filter(it=>match(it,q)).slice(0,60);
+    idx=-1; paint();
+  };
+  inp.addEventListener('input', ()=>{ refresh(); if(onInput) onInput(); });
+  inp.addEventListener('focus', refresh);
+  inp.addEventListener('blur', ()=>setTimeout(close, 120));
+  inp.addEventListener('keydown', e=>{
+    if(!box.classList.contains('on')){
+      if(e.key==='ArrowDown'){ refresh(); e.preventDefault(); }
+      return;
+    }
+    if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+      idx=Math.max(0, Math.min(items.length-1, idx+(e.key==='ArrowDown'?1:-1)));
+      paint();
+      const sel=box.querySelector('.sel'); if(sel) sel.scrollIntoView({block:'nearest'});
+      e.preventDefault();
+    } else if(e.key==='Enter'){
+      // im mehrzeiligen Kurztext keinen Umbruch einfügen — Enter übernimmt bzw. schließt
+      if(idx>=0) choose(items[idx]); else close();
+      e.preventDefault();
+    } else if(e.key==='Escape'){
+      close(); e.preventDefault(); e.stopPropagation();   // erst Liste schließen, nicht den Dialog
+    }
+  });
+}
+// LV-Nummer: Treffer ab der ersten Stelle (Präfix) · Kurztext: Suche im ganzen Text
+makeSuggest($('#lvPos'), $('#lvPosSug'),
+  (it,q)=>!q || it.lv.toLowerCase().startsWith(q),
+  it=>({a:it.lv, b:it.kurz, num:'a'}),
+  ()=>{ lvApplyKnown($('#lvPos').value.trim()); autoGrow($('#lvKurz')); });   // exakte Nummer → Kurztext + Einheit
+makeSuggest($('#lvKurz'), $('#lvKurzSug'),
+  (it,q)=>it.kurz && (!q || it.kurz.toLowerCase().includes(q)),
+  it=>({a:it.kurz, b:it.lv, num:'b'}),
+  ()=>{                                                  // exakter Kurztext → Nummer + Einheit
+    autoGrow($('#lvKurz'));
+    const t=$('#lvKurz').value.trim(); if(!t) return;
+    const hit=lvPairs().find(x=>x.kurz===t);
+    if(hit){ $('#lvPos').value=hit.lv; lvApplyKnown(hit.lv); }
+  });
+// Kein Zeilenumbruch im Kurztext — auch wenn gerade keine Vorschlagsliste offen ist
+$('#lvKurz').addEventListener('keydown', e=>{ if(e.key==='Enter') e.preventDefault(); });
+$('#lvFromRoom').onclick=()=>{
+  const r=roomById($('#lvRoom').value); if(!r) return;
+  const st=roomStats(r);
+  $('#lvH').value=fmt3(r.height);
+  $('#lvU').value=fmt3(st.per);
+};
+$('#lvOk').onclick=()=>{
+  const p=proj();
+  const data={
+    lv:$('#lvPos').value.trim(),
+    kurz:$('#lvKurz').value.trim(),
+    roomId:$('#lvRoom').value,
+    objId:$('#lvObj').value||null,
+    menge:parseNum($('#lvMenge').value)||1,
+    einheit:$('#lvEinheit').value,
+    laenge:parseNum($('#lvL').value), breite:parseNum($('#lvB').value), hoehe:parseNum($('#lvH').value),
+    umfang:parseNum($('#lvU').value), durchm:parseNum($('#lvD').value),
+    vorn:$('#lvVorn').checked, oben:$('#lvOben').checked, links:$('#lvLinks').checked,
+    rechts:$('#lvRechts').checked, hinten:$('#lvHinten').checked, unten:$('#lvUnten').checked,
+    nutzGrund:$('#lvNutzGrund').checked, nutzAnsicht:$('#lvNutzAnsicht').checked, nutzUmfang:$('#lvNutzUmfang').checked,
+    fotos:lvFotos.map(f=>({...f}))
+  };
+  if(!data.lv){ alert('Bitte eine LV Position angeben.'); return; }
+  if(lvPresetWall!=null) data.wall=lvPresetWall;
+  let ziel;
+  if(lvEditId){ ziel=p.attrs.find(x=>x.id===lvEditId); Object.assign(ziel, data); }
+  else { ziel={id:uid(), ...data}; p.attrs.push(ziel); }
+  // Nummer erst bei LV-Zuordnung vergeben — für Objekt/Tür/Fenster oder für die Wand
+  const rr=roomById(ziel.roomId);
+  if(ziel.objId){
+    const t=rr?((rr.objects||[]).find(g=>g.id===ziel.objId)||(rr.openings||[]).find(o=>o.id===ziel.objId)):null;
+    if(t && !t.nr) t.nr=nextObjNr();
+  } else if(ziel.wall!=null && rr){
+    rr.wallNr=rr.wallNr||{};
+    if(!rr.wallNr[ziel.wall]) rr.wallNr[ziel.wall]=nextObjNr();
+  }
+  assignLvColors(p);
+  // Paar LV-Nummer ↔ Kurztext projektweit merken (letzter Stand gewinnt)
+  if(data.lv && data.kurz){ p.lvTexts=p.lvTexts||{}; p.lvTexts[data.lv]=data.kurz; }
+  save(); dlgLv.close(); renderAll(); if(view!=='lv') renderLv();
+};
+/* ---------- Mengenermittlung: exakt wie die VBA-Pipeline (Makro3–Makro6) ----------
+   Stuck   : Menge
+   Lange   : Menge × Länge          (Nutze Umfang als Länge → Länge = Deckenumfang des Raums)
+   Volumen : Länge × Breite × Höhe  (ohne Menge — faithful zum VBA)
+   Flache  : Nutze Grundfläche → Menge × Bodenfläche des Raums; sonst
+             Richtungen gesetzt → Menge × (L·H·Vorn + L·B·Oben + B·H·Links + B·H·Rechts + L·H·Hinten + L·B·Unten)
+             keine Richtung in der ganzen LV-Gruppe → Menge × (L·H + L·B)
+   „Nutze Ansichtsfläche als Fläche" geht — wie im VBA — nicht in die Rechnung ein. */
+const EINH_SYM={Flache:'m²', Lange:'m', Volumen:'m³', Stuck:'Stk'};
+function lvGroupAlleNein(list){
+  return !list.some(a=>a.vorn||a.oben||a.links||a.rechts||a.hinten||a.unten);
+}
+function lvCalc(a, alleNein){
+  const num=v=>Number.isFinite(v)?v:0;
+  const r=roomById(a.roomId), st=r?roomStats(r):null;
+  const menge=num(a.menge);
+  let L=num(a.laenge); const B=num(a.breite), H=num(a.hoehe);
+  if(a.nutzUmfang && st) L=st.per;                       // Deckenumfang als Länge
+  const f=k=>a[k]?1:0;
+  let wert=0, formel='';
+  const braucht=new Set();                                // Maße, die diese Formel benötigt
+  if(a.einheit==='Stuck'){
+    wert=menge; formel='Menge';
+  } else if(a.einheit==='Lange'){
+    if(!a.nutzUmfang) braucht.add('L');
+    wert=menge*L; formel=`${fmt3(menge)} × ${fmt3(L)}${a.nutzUmfang?' (Umfang)':''}`;
+  } else if(a.einheit==='Volumen'){
+    ['L','B','H'].forEach(k=>braucht.add(k));
+    wert=L*B*H; formel=`${fmt3(L)} × ${fmt3(B)} × ${fmt3(H)}`;
+  } else {
+    if(a.nutzGrund && st){
+      wert=menge*st.area; formel=`${fmt3(menge)} × ${fmt3(st.area)} (Bodenfläche)`;
+    } else if(alleNein){
+      // Ersatzformel: gewollt greift nur einer der beiden Terme — je nachdem ob H oder B gefüllt ist.
+      // Deshalb nur meckern, wenn gar nichts rechenbar ist.
+      braucht.add('L');
+      if(!H && !B) braucht.add('H');
+      wert=menge*(L*H + L*B); formel=`${fmt3(menge)} × (L×H + L×B)`;
+    } else {
+      if(!a.nutzUmfang && (a.vorn||a.hinten||a.oben||a.unten)) braucht.add('L');
+      if(a.oben||a.unten||a.links||a.rechts) braucht.add('B');
+      if(a.vorn||a.hinten||a.links||a.rechts) braucht.add('H');
+      const fl=L*H*f('vorn') + L*B*f('oben') + B*H*f('links') + B*H*f('rechts') + L*H*f('hinten') + L*B*f('unten');
+      wert=menge*fl;
+      const teile=[['vorn','L×H'],['oben','L×B'],['links','B×H'],['rechts','B×H'],['hinten','L×H'],['unten','L×B']]
+        .filter(([k])=>a[k]).map(([k,t])=>t+' '+k[0].toUpperCase()+k.slice(1,2));
+      formel=`${fmt3(menge)} × (${teile.join(' + ')||'0'})`;
+    }
+  }
+  // Fehlende Maße melden — sonst rechnet die Formel still mit 0 weiter
+  const wert_=({L, B, H});
+  const namen={L:'Länge', B:'Breite', H:'Höhe'};
+  const fehlt=[...braucht].filter(k=>!wert_[k]).map(k=>namen[k]);
+  return {wert, sym:EINH_SYM[a.einheit]||'', formel, fehlt};
+}
+// LV-Positionen gruppieren (nur solche mit mindestens einer Zuordnung)
+function lvGroups(){
+  const p=proj(), m=new Map();
+  (p.attrs||[]).forEach(a=>{
+    const k=a.lv||'';
+    if(!m.has(k)) m.set(k, []);
+    m.get(k).push(a);
+  });
+  return [...m.entries()].sort((x,y)=>lvCmp(x[0],y[0])).map(([lv,list])=>{
+    const alleNein=lvGroupAlleNein(list);
+    const einheiten=[...new Set(list.map(a=>a.einheit).filter(Boolean))];
+    const res=list.map(a=>lvCalc(a, alleNein));
+    const summe=res.reduce((s,x)=>s+x.wert, 0);
+    const fehlend=[...new Set(res.flatMap(x=>x.fehlt))];
+    const soll=lvSollWert(lv);                                  // vorgesehene Menge laut LV
+    const ueber=Number.isFinite(soll) && summe>soll+0.0005;     // Aufmaß über LV-Menge
+    return {lv, list, alleNein, einheiten, summe, fehlend, soll, ueber,
+      sym:einheiten.length===1?(EINH_SYM[einheiten[0]]||''):'',
+      kurz:(p.lvTexts||{})[lv] || (list.find(a=>a.kurz)||{}).kurz || ''};
+  });
+}
+let lvDrill=null;   // gesetzt = Detailansicht einer LV-Position
+
+function renderLv(){
+  if(lvDrill!=null) renderLvDetail(); else renderLvUebersicht();
+}
+/* ---------- Ebene 1: Übersicht — eine Zeile je LV-Position ---------- */
+function renderLvUebersicht(){
+  const p=proj(), groups=lvGroups();
+  $('#lvview').innerHTML=`
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px">
+      <h2 style="font-size:17px">LV-Positionen (${groups.length})</h2>
+      <button class="btn primary" id="lvnew">＋ Neue LV-Position</button>
+      <button class="btn" id="lvedit" title="Auswahllisten pflegen: Positionen ausblenden, Kurztexte ändern">LV editieren</button>
+    </div>
+    <table><thead><tr>
+      <th>LV Position</th><th>Kurztext</th><th>Zuordnungen</th><th>Einheit</th>
+      <th style="text-align:right">Menge lt. LV</th><th style="text-align:right">Summe</th>
+    </tr></thead><tbody>
+    ${groups.map(g=>{
+      const c=lvColor(p,g.lv);
+      const mix=g.einheiten.length>1;
+      return `<tr style="cursor:pointer" data-lvdrill="${esc(g.lv)}" title="Zuordnungen anzeigen">
+        <td>${c?`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${c};margin-right:6px;vertical-align:-1px"></span>`:''}<b>${esc(g.lv||'– ohne Nummer –')}</b></td>
+        <td>${esc(g.kurz)}</td>
+        <td class="num">${g.list.length}</td>
+        <td>${mix?`<span style="color:var(--danger)">Zu überprüfen</span>`:esc(einhTxt(g.einheiten[0]))}</td>
+        <td class="num">${Number.isFinite(g.soll)?fmt3(g.soll)+' '+g.sym:'–'}</td>
+        <td class="num"${g.ueber&&!mix?' title="Aufmaß liegt über der LV-Menge"':''}>
+          <b${g.ueber&&!mix?' style="color:var(--danger)"':''}>${mix?'—':fmt3(g.summe)+' '+g.sym}</b>${g.fehlend.length?` <span style="color:var(--danger)" title="Maß fehlt: ${esc(g.fehlend.join(', '))}">⚠</span>`:''}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="6" style="color:var(--muted)">Noch keine LV-Positionen. Über „＋ Neue LV-Position“, im Raum-Panel oder am ausgewählten Objekt anlegen.</td></tr>'}
+    </tbody></table>
+    <p class="hint" style="margin-top:8px">Zeile anklicken zeigt die einzelnen Zuordnungen. Gerechnet wird wie in
+      magicplan; bei gemischten Einheiten innerhalb einer Position gibt es keine Summe („Zu überprüfen“).</p>`;
+  $('#lvnew').onclick=()=>openLvDialog(null, sel.roomId||((proj().rooms[0]||{}).id));
+  $('#lvedit').onclick=openLvEdit;
+  document.querySelectorAll('[data-lvdrill]').forEach(tr=>{
+    tr.onclick=()=>{ lvDrill=tr.dataset.lvdrill; renderLv(); };
+  });
+}
+/* ---------- Ebene 2: die Zuordnungen einer LV-Position ---------- */
+function renderLvDetail(){
+  const p=proj();
+  const g=lvGroups().find(x=>x.lv===lvDrill);
+  if(!g){ lvDrill=null; renderLvUebersicht(); return; }
+  const rows=[...g.list].sort((a,b)=>(roomById(a.roomId)?.name||'').localeCompare(roomById(b.roomId)?.name||''));
+  const dirTxt=a=>['vorn','oben','links','rechts','hinten','unten'].filter(k=>a[k]).map(k=>k[0].toUpperCase()).join(' ')||'–';
+  const c=lvColor(p,g.lv);
+  $('#lvview').innerHTML=`
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap">
+      <button class="btn" id="lvback">← Zurück</button>
+      <h2 style="font-size:17px">${c?`<span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:${c};margin-right:7px"></span>`:''}${esc(g.lv||'– ohne Nummer –')}</h2>
+      <span class="hint">${esc(g.kurz)}</span>
+      <span style="flex:1"></span>
+      ${Number.isFinite(g.soll)?`<span class="hint">lt. LV: ${fmt3(g.soll)} ${g.sym}</span>`:''}
+      <b${g.ueber&&g.einheiten.length<2?' style="color:var(--danger)" title="Aufmaß liegt über der LV-Menge"':''}>Summe: ${g.einheiten.length>1?'—':fmt3(g.summe)+' '+g.sym}</b>
+    </div>
+    <table><thead><tr>
+      <th>Etage</th><th>Raum</th><th>Objekt</th><th>Menge</th><th>Einheit</th>
+      <th>L</th><th>B</th><th>H</th><th>Umf.</th><th>Ø</th><th>Richt.</th><th>Flags</th>
+      <th style="text-align:right">Ergebnis</th><th></th>
+    </tr></thead><tbody>
+    ${rows.map(a=>{
+      const r=roomById(a.roomId);
+      const flags=[a.nutzGrund?'Grundfl.':null,a.nutzAnsicht?'Ansicht':null,a.nutzUmfang?'Umfang→L':null].filter(Boolean).join(', ')||'–';
+      const res=lvCalc(a, g.alleNein);
+      return `<tr>
+        <td>${esc(r?floorName(r.floorId):'?')}</td><td>${esc(r?r.name:'– gelöscht –')}</td>
+        <td>${esc(lvZielText(a))}</td>
+        <td class="num">${fmt3(a.menge)}</td><td>${esc(einhTxt(a.einheit))}</td>
+        <td class="num">${isFinite(a.laenge)?fmt3(a.laenge):''}</td>
+        <td class="num">${isFinite(a.breite)?fmt3(a.breite):''}</td>
+        <td class="num">${isFinite(a.hoehe)?fmt3(a.hoehe):''}</td>
+        <td class="num">${isFinite(a.umfang)?fmt3(a.umfang):''}</td>
+        <td class="num">${isFinite(a.durchm)?fmt3(a.durchm):''}</td>
+        <td>${dirTxt(a)}</td><td>${flags}</td>
+        <td class="num" title="${esc(res.formel)}${res.fehlt.length?' — fehlt: '+esc(res.fehlt.join(', ')):''}">
+          <b${res.fehlt.length?' style="color:var(--danger)"':''}>${fmt3(res.wert)}</b> ${res.sym}
+          ${res.fehlt.length?`<span style="color:var(--danger)" title="${esc(res.fehlt.join(', '))} fehlt">⚠</span>`:''}</td>
+        <td style="white-space:nowrap">
+          <button class="btn small" data-lvedit="${a.id}">✎</button>
+          <button class="btn small" data-lvcopy="${a.id}">⧉</button>
+          <button class="btn small danger" data-lvdel="${a.id}">🗑</button>
+        </td></tr>`;
+    }).join('')}
+    </tbody>
+    <tfoot><tr><td colspan="12" style="text-align:right"><b>Summe</b></td>
+      <td class="num"><b>${g.einheiten.length>1?'—':fmt3(g.summe)+' '+g.sym}</b></td><td></td></tr></tfoot>
+    </table>
+    <p class="hint" style="margin-top:8px">Ergebnis je Zeile wie in magicplan gerechnet — Formel als Tooltip.
+      ${g.alleNein&&g.einheiten[0]==='Flache'?'Ohne gesetzte Richtungen gilt für diese Position L×H + L×B.':''}</p>`;
+  $('#lvback').onclick=()=>{ lvDrill=null; renderLv(); };
+  document.querySelectorAll('[data-lvedit]').forEach(b=>b.onclick=()=>openLvDialog(b.dataset.lvedit));
+  document.querySelectorAll('[data-lvcopy]').forEach(b=>b.onclick=()=>{
+    const a=proj().attrs.find(x=>x.id===b.dataset.lvcopy);
+    proj().attrs.push({...a, id:uid()}); save(); renderLv();
+  });
+  document.querySelectorAll('[data-lvdel]').forEach(b=>b.onclick=()=>{
+    proj().attrs=proj().attrs.filter(x=>x.id!==b.dataset.lvdel); save(); renderLv();
+  });
+}
+
+/* ================= LV editieren (Katalog) =================
+   Sichtbarkeit in den Auswahllisten steuern + Kurztexte pflegen. */
+const dlgLvEdit=$('#dlgLvEdit');
+function renderLvEdit(){
+  const p=proj(), hid=p.lvHidden||{};
+  const q=$('#lvEditSearch').value.trim().toLowerCase();
+  const alle=lvPairs(true);
+  const list=alle.filter(it=>!q || it.lv.toLowerCase().includes(q) || (it.kurz||'').toLowerCase().includes(q));
+  const used={};
+  (p.attrs||[]).forEach(a=>{ if(a.lv) used[a.lv]=(used[a.lv]||0)+1; });
+  const aus=alle.filter(it=>hid[it.lv]).length;
+  $('#lvEditCount').textContent=`${alle.length} Positionen · ${aus} ausgeblendet${q?` · ${list.length} Treffer`:''}`;
+  $('#lvEditList').innerHTML = list.length ? list.map(it=>`
+    <div class="lvrow${hid[it.lv]?' off':''}" data-row="${esc(it.lv)}">
+      <input type="checkbox" data-lvvis="${esc(it.lv)}" ${hid[it.lv]?'':'checked'} title="In den Auswahllisten zeigen">
+      <b title="${esc(it.lv)}">${esc(it.lv)}</b>
+      <input type="text" data-lvtxt="${esc(it.lv)}" value="${esc(it.kurz||'')}" placeholder="Kurztext">
+      <span class="use">${used[it.lv]?used[it.lv]+'×':''}</span>
+    </div>`).join('') : '<p class="hint">Keine Positionen — erst über „LV-Import" laden oder LV-Positionen anlegen.</p>';
+
+  $('#lvEditList').querySelectorAll('[data-lvvis]').forEach(cb=>{
+    cb.onchange=()=>{
+      const p2=proj(); p2.lvHidden=p2.lvHidden||{};
+      if(cb.checked) delete p2.lvHidden[cb.dataset.lvvis];
+      else p2.lvHidden[cb.dataset.lvvis]=true;
+      cb.closest('.lvrow').classList.toggle('off', !cb.checked);
+      const n=lvPairs(true).filter(it=>(proj().lvHidden||{})[it.lv]).length;
+      $('#lvEditCount').textContent=$('#lvEditCount').textContent.replace(/· \d+ ausgeblendet/, `· ${n} ausgeblendet`);
+      save();
+    };
+  });
+  $('#lvEditList').querySelectorAll('[data-lvtxt]').forEach(inp=>{
+    inp.onchange=()=>{
+      const p2=proj(), lv=inp.dataset.lvtxt, t=inp.value.trim();
+      p2.lvTexts=p2.lvTexts||{}; p2.lvTexts[lv]=t;
+      // Kurztext hängt an der Nummer → bestehende Positionen mitziehen
+      (p2.attrs||[]).forEach(a=>{ if(a.lv===lv) a.kurz=t; });
+      save(); renderAll();
+    };
+  });
+}
+function openLvEdit(){
+  syncLvTexts(proj());
+  $('#lvEditSearch').value='';
+  renderLvEdit();
+  dlgLvEdit.showModal();
+}
+$('#lvEditSearch').oninput=renderLvEdit;
+$('#lvEditAll').onclick=()=>{ proj().lvHidden={}; save(); renderLvEdit(); };
+$('#lvEditNone').onclick=()=>{
+  const p=proj(); p.lvHidden={};
+  lvPairs(true).forEach(it=>{ p.lvHidden[it.lv]=true; });
+  save(); renderLvEdit();
+};
+
+/* ================= LV-Import (Airtable) =================
+   Holt LV-Nummer + Kurztext + Einheit einer Baustelle in das aktuelle Projekt.
+   Token liegt separat in localStorage — nie im Projekt/Backup. */
+const AT_TOKEN_KEY='grundriss-airtable-token';
+const AT_BASE_KEY='grundriss-airtable-base';
+const AT_BASE_DEFAULT='apprGVk6zP4lbZpQd';       // Base „Baustellen"
+const AT_T_SITES='Baustellen', AT_T_LV='LVs';    // Tabellennamen
+const dlgImport=$('#dlgImport');
+let atCache=null;                                 // {sites:[{id,name,rows:[…]}]}
+
+async function atFetch(path, token, params){
+  const url=new URL('https://api.airtable.com/v0/'+path);
+  Object.entries(params||{}).forEach(([k,v])=>{
+    if(v==null) return;
+    if(Array.isArray(v)) v.forEach(x=>url.searchParams.append(k,x));
+    else url.searchParams.set(k,v);
+  });
+  const res=await fetch(url.toString(), {headers:{Authorization:'Bearer '+token}});
+  if(!res.ok){
+    const txt=await res.text().catch(()=>'');
+    let hint='';
+    if(res.status===401||res.status===403) hint=' — Token ungültig oder ohne Zugriff auf diese Base?';
+    if(res.status===404) hint=' — Base-ID oder Tabellenname stimmt nicht?';
+    throw new Error(`Airtable ${res.status}${hint}\n${txt.slice(0,200)}`);
+  }
+  return res.json();
+}
+async function atAll(base, table, token, fields, onProgress){
+  let out=[], offset=null, guard=0;
+  do{
+    const j=await atFetch(`${base}/${encodeURIComponent(table)}`, token,
+      {'fields[]':fields, pageSize:100, offset});
+    out=out.concat(j.records||[]);
+    offset=j.offset;
+    if(onProgress) onProgress(out.length);
+  } while(offset && ++guard<200);
+  return out;
+}
+async function atLoadSites(){
+  const token=$('#atToken').value.trim();
+  const base=$('#atBase').value.trim()||AT_BASE_DEFAULT;
+  if(!token){ atStatus('Bitte zuerst einen Zugriffstoken eintragen.', true); return; }
+  try{
+    atStatus('Lade Baustellen …');
+    const sites=await atAll(base, AT_T_SITES, token, ['Title']);
+    atStatus(`Lade LV-Positionen … (${sites.length} Baustellen)`);
+    const lvs=await atAll(base, AT_T_LV, token,
+      ['LV-Nummer','Kurzbeschreibung','Einheit','Menge','Langtext','Baustelle'],
+      n=>atStatus(`Lade LV-Positionen … ${n}`));
+    // LVs ihrer Baustelle zuordnen
+    const byId={};
+    sites.forEach(s=>{ byId[s.id]={id:s.id, name:(s.fields&&s.fields.Title)||'(ohne Titel)', rows:[]}; });
+    lvs.forEach(r=>{
+      const f=r.fields||{};
+      const row={lv:String(f['LV-Nummer']||'').trim(), kurz:String(f['Kurzbeschreibung']||'').trim(),
+        einheit:mapEinheit(f['Einheit']), roh:String(f['Einheit']||'').trim(),
+        menge:Number(f['Menge']), lang:String(f['Langtext']||'').trim()};
+      if(!row.lv && !row.kurz) return;
+      (f['Baustelle']||[]).forEach(sid=>{ if(byId[sid]) byId[sid].rows.push(row); });
+    });
+    atCache={sites:Object.values(byId).filter(s=>s.rows.length).sort((a,b)=>a.name.localeCompare(b.name))};
+    if($('#atRemember').checked){ localStorage.setItem(AT_TOKEN_KEY, token); localStorage.setItem(AT_BASE_KEY, base); }
+    atStatus(`${atCache.sites.length} Baustellen mit LV-Positionen gefunden.`);
+    renderAtList();
+  }catch(err){
+    atCache=null; renderAtList();
+    const net=/failed to fetch|networkerror|load failed/i.test(err.message);
+    atStatus(net
+      ? 'Verbindung zu Airtable fehlgeschlagen — offline, oder der Browser blockiert die Anfrage (CORS). Alternativ unten die Liste einfügen.'
+      : err.message, true);
+  }
+}
+function atStatus(msg, err){
+  const el=$('#atStatus'); if(!el) return;
+  el.textContent=msg||'';
+  el.style.color=err?'var(--danger)':'var(--muted)';
+}
+function renderAtList(){
+  const el=$('#atList'); if(!el) return;
+  if(!atCache){ el.innerHTML=''; return; }
+  el.innerHTML=`<div class="panel" style="margin-top:8px;max-height:260px;overflow:auto">
+    ${atCache.sites.map((s,i)=>`<div class="stat" style="align-items:center">
+      <span>${esc(s.name)} <span class="hint">· ${s.rows.length} Positionen</span></span>
+      <button class="btn small primary" data-atimp="${i}">Importieren</button>
+    </div>`).join('')}
+  </div>`;
+  el.querySelectorAll('[data-atimp]').forEach(b=>{
+    b.onclick=()=>{
+      const s=atCache.sites[+b.dataset.atimp];
+      proj().bauvorhaben=s.name;        // Bauvorhaben für die Fußzeile im Export
+      const res=importLvRows(s.rows);
+      atStatus(`„${s.name}“ übernommen: ${res.neu} neu, ${res.upd} aktualisiert (${res.gesamt} Positionen).`);
+    };
+  });
+}
+// Kurztext mit vorgesehener Menge: „Wände spachteln (20 m²)"
+function lvKurzMitMenge(r){
+  const k=r.kurz||'';
+  if(!Number.isFinite(r.menge) || !r.menge) return k;
+  const m=String(Math.round(r.menge*1000)/1000).replace('.', ',');
+  const zusatz=`(${m}${r.roh?' '+r.roh:''})`;
+  return k ? `${k} ${zusatz}` : zusatz;
+}
+// Importierte Positionen landen im Projekt-Wörterbuch (Menüs im LV-Dialog) + Farbvergabe
+function importLvRows(rows){
+  const p=proj();
+  p.lvTexts=p.lvTexts||{}; p.lvUnits=p.lvUnits||{}; p.lvLong=p.lvLong||{}; p.lvSoll=p.lvSoll||{};
+  let neu=0, upd=0;
+  rows.forEach(r=>{
+    if(!r.lv) return;
+    const kurz=lvKurzMitMenge(r);
+    if(p.lvTexts[r.lv]==null){ neu++; p.lvTexts[r.lv]=kurz; }
+    else if(kurz && p.lvTexts[r.lv]!==kurz){ upd++; p.lvTexts[r.lv]=kurz; }
+    if(r.einheit) p.lvUnits[r.lv]=r.einheit;
+    if(r.lang) p.lvLong[r.lv]=r.lang;
+    if(Number.isFinite(r.menge)) p.lvSoll[r.lv]=r.menge;
+  });
+  assignLvColors(p);
+  save(); renderAll();
+  return {neu, upd, gesamt:rows.length};
+}
+$('#lvimport').onclick=()=>{
+  $('#atToken').value=localStorage.getItem(AT_TOKEN_KEY)||'';
+  $('#atRemember').checked=!!localStorage.getItem(AT_TOKEN_KEY);
+  $('#atBase').value=localStorage.getItem(AT_BASE_KEY)||AT_BASE_DEFAULT;
+  atCache=null; renderAtList(); atStatus('');
+  dlgImport.showModal();
+};
+$('#atLoad').onclick=atLoadSites;
+$('#atForget').onclick=()=>{
+  localStorage.removeItem(AT_TOKEN_KEY);
+  $('#atToken').value=''; $('#atRemember').checked=false;
+  atStatus('Gespeicherter Token gelöscht.');
+};
+$('#atPasteOk').onclick=()=>{
+  const rows=$('#atPaste').value.split(/\r?\n/).map(l=>{
+    const c=l.split(/[;\t]/);
+    return {lv:(c[0]||'').trim(), kurz:(c[1]||'').trim(), einheit:mapEinheit(c[2]),
+      roh:(c[2]||'').trim(), menge:parseNum(c[3]), lang:(c[4]||'').trim()};
+  }).filter(r=>r.lv);
+  if(!rows.length){ atStatus('Keine verwertbaren Zeilen gefunden.', true); return; }
+  const res=importLvRows(rows);
+  atStatus(`Übernommen: ${res.neu} neu, ${res.upd} aktualisiert (${res.gesamt} Zeilen).`);
+};
+
+/* ================= Bluetooth ================= */
+const LEICA_SVC='3ab10100-f831-4395-b29d-570977d5bf94';
+const LEICA_DIST='3ab10101-f831-4395-b29d-570977d5bf94';
+const BOSCH_SVC='02a6c0d0-0451-4000-b000-fb3210111989';
+const BOSCH_CHR='02a6c0d1-0451-4000-b000-fb3210111989';
+const bt={device:null, type:null, lastAt:0};
+const btlogs=[];
+function btLog(s){
+  btlogs.push(new Date().toLocaleTimeString('de-DE')+' '+s);
+  if(btlogs.length>80) btlogs.shift();
+  renderBtLog();
+}
+function renderBtLog(){ const el=$('#btlog'); if(el) el.textContent=btlogs.join('\n'); }
+function hexStr(u8){ return [...u8].map(b=>b.toString(16).padStart(2,'0')).join(' '); }
+function setBtStatus(on, txt){
+  $('#btchip').classList.toggle('on', on);
+  $('#btchiptext').textContent='Laser: '+txt;
+}
+function requireBt(){
+  if(!navigator.bluetooth){
+    alert('Web Bluetooth ist in diesem Browser nicht verfügbar.\n\nWindows: Chrome oder Edge verwenden.\niPhone/iPad: die App „Bluefy“ aus dem App Store nutzen.');
+    return false;
+  }
+  return true;
+}
+async function connectLeica(){
+  if(!requireBt()) return;
+  try{
+    btLog('Suche Leica DISTO…');
+    const dev=await navigator.bluetooth.requestDevice({
+      filters:[{namePrefix:'DISTO'},{services:[LEICA_SVC]}],
+      optionalServices:[LEICA_SVC]
+    });
+    bt.device=dev; bt.type='leica';
+    dev.addEventListener('gattserverdisconnected',()=>{ setBtStatus(false,'getrennt'); btLog('Verbindung getrennt.'); });
+    const server=await dev.gatt.connect();
+    const svc=await server.getPrimaryService(LEICA_SVC);
+    const ch=await svc.getCharacteristic(LEICA_DIST);
+    await ch.startNotifications();
+    ch.addEventListener('characteristicvaluechanged', e=>{
+      const v=e.target.value;
+      if(v.byteLength>=4){
+        const m=v.getFloat32(0,true);
+        if(isFinite(m)&&m>0) handleMeasurement(m,'Leica');
+      }
+    });
+    setBtStatus(true, dev.name||'Leica DISTO');
+    btLog('Leica verbunden: '+(dev.name||''));
+  }catch(err){ btLog('Leica: '+err.message); }
+}
+async function connectBosch(){
+  if(!requireBt()) return;
+  try{
+    btLog('Suche Bosch GLM…');
+    const dev=await navigator.bluetooth.requestDevice({
+      filters:[{namePrefix:'Bosch'},{namePrefix:'GLM'},{services:[BOSCH_SVC]}],
+      optionalServices:[BOSCH_SVC]
+    });
+    bt.device=dev; bt.type='bosch';
+    dev.addEventListener('gattserverdisconnected',()=>{ setBtStatus(false,'getrennt'); btLog('Verbindung getrennt.'); });
+    const server=await dev.gatt.connect();
+    const svc=await server.getPrimaryService(BOSCH_SVC);
+    const ch=await svc.getCharacteristic(BOSCH_CHR);
+    await ch.startNotifications();
+    ch.addEventListener('characteristicvaluechanged', e=>boschFrame(e.target.value));
+    try{
+      // MT-Protokoll: automatische Messwert-Übertragung aktivieren
+      await ch.writeValue(new Uint8Array([0xC0,0x55,0x02,0x01,0x00,0x1A]));
+      btLog('Bosch Autosync-Kommando gesendet.');
+    }catch(e){ btLog('Bosch Autosync fehlgeschlagen: '+e.message); }
+    setBtStatus(true, dev.name||'Bosch GLM');
+    btLog('Bosch verbunden: '+(dev.name||''));
+  }catch(err){ btLog('Bosch: '+err.message); }
+}
+function boschFrame(v){
+  const u8=new Uint8Array(v.buffer);
+  btLog('Bosch RX: '+hexStr(u8));
+  const dv=new DataView(v.buffer);
+  const cand=[];
+  for(let o=0;o+4<=dv.byteLength;o++){
+    const f=dv.getFloat32(o,true);
+    if(isFinite(f)&&f>0.049&&f<330) cand.push({o,f});
+  }
+  let m=null;
+  const pref=cand.find(c=>c.o===7)||cand.find(c=>c.o===5)||cand[0];
+  if(pref) m=pref.f;
+  if(m==null){
+    for(let o=0;o+4<=dv.byteLength;o++){
+      const mm=dv.getUint32(o,true);
+      if(mm>=50&&mm<=330000 && (o<4 || dv.getUint8(o-1)!==0)){ m=mm/1000; break; }
+    }
+  }
+  if(m!=null) handleMeasurement(m,'Bosch');
+  else btLog('(kein Messwert im Frame erkannt — Log bitte melden, Protokoll wird angepasst)');
+}
+function btDisconnect(){
+  try{ if(bt.device&&bt.device.gatt.connected) bt.device.gatt.disconnect(); }catch(e){}
+  setBtStatus(false,'getrennt');
+}
+function handleMeasurement(m, src){
+  const now=Date.now();
+  if(now-bt.lastAt<250) return;   // Doppel-Notifications ausfiltern
+  bt.lastAt=now;
+  m=Math.round(m*1000)/1000;
+  btLog(`Messwert (${src}): ${fmt3(m)} m`);
+  const bv=$('#btvalue'); if(bv) bv.textContent=fmt3(m)+' m';
+  if(mode==='draw' && draft.points.length && draft.dir){ addSegment(m); return; }
+  const ae=document.activeElement;
+  const target=(ae && ae.matches && ae.matches('input.laser')) ? ae : lastLaserInput;
+  if(target && document.body.contains(target)){
+    target.value=fmt3(m);
+    target.dispatchEvent(new Event('change'));
+    target.style.background='#d9f5e8';
+    setTimeout(()=>{ target.style.background=''; },600);
+  }
+}
+document.addEventListener('focusin', e=>{
+  if(e.target.matches('input.laser')) lastLaserInput=e.target;
+});
+
+/* ================= CSV-Export (magicplan-Format) ================= */
+function csvField(v){
+  v=String(v==null?'':v);
+  return /[;"\n\r]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v;
+}
+function exportCsv(){
+  const p=proj();
+  const rows=[];
+  const push=arr=>rows.push(arr.map(csvField).join(';'));
+
+  // Block 1: Räume
+  push(['ATTRIBUTE DER RÄUME','Etage','Höhe: m','Bodenfläche ohne Wände: m²','Deckenfläche: m²',
+        'Deckenumfang: m','Wandflächen: m²','Fensteroberflächen: m²','Türflächen: m²','Volumen: m³']);
+  p.rooms.forEach(r=>{
+    const st=roomStats(r);
+    push([r.name, floorName(r.floorId), fmt3(r.height), fmt3(st.area), fmt3(st.area),
+          fmt3(st.per), fmt3(st.wallA), fmt3(st.winA), fmt3(st.doorA), fmt3(st.vol)]);
+  });
+  rows.push(''); rows.push(''); rows.push('');
+
+  // Block 2: Attribute des Objekts
+  push(['Attribute des Objekts']);
+  push(['','Anmerkung','Anmerkungen','Etage','Raum','Menge/Faktor/Stunden','Länge in m','Breite in m','Höhe in m',
+        'Umfang in m','Durchmesser in m','Vorn','Oben','Links','Rechts','Hinten','Unten','Einheit',
+        'Nutze Grundfläche als Fläche','Nutze Ansichtsfläche als Fläche','Nutze Umfang als Länge','Symbol']);
+  const jn=b=>b?'Ja':'Nein';
+  const num=v=>isFinite(v)?fmt3(v):'';
+  p.attrs.forEach((a,i)=>{
+    const r=roomById(a.roomId);
+    // Bezug (Objekt/Wand) in der sonst leeren Symbol-Spalte mitgeben — Spaltenstruktur bleibt unverändert
+    push([a.id, String(i+1), a.lv, r?floorName(r.floorId):'', r?r.name:'',
+          fmt3(a.menge||0), num(a.laenge), num(a.breite), num(a.hoehe), num(a.umfang), num(a.durchm),
+          jn(a.vorn), jn(a.oben), jn(a.links), jn(a.rechts), jn(a.hinten), jn(a.unten),
+          a.einheit||'', jn(a.nutzGrund), jn(a.nutzAnsicht), jn(a.nutzUmfang),
+          lvZielText(a, true)]);
+  });
+  if(!p.attrs.length){
+    alert('Hinweis: Es sind noch keine LV-Positionen angelegt — der Attribute-Block der CSV bleibt leer.');
+  }
+  const csv='﻿'+'sep=;\r\n'+rows.join('\r\n')+'\r\n';
+  download(new Blob([csv],{type:'text/csv;charset=utf-8'}), `${p.name} ITS Statistiken.csv`);
+}
+function download(blob, name){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=name;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},500);
+}
+
+/* ================= Backup / Import ================= */
+$('#backupbtn').onclick=()=>{
+  const c=confirm('OK = Backup speichern (JSON)\nAbbrechen = Backup laden');
+  if(c){
+    download(new Blob([JSON.stringify(db,null,1)],{type:'application/json'}),
+      'grundriss-backup-'+new Date().toISOString().slice(0,10)+'.json');
+  } else $('#importfile').click();
+};
+$('#importfile').onchange=e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      const d=JSON.parse(rd.result);
+      if(!d.projects||!Array.isArray(d.projects)) throw new Error('Format unbekannt');
+      if(!confirm(`Backup mit ${d.projects.length} Projekt(en) laden? Aktuelle Daten werden ersetzt.`)) return;
+      db=d; db.projects.forEach(assignLvColors); db.projects.forEach(syncLvTexts); save();
+      activeFloorId=proj().floors[0].id; sel={roomId:null,wall:null};
+      renderAll(); zoomFit();
+    }catch(err){ alert('Import fehlgeschlagen: '+err.message); }
+  };
+  rd.readAsText(f);
+  e.target.value='';
+};
+
+/* ================= Druck / PDF =================
+   Aufbau je Etage: 1 Übersichtsseite (ohne Maße) → je Raum 1 Seite (Mini-Etage links,
+   Raum mit Maßen rechts, LV-Positionen unten) → Fotoseiten mit je 4 Bildern. */
+const KA_LOGO='data:image/jpeg;base64,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';
+
+/* Plan-SVG mit Optionen: masse, namen, highlight (Raum rot), objekte,
+   boxW/boxH = Zeichenfläche in mm (nötig, um die Schriftgröße im Druck zu garantieren) */
+const PT7_MM=7*25.4/72, PT9_MM=9*25.4/72;     // 7 pt ≈ 2,47 mm · 9 pt ≈ 3,18 mm
+function planSvg(rooms, opts){
+  opts=opts||{};
+  if(!rooms.length) return '<p style="color:#777">Keine Räume.</p>';
+  const bb=bboxOf(rooms.flatMap(r=>r.points));
+  const boxW=opts.boxW||186, boxH=opts.boxH||240;          // mm
+  const iw=bb.maxx-bb.minx, ih=bb.maxy-bb.miny;
+  // Rand nur so groß wie die Maßketten bei 7 pt brauchen — sonst schrumpft der Plan unnötig
+  let pad=opts.masse?0.8:0.5;
+  if(opts.masse) for(let k=0;k<4;k++){
+    const s0=Math.min(boxW/(iw+2*pad), boxH/(ih+2*pad));
+    const need=(PT9_MM/s0)*4.2;                             // zwei Maßreihen + Zahl bei 9 pt
+    if(Math.abs(need-pad)<0.02) break;
+    pad=need;
+  }
+  const w=iw+2*pad, h=ih+2*pad;
+  const lbl=Math.max(0.16, w/58);
+  const mmProM=Math.min(boxW/w, boxH/h);                    // Maßstab der fertigen Seite
+  const minFs=PT7_MM/mmProM;                                // Untergrenze 7 pt (in Metern)
+  const prefFs=PT9_MM/mmProM;                               // Standard 9 pt (in Metern)
+  const refs=[];
+  let out=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${bb.minx-pad} ${bb.miny-pad} ${w} ${h}"`+
+    ` preserveAspectRatio="xMidYMid meet" style="width:${boxW}mm; height:${boxH}mm">`;
+  rooms.forEach(r=>{
+    const hl=opts.highlight===r.id;
+    const d=r.points.map((p,i)=>(i?'L':'M')+p.x+' '+p.y).join(' ')+' Z';
+    out+=`<path d="${d}" fill="${hl?'#fdecec':'#fff'}" stroke="${hl?'#d64545':(opts.mini?'#9aa1ad':'#000')}"`+
+      ` stroke-width="${hl?w/240:(opts.mini?w/500:0.1)}" stroke-linejoin="miter"/>`;
+    if(!opts.mini){
+      out+=openingMarks(r, lbl).replace(/var\(--canvas\)/g,'#fff');
+      out+=wallMarks(r, lbl);
+      if(opts.objekte!==false) out+=objMarks(r, lbl, false);
+    }
+    if(opts.namen){
+      const c=centroid(r.points), st=roomStats(r);
+      out+=`<text x="${c.x}" y="${c.y}" text-anchor="middle" font-size="${lbl*0.9}">
+        <tspan x="${c.x}" dy="-0.05">${esc(r.name)}</tspan>
+        <tspan x="${c.x}" dy="${lbl*1.15}" font-size="${lbl*0.8}" fill="#555">${fmt(st.area,2)} m²</tspan></text>`;
+    }
+    if(opts.masse){
+      out+=angleMarks(r, lbl).replace(/var\(--danger\)/g,'#d64545');
+      const c=centroid(r.points);
+      r.points.forEach((a,i)=>{
+        const b=r.points[(i+1)%r.points.length], L=dist(a,b);
+        if(L<0.3) return;
+        const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+        let nx=-(b.y-a.y)/L, ny=(b.x-a.x)/L;
+        if((mx+nx*0.1-c.x)**2+(my+ny*0.1-c.y)**2 < (mx-nx*0.1-c.x)**2+(my-ny*0.1-c.y)**2){nx=-nx;ny=-ny;}
+        const po={color:'#555', tcol:'#222', off:Math.max(lbl*1.5, prefFs*1.3), fs:lbl*0.7,
+          sw:0.014, halo:'#fff', minFs, fsPref:prefFs, refs};
+        const segs=wallChainCuts(r,i);
+        if(segs.length>1){
+          segs.forEach(([q1,q2])=>{ out+=dimSvg(q1, q2, nx, ny, lbl, po); });
+          out+=dimSvg(a, b, nx, ny, lbl, {...po, off:Math.max(lbl*2.7, prefFs*3.0)});
+        } else out+=dimSvg(a, b, nx, ny, lbl, po);
+      });
+    }
+  });
+  out+='</svg>';
+  // Sicherheitsnetz: keine Schrift im Plan unter 7 pt (auch Raumnamen, Objektnummern)
+  out=out.replace(/font-size="([\d.]+)"/g, (m,v)=>`font-size="${Math.max(+v, minFs)}"`);
+  if(refs.length) out+=`<div class="prefs">${refs.map(x=>`<span><b>${x.nr}</b> ${x.txt} m</span>`).join('')}</div>`;
+  return out;
+}
+/* Alle Fotos eines Raums mit ihrer Zuordnung einsammeln */
+function fotosVonRaum(r){
+  const p=proj(), out=[];
+  (r.fotos||[]).forEach(f=>out.push({f, tags:[r.name]}));
+  Object.entries(r.wallFotos||{}).forEach(([i,list])=>
+    (list||[]).forEach(f=>out.push({f, tags:[r.name, wallNrOf(r,i)?('#'+wallNrOf(r,i)):('Wand '+(+i+1))]})));
+  (r.objects||[]).forEach(g=>(g.fotos||[]).forEach(f=>
+    out.push({f, tags:[r.name, objAnzeige(g)||g.name||'Objekt']})));
+  (r.openings||[]).forEach(o=>(o.fotos||[]).forEach(f=>
+    out.push({f, tags:[r.name, objAnzeige(o)]})));
+  (p.attrs||[]).filter(a=>a.roomId===r.id).forEach(a=>(a.fotos||[]).forEach(f=>
+    out.push({f, tags:[r.name, 'LV '+a.lv]})));
+  return out;
+}
+/* Eine Druckseite mit Kopf-/Fußzeile */
+function pSheet(inner, nr, bv){
+  return `<div class="psheet">
+    <div class="phead"><div class="band"></div><img src="${KA_LOGO}" alt=""></div>
+    <div class="pbody">${inner}</div>
+    <div class="pfoot"><span>${esc(bv)}</span><span>${nr}</span></div>
+  </div>`;
+}
+function buildPrint(){
+  const p=proj();
+  const bv=p.bauvorhaben || p.name || '';
+  const seiten=[];
+  p.floors.forEach(f=>{
+    const rooms=p.rooms.filter(r=>r.floorId===f.id);
+    if(!rooms.length) return;
+    // 1) Übersicht der Etage — ohne Maße, mit Raumnamen und Größen
+    seiten.push(`<div class="ptitle">▼ ${esc(f.name)}</div>
+      <div style="display:flex; align-items:center; justify-content:center; margin-top:4mm">
+        ${planSvg(rooms, {namen:true, masse:false, boxW:186, boxH:240})}
+      </div>`);
+    // 2) je Raum eine Seite
+    rooms.forEach(r=>{
+      const st=roomStats(r);
+      const lvs=(p.attrs||[]).filter(a=>a.roomId===r.id)
+        .sort((a,b)=>lvCmp(a.lv,b.lv));
+      const grp={};
+      lvs.forEach(a=>{ (grp[a.lv]=grp[a.lv]||[]).push(a); });
+      seiten.push(`
+        <div style="display:flex; justify-content:space-between; align-items:flex-start">
+          <div class="ptitle">▼ ${esc(r.name)}<small>${esc(f.name)}</small></div>
+          <div class="pstats">GRUNDFLÄCHE: ${fmt(st.area,2)} m² • UMFANG: ${fmt(st.per,2)} m • DECKENHÖHE: ${fmt(r.height,2)} m</div>
+        </div>
+        <div class="pcols" style="margin-top:3mm">
+          <div style="width:30mm; flex:0 0 30mm">
+            ${planSvg(rooms, {mini:true, highlight:r.id, boxW:30, boxH:38})}
+          </div>
+          <div style="flex:1">
+            ${planSvg([r], {masse:true, objekte:true, boxW:150, boxH:132})}
+          </div>
+        </div>
+        <div style="margin-top:4mm">
+          <div style="font-weight:700; font-size:12px; margin-bottom:1.5mm">LV-Positionen in diesem Raum</div>
+          ${lvs.length?`<table><thead><tr>
+            <th>LV</th><th>Kurztext</th><th>Objekt</th><th class="num">Menge</th><th>Einheit</th>
+            <th class="num">L</th><th class="num">B</th><th class="num">H</th><th class="num">Ergebnis</th>
+          </tr></thead><tbody>
+          ${lvs.map(a=>{
+            const alleNein=lvGroupAlleNein((p.attrs||[]).filter(x=>x.lv===a.lv));
+            const res=lvCalc(a, alleNein);
+            return `<tr><td>${esc(a.lv)}</td><td>${esc(a.kurz||(p.lvTexts||{})[a.lv]||'')}</td>
+              <td>${esc(lvZielText(a))}</td>
+              <td class="num">${fmt3(a.menge)}</td><td>${esc(einhTxt(a.einheit))}</td>
+              <td class="num">${Number.isFinite(a.laenge)?fmt3(a.laenge):''}</td>
+              <td class="num">${Number.isFinite(a.breite)?fmt3(a.breite):''}</td>
+              <td class="num">${Number.isFinite(a.hoehe)?fmt3(a.hoehe):''}</td>
+              <td class="num"><b>${fmt3(res.wert)}</b> ${res.sym}</td></tr>`;
+          }).join('')}
+          </tbody></table>`:'<div style="color:#888; font-size:11px">Keine LV-Positionen zugeordnet.</div>'}
+        </div>`);
+      // 3) Fotoseiten — je 4 Bilder
+      const fotos=fotosVonRaum(r);
+      for(let i=0;i<fotos.length;i+=4){
+        const vier=fotos.slice(i,i+4);
+        seiten.push(`<div class="ptitle">▼ Bilder<small>${esc(f.name)} · ${esc(r.name)}</small></div>
+          <div style="height:calc(100% - 14mm); margin-top:3mm">
+            <div class="pfotos">
+              ${vier.map((x,k)=>`<div class="pfoto">
+                <div class="tag">${[...x.tags, 'Foto '+(i+k+1)]
+                  .map((t,j)=>(j?'<i>→</i>':'')+(j===x.tags.length?`<em>${esc(t)}</em>`:esc(t))).join('')}</div>
+                <div class="bild"><img src="${x.f.src}" alt=""></div>
+              </div>`).join('')}
+              ${Array(4-vier.length).fill('<div></div>').join('')}
+            </div>
+          </div>`);
+      }
+    });
+  });
+  if(!seiten.length) seiten.push('<div class="ptitle">Keine Räume vorhanden</div>');
+  $('#printarea').innerHTML=seiten.map((s,i)=>pSheet(s, i+1, bv)).join('');
+}
+// Erst drucken, wenn Logo und Fotos wirklich dekodiert sind — sonst bleiben sie im PDF leer
+async function bilderFertig(root){
+  const imgs=[...root.querySelectorAll('img')];
+  await Promise.all(imgs.map(im=>{
+    if(im.complete && im.naturalWidth) return im.decode().catch(()=>{});
+    return new Promise(res=>{ im.onload=im.onerror=res; }).then(()=>im.decode().catch(()=>{}));
+  }));
+  await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+}
+$('#printbtn').onclick=async()=>{
+  const b=$('#printbtn'), alt=b.textContent;
+  b.textContent='Bereite vor …'; b.disabled=true;
+  try{ buildPrint(); await bilderFertig($('#printarea')); window.print(); }
+  finally{ b.textContent=alt; b.disabled=false; }
+};
+
+/* ================= Topbar / Projekte ================= */
+function renderTopbar(){
+  $('#projsel').innerHTML=db.projects.map(p=>`<option value="${p.id}" ${p.id===db.activeProjectId?'selected':''}>${esc(p.name)}</option>`).join('');
+}
+$('#projsel').onchange=e=>{
+  db.activeProjectId=e.target.value;
+  activeFloorId=proj().floors[0].id; sel={roomId:null,wall:null};
+  save(); renderAll(); zoomFit();
+};
+$('#projnew').onclick=()=>{
+  const name=prompt('Name des neuen Projekts (z. B. Objektadresse):');
+  if(!name) return;
+  const p={id:uid(), name, floors:[{id:uid(), name:'Erdgeschoss'}], rooms:[], attrs:[]};
+  db.projects.push(p); db.activeProjectId=p.id;
+  activeFloorId=p.floors[0].id; sel={roomId:null,wall:null};
+  save(); renderAll(); zoomFit();
+};
+$('#projsel').ondblclick=()=>{
+  const p=proj();
+  const name=prompt('Projekt umbenennen (leer lassen + OK = löschen):', p.name);
+  if(name===null) return;
+  if(name===''){
+    if(db.projects.length<=1){ alert('Das letzte Projekt kann nicht gelöscht werden.'); return; }
+    if(!confirm(`Projekt „${p.name}“ komplett löschen?`)) return;
+    db.projects=db.projects.filter(x=>x.id!==p.id);
+    db.activeProjectId=db.projects[0].id;
+  } else p.name=name;
+  activeFloorId=proj().floors[0].id; sel={roomId:null,wall:null};
+  save(); renderAll(); zoomFit();
+};
+$('#tabplan').onclick=()=>{ view='plan'; renderAll(); };
+$('#tablv').onclick=()=>{ view='lv'; renderAll(); };
+$('#exportcsv').onclick=exportCsv;
+$('#helpbtn').onclick=()=>$('#dlgHelp').showModal();
+document.querySelectorAll('dialog [data-close]').forEach(b=>b.onclick=()=>b.closest('dialog').close());
+
+/* ================= Render-Wurzel ================= */
+function renderAll(){
+  renderTopbar();
+  $('#tabplan').classList.toggle('active', view==='plan');
+  $('#tablv').classList.toggle('active', view==='lv');
+  const isPlan=view==='plan';
+  $('#main').style.display=isPlan?'':'none';
+  $('#sidebar').style.display=isPlan?'':'none';
+  $('#lvview').style.display=isPlan?'none':'block';
+  if(isPlan){ renderSidebar(); renderCanvas(); renderCrumb(); }
+  else renderLv();
+}
+function renderCrumb(){
+  const fr=focusRoomId?roomById(focusRoomId):null;
+  $('#crumb').innerHTML = fr
+    ? `<button id="crumbback" title="Zurück zur Etagenansicht (Esc)">← ${esc(floorName(fr.floorId))}</button><span>▸</span><b>${esc(fr.name)}</b>`
+    : `<span>Etage: <b>${esc(floorName(activeFloorId))}</b></span>`;
+  const bb=$('#crumbback'); if(bb) bb.onclick=exitRoom;
+}
+window.addEventListener('resize', ()=>{ if(view==='plan') renderCanvas(); });
+syncSharedDoors(); save();   // Altbestand: Türpaare in geteilten Wänden lagerichtig angleichen
+renderAll();
+zoomFit();
+</script>
+</body>
+</html>
