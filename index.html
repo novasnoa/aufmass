@@ -832,8 +832,10 @@ function objMarks(r, lbl, interactive){
       out+=objBadge(g, g.x+g.w+lbl*0.45, g.y-lbl*0.45, lbl, interactive);
       if(isSel){
         [[g.x,g.y,0],[g.x+g.w,g.y,1],[g.x+g.w,g.y+g.h,2],[g.x,g.y+g.h,3]].forEach(([px,py,k])=>{
-          const an=sel.objH===k, hs=lbl*(an?0.45:0.35);
+          const an=sel.objH===k, hs=lbl*(an?0.45:0.35), tr=lbl*(an?2.6:1.2);
+          if(an) out+=`<circle cx="${px}" cy="${py}" r="${tr}" fill="url(#ziehzone)" style="pointer-events:none"/>`;
           out+=`<rect x="${px-hs}" y="${py-hs}" width="${2*hs}" height="${2*hs}" fill="${an?'#2f6fed':'#fff'}" stroke="#2f6fed" stroke-width="${lbl*0.08}" data-obj="${g.id}" data-objh="${k}" style="cursor:nwse-resize"/>`;
+          out+=`<circle cx="${px}" cy="${py}" r="${tr}" fill="transparent" data-obj="${g.id}" data-objh="${k}" style="cursor:nwse-resize"/>`;
         });
       }
     } else if(g.type==='sym'){
@@ -864,8 +866,10 @@ function objMarks(r, lbl, interactive){
         // Eckgriffe am sichtbaren Umriss (auch bei 90°/270° gedrehten Symbolen)
         const vx=cx-W/2, vy=cy-H/2;
         [[vx,vy,0],[vx+W,vy,1],[vx+W,vy+H,2],[vx,vy+H,3]].forEach(([px,py,k])=>{
-          const an=sel.objH===k, hs=lbl*(an?0.45:0.35);
+          const an=sel.objH===k, hs=lbl*(an?0.45:0.35), tr=lbl*(an?2.6:1.2);
+          if(an) out+=`<circle cx="${px}" cy="${py}" r="${tr}" fill="url(#ziehzone)" style="pointer-events:none"/>`;
           out+=`<rect x="${px-hs}" y="${py-hs}" width="${2*hs}" height="${2*hs}" fill="${an?'#2f6fed':'#fff'}" stroke="#2f6fed" stroke-width="${lbl*0.08}" data-obj="${g.id}" data-objh="${k}" style="cursor:nwse-resize"/>`;
+          out+=`<circle cx="${px}" cy="${py}" r="${tr}" fill="transparent" data-obj="${g.id}" data-objh="${k}" style="cursor:nwse-resize"/>`;
         });
       }
     } else {
@@ -883,12 +887,20 @@ function objMarks(r, lbl, interactive){
         out+=`<polyline points="${ptsStr}" fill="none" stroke="${cols[0]||'#7a4fd0'}" stroke-width="0.05"${dat}/>`;
       }
       if(interactive){
-        // je Segment eine eigene Trefferfläche — Segmente sind einzeln anwählbar
+        // Je Segment eine eigene Trefferfläche. Der Radius wächst in zwei Stufen:
+        // Linie angewählt → größer, Segment angewählt (= ziehbar) → nochmals deutlich größer.
         for(let k=0;k<g.points.length-1;k++){
           const q1=g.points[k], q2=g.points[k+1];
-          if(isSel && sel.objSeg===k)
+          const segSel = isSel && sel.objSeg===k;
+          const treffer = lbl*(segSel?2.6:(isSel?1.7:1.1));
+          if(segSel){
+            // Ziehzone als weicher grüner Schlauch entlang des Segments (Kreis, am Segment entlanggezogen)
+            [[1.0,0.10],[0.66,0.16],[0.34,0.24]].forEach(([f,op])=>{
+              out+=`<line x1="${q1.x}" y1="${q1.y}" x2="${q2.x}" y2="${q2.y}" stroke="#0ea06f" stroke-opacity="${op}" stroke-width="${treffer*f}" stroke-linecap="round" style="pointer-events:none"/>`;
+            });
             out+=`<line x1="${q1.x}" y1="${q1.y}" x2="${q2.x}" y2="${q2.y}" stroke="#2f6fed" stroke-width="0.12" opacity="0.5" style="pointer-events:none"/>`;
-          out+=`<line x1="${q1.x}" y1="${q1.y}" x2="${q2.x}" y2="${q2.y}" stroke="transparent" stroke-width="0.35" data-obj="${g.id}" data-objseg="${k}" style="cursor:move"/>`;
+          }
+          out+=`<line x1="${q1.x}" y1="${q1.y}" x2="${q2.x}" y2="${q2.y}" stroke="transparent" stroke-width="${treffer}" stroke-linecap="round" data-obj="${g.id}" data-objseg="${k}" style="cursor:move"/>`;
         }
       }
       // Nummern-Plakette mittig auf dem mittleren Segment
@@ -898,8 +910,10 @@ function objMarks(r, lbl, interactive){
       if(isSel){
         g.points.forEach((pt,k)=>{
           const an = sel.objH===k;                     // angewählter Punkt ist gefüllt und größer
-          const hs=lbl*(an?0.45:0.35);
+          const hs=lbl*(an?0.45:0.35), tr=lbl*(an?2.6:1.2);
+          if(an) out+=`<circle cx="${pt.x}" cy="${pt.y}" r="${tr}" fill="url(#ziehzone)" style="pointer-events:none"/>`;
           out+=`<rect x="${pt.x-hs}" y="${pt.y-hs}" width="${2*hs}" height="${2*hs}" fill="${an?'#2f6fed':'#fff'}" stroke="#2f6fed" stroke-width="${lbl*0.08}" data-obj="${g.id}" data-objh="${k}" style="cursor:pointer"/>`;
+          out+=`<circle cx="${pt.x}" cy="${pt.y}" r="${tr}" fill="transparent" data-obj="${g.id}" data-objh="${k}" style="cursor:pointer"/>`;
         });
       }
     }
@@ -948,6 +962,11 @@ function renderCanvas(){
     <pattern id="grid" width="1" height="1" patternUnits="userSpaceOnUse">
       <path d="M 1 0 L 0 0 0 1" fill="none" stroke="#e6e9ee" stroke-width="0.015"/>
     </pattern>
+    <radialGradient id="ziehzone">
+      <stop offset="0%" stop-color="#0ea06f" stop-opacity="0.32"/>
+      <stop offset="55%" stop-color="#0ea06f" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#0ea06f" stop-opacity="0"/>
+    </radialGradient>
   </defs>
   <rect x="${vb.x-50}" y="${vb.y-50}" width="${vb.w+100}" height="${vb.h+100}" fill="url(#grid)" data-bg="1"/>`;
 
@@ -986,8 +1005,11 @@ function renderCanvas(){
           out+=dimSvg(a, b, nx, ny, lbl, dopts);
         }
         const isSelV = sel.vertex===i;
+        // Trefferradius: grundsätzlich großzügig, bei ausgewählter (= ziehbarer) Ecke deutlich größer
+        const trefferR = lbl*(isSelV?2.8:1.5);
+        if(isSelV) out+=`<circle cx="${a.x}" cy="${a.y}" r="${trefferR}" fill="url(#ziehzone)" style="pointer-events:none"/>`;
         out+=`<circle cx="${a.x}" cy="${a.y}" r="${lbl*(isSelV?0.55:0.35)}" fill="${isSelV?'#2f6fed':'#2b3345'}" stroke="#fff" stroke-width="${lbl*0.12}" data-roomid="${r.id}" data-vertex="${i}" style="cursor:move"/>`;
-        out+=`<circle cx="${a.x}" cy="${a.y}" r="${lbl*1.1}" fill="transparent" data-roomid="${r.id}" data-vertex="${i}" style="cursor:move"/>`;
+        out+=`<circle cx="${a.x}" cy="${a.y}" r="${trefferR}" fill="transparent" data-roomid="${r.id}" data-vertex="${i}" style="cursor:move"/>`;
       });
       // Türen/Fenster anwählbar: Hitzone, Auswahl-Markierung und Breiten-Griffe
       (r.openings||[]).forEach(o=>{
