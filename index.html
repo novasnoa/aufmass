@@ -1228,55 +1228,7 @@ const SYMDEFS={
   '4k':{label:'4-K-Schleuse', w:4.0, h:1.0, k:4},
   'rfa':{label:'RFA', w:1.2, h:1.2, k:0}
 };
-/* ---------- Zwei-Finger-Gesten: Zoomen und Verschieben (iPad) ---------- */
-const zeiger=new Map();          // aktive Finger/Zeiger
-let pinch=null;
-// Laufendes Ziehen zurücknehmen, wenn der zweite Finger dazukommt —
-// sonst verschiebt die Zoom-Geste ungewollt Räume oder Objekte.
-function cancelDrag(){
-  if(!drag) return;
-  const d=drag; drag=null;
-  if(d.kind==='room' && d.room && d.orig){
-    d.room.points=d.orig.map(q=>({...q}));
-    if(d.origObjs) d.room.objects=JSON.parse(JSON.stringify(d.origObjs));
-  } else if(d.kind==='vertex' && d.room && d.orig){
-    d.room.points[d.idx]={...d.orig};
-  } else if(d.kind==='wall' && d.room && d.origA){
-    const n=d.room.points.length;
-    d.room.points[d.idx]={...d.origA};
-    d.room.points[(d.idx+1)%n]={...d.origB};
-  } else if((d.kind==='objmove'||d.kind==='objh') && d.g && d.orig){
-    Object.assign(d.g, JSON.parse(JSON.stringify(d.orig)));
-  } else if((d.kind==='open'||d.kind==='openend') && d.o && d.orig){
-    Object.assign(d.o, d.orig);
-  }
-  renderCanvas();
-}
-const svgRatio = p => {                         // Bildschirmpunkt → Anteil im SVG-Feld
-  const r=svg.getBoundingClientRect();
-  return {x:(p.x-r.left)/r.width, y:(p.y-r.top)/r.height};
-};
-function startPinch(){
-  cancelDrag();
-  const [a,b]=[...zeiger.values()];
-  pinch={dist:Math.hypot(b.x-a.x, b.y-a.y), mid:{x:(a.x+b.x)/2, y:(a.y+b.y)/2}, vb:{...vb}};
-}
-function updatePinch(){
-  const [a,b]=[...zeiger.values()];
-  const d=Math.hypot(b.x-a.x, b.y-a.y);
-  if(d<12 || !pinch.dist) return;
-  const f=Math.max(0.05, Math.min(20, pinch.dist/d));          // >1 = weiter weg
-  const w=Math.max(0.4, Math.min(600, pinch.vb.w*f));
-  const h=w*(pinch.vb.h/pinch.vb.w);
-  const s0=svgRatio(pinch.mid), s1=svgRatio({x:(a.x+b.x)/2, y:(a.y+b.y)/2});
-  const wx=pinch.vb.x+s0.x*pinch.vb.w, wy=pinch.vb.y+s0.y*pinch.vb.h;   // festgehaltener Punkt
-  vb={x:wx-s1.x*w, y:wy-s1.y*h, w, h};
-  renderCanvas();
-}
 svg.addEventListener('pointerdown', e=>{
-  zeiger.set(e.pointerId, {x:e.clientX, y:e.clientY});
-  if(zeiger.size===2){ startPinch(); return; }
-  if(zeiger.size>2) return;
   const p=svgPoint(e);
   svg.setPointerCapture(e.pointerId);
   if(mode==='draw'){ handleDrawClick(p); return; }
@@ -1341,8 +1293,7 @@ svg.addEventListener('pointerdown', e=>{
       }
       lastObjTap={id:g.id, t:now, x:p.x, y:p.y};
       if(sel.objId!==g.id){ sel={roomId:focusRoomId, wall:null, vertex:null, objId:g.id}; renderAll(); }
-      if(t.dataset.objh!==undefined) drag={kind:'objh', room:r, g, h:+t.dataset.objh, moved:false,
-        orig:JSON.parse(JSON.stringify(g))};
+      if(t.dataset.objh!==undefined) drag={kind:'objh', room:r, g, h:+t.dataset.objh, moved:false};
       else drag={kind:'objmove', room:r, g, start:p, orig:JSON.parse(JSON.stringify(g)), moved:false};
       return;
     }
@@ -1356,9 +1307,9 @@ svg.addEventListener('pointerdown', e=>{
       const u={x:(b.x-a.x)/L, y:(b.y-a.y)/L};
       const tc=(p.x-a.x)*u.x+(p.y-a.y)*u.y;
       if(t.dataset.openend!==undefined){
-        drag={kind:'openend', room:r, o, end:+t.dataset.openend, moved:false, orig:{...o}};
+        drag={kind:'openend', room:r, o, end:+t.dataset.openend, moved:false};
       } else {
-        drag={kind:'open', room:r, o, grab:tc-Math.max(0,Math.min(o.offset,L-o.width)), moved:false, orig:{...o}};
+        drag={kind:'open', room:r, o, grab:tc-Math.max(0,Math.min(o.offset,L-o.width)), moved:false};
       }
       return;
     }
@@ -1390,8 +1341,6 @@ svg.addEventListener('pointerdown', e=>{
   drag={kind:'pan', start:{x:e.clientX,y:e.clientY}, orig:{...vb}, moved:false, pendingRoom};
 });
 svg.addEventListener('pointermove', e=>{
-  if(zeiger.has(e.pointerId)) zeiger.set(e.pointerId, {x:e.clientX, y:e.clientY});
-  if(pinch){ if(zeiger.size>=2) updatePinch(); return; }
   const p=svgPoint(e);
   if(mode==='draw'){ draft.cursor=snapDir(p); renderCanvas(); updateDrawHint(); return; }
   if(mode==='place'){ if(placing){placing.at=p; renderCanvas();} return; }
@@ -1543,16 +1492,7 @@ svg.addEventListener('pointermove', e=>{
     renderCanvas();
   }
 });
-svg.addEventListener('pointercancel', e=>{
-  zeiger.delete(e.pointerId);
-  if(pinch && zeiger.size<2){ pinch=null; drag=null; }
-});
 svg.addEventListener('pointerup', e=>{
-  zeiger.delete(e.pointerId);
-  if(pinch){                      // Ende der Zoom-Geste — kein Klick auslösen
-    if(zeiger.size<2){ pinch=null; drag=null; }
-    return;
-  }
   if(drag){
     if(drag.kind==='room' && !drag.moved && mode==='select'){
       const id=drag.room.id; drag=null; focusRoom(id); return;
