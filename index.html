@@ -408,6 +408,14 @@
       <li>Ein Eingabefeld mit grünem Rand anklicken (Wandlänge, Raumhöhe, LV-Maße …) und die Messung am Gerät auslösen — der Wert springt direkt ins Feld.</li>
       <li>Beim <b>Raum zeichnen</b>: Richtung mit Maus/Finger vorgeben und am Laser messen — die Wand wird mit exakter Länge gesetzt.</li>
     </ol>
+    <h3 style="margin-bottom:4px">Plan als Hintergrund</h3>
+    <ul style="padding-left:18px; margin-bottom:10px">
+      <li>In der <b>Etagenansicht</b> unter „Plan als Hintergrund": <b>☁️ Aus Airtable</b> zeigt die Pläne, die bei deiner Baustelle im Feld <b>Aufmaß Pläne</b> liegen — anklicken und laden, der Maßstab wird aus dem Dateinamen übernommen. <b>🖼️ Aus Datei</b> lädt ein Bild vom Gerät. Der Plan liegt hinter allem und wird <b>nicht mitgedruckt</b>.</li>
+      <li><b>PDFs vorher am Rechner umwandeln:</b> <code>python plan-export.py plan.pdf --massstab 75 --beschreibung "EG Haus 2"</code>. Das Skript schreibt das Bild mit der echten Breite im Namen (<code>EG Haus 2 [B=46,800m].jpg</code>) — dieses Bild in Airtable ins Feld <b>Aufmaß Pläne</b> hochladen, fertig. Mit <code>--ausschnitt 0,0,0.78,1</code> bleibt das Schriftfeld weg.</li>
+      <li><b>„📏 Maßstab messen"</b> ist die Gegenprobe: zwei Punkte anklicken, deren echten Abstand du kennst (z. B. eine bemaßte Wand), Maß eintragen — der Plan wird passend skaliert, der erste Punkt bleibt liegen.</li>
+      <li><b>Beweglich/Gesperrt:</b> solange beweglich, verschiebt Ziehen auf dem Plan ihn selbst (gestrichelter Rahmen). Zum Zeichnen sperren — dann ist er für Klicks unsichtbar. <b>Drehung</b> gleicht schief eingescannte Pläne aus, <b>Deckkraft</b> regelt, wie stark er durchscheint.</li>
+      <li>Der Plan gehört zur <b>Etage</b>, wird mit dem Projekt nach Airtable gesichert und liegt lokal in der Bilddatenbank — nicht im knappen Textspeicher.</li>
+    </ul>
     <h3 style="margin-bottom:4px">Etagen- und Raumansicht</h3>
     <ul style="padding-left:18px; margin-bottom:10px">
       <li><b>Etagenansicht:</b> Übersicht aller Räume der Etage. Raum <b>ziehen</b> = auf der Etage verschieben, Raum <b>anklicken</b> = hineinzoomen.</li>
@@ -483,6 +491,7 @@
 <input type="file" id="fotoInFile" accept="image/*" multiple style="display:none">
 <input type="file" id="fotoInCam" accept="image/*" capture="environment" style="display:none">
 <input type="file" id="importfile" accept=".json" style="display:none">
+<input type="file" id="planfile" accept="image/*" style="display:none">
 
 <script>
 'use strict';
@@ -585,7 +594,7 @@ const istGeaendert = () => { const p=proj(); return !p.gesichertRev || p.gesiche
 function standAlsGesichert(){
   const p=proj();
   p.gesichertRev=db.rev; p.gesichertAm=Date.now();
-  try{ localStorage.setItem(LS, JSON.stringify(db)); }catch(e){}   // direkt: kein neuer rev
+  try{ localStorage.setItem(LS, dbText()); }catch(e){}             // direkt: kein neuer rev
   renderTopbar();
 }
 
@@ -658,23 +667,95 @@ function redoSchritt(){
   standAnwenden(redoStapel.pop());
 }
 
+/* ================= Bildspeicher (IndexedDB) =================
+   Der localStorage fasst nur ~5 MB und schreibt bei jeder Änderung alles neu — mit
+   Fotos und Planbildern ist er sofort voll. Deshalb liegen Bilddaten in IndexedDB
+   (Schlüssel = Bild-ID), im localStorage steht nur noch der Bauplan des Projekts.
+   Im Arbeitsspeicher bleibt alles wie gehabt: f.src ist weiter eine data-URL. */
+const IDB_NAME='grundriss-bilder', IDB_STORE='bilder';
+let idbVerbindung=null;
+const idbGesichert=new Set();              // schon geschriebene IDs, spart Doppelschreiben
+function idb(){
+  if(idbVerbindung) return idbVerbindung;
+  idbVerbindung=new Promise((res,rej)=>{
+    if(!window.indexedDB) return rej(new Error('IndexedDB steht in diesem Browser nicht zur Verfügung'));
+    const anfrage=indexedDB.open(IDB_NAME, 1);
+    anfrage.onupgradeneeded=()=>{
+      const d=anfrage.result;
+      if(!d.objectStoreNames.contains(IDB_STORE)) d.createObjectStore(IDB_STORE);
+    };
+    anfrage.onsuccess=()=>res(anfrage.result);
+    anfrage.onerror=()=>rej(anfrage.error||new Error('Bildspeicher nicht erreichbar'));
+  });
+  return idbVerbindung;
+}
+function idbLauf(modus, arbeit){
+  return idb().then(d=>new Promise((res,rej)=>{
+    const t=d.transaction(IDB_STORE, modus), s=t.objectStore(IDB_STORE);
+    let ergebnis;
+    arbeit(s, w=>{ ergebnis=w; });
+    t.oncomplete=()=>res(ergebnis);
+    t.onerror=t.onabort=()=>rej(t.error||new Error('Bildspeicher-Vorgang fehlgeschlagen'));
+  }));
+}
+const idbSchreiben = (id, wert) => idbLauf('readwrite', s=>s.put(wert, id));
+const idbLoeschen  = ids => idbLauf('readwrite', s=>ids.forEach(id=>s.delete(id)));
+const idbSchluessel = () => idbLauf('readonly', (s,fertig)=>{ const r=s.getAllKeys(); r.onsuccess=()=>fertig(r.result); });
+const idbLesen = ids => idbLauf('readonly', (s,fertig)=>{
+  const aus={}; let offen=ids.length;
+  if(!offen) return fertig(aus);
+  ids.forEach(id=>{ const r=s.get(id); r.onsuccess=()=>{ if(r.result) aus[id]=r.result; if(!--offen) fertig(aus); }; });
+});
+
+const alleBilder = () => (db.projects||[]).reduce((a,p)=>a.concat(alleFotos(p)), []);
+// Projektstand ohne Bilddaten — genau das, was in den localStorage gehört
+const dbText = () => standErfassen();
+// Neue Bilder wegschreiben; Fehler melden, aber den Ablauf nicht anhalten
+function bilderSichern(){
+  const neu=alleBilder().filter(f=>f && f.src && !idbGesichert.has(f.id));
+  neu.forEach(f=>{
+    idbGesichert.add(f.id);
+    idbSchreiben(f.id, f.src).catch(err=>{
+      idbGesichert.delete(f.id);
+      melde('Bild konnte nicht gespeichert werden: '+err.message, true);
+    });
+  });
+}
+// Beim Start: Bilddaten aus IndexedDB zurück in die Fotos hängen
+async function bilderNachladen(){
+  const fehlend=alleBilder().filter(f=>f && !f.src);
+  if(!fehlend.length) return 0;
+  const werte=await idbLesen(fehlend.map(f=>f.id));
+  let ok=0;
+  fehlend.forEach(f=>{ if(werte[f.id]){ f.src=werte[f.id]; idbGesichert.add(f.id); ok++; } });
+  return ok;
+}
+// Verwaiste Bilder entfernen (gelöschte Fotos, alte Projekte)
+async function bilderAufraeumen(){
+  const benutzt=new Set(alleBilder().map(f=>f.id));
+  const alle=await idbSchluessel();
+  const weg=alle.filter(id=>!benutzt.has(id));
+  if(weg.length) await idbLoeschen(weg);
+  return weg.length;
+}
+
 function save(){
   db.rev=Date.now();                       // Marke für „seit der letzten Sicherung geändert"
+  const text=standErfassen();              // ohne Bilddaten — die liegen in IndexedDB
   if(!ohneUndoAktiv){
-    const jetzt=standErfassen();
-    if(letzterStand!=null && letzterStand!==jetzt){
+    if(letzterStand!=null && letzterStand!==text){
       undoStapel.push(letzterStand);
       if(undoStapel.length>UNDO_MAX) undoStapel.shift();
       redoStapel=[];                       // neue Änderung → Wiederholen verfällt
     }
-    letzterStand=jetzt;
+    letzterStand=text;
     renderUndoBtns(); renderTopbar();      // Kopfzeile zeigt „ungesichert" sofort an
   }
-  try{ localStorage.setItem(LS, JSON.stringify(db)); }
+  bilderSichern();
+  try{ localStorage.setItem(LS, text); }
   catch(e){
-    // Fotos können den localStorage füllen — verständlich melden statt still zu scheitern
     alert('Speichern fehlgeschlagen: Der lokale Speicher des Browsers ist voll.\n\n'+
-      'Bitte über „Backup“ sichern und einige Fotos entfernen — sonst gehen neue Eingaben verloren.');
+      'Bitte über „Backup“ sichern — sonst gehen neue Eingaben verloren.');
     throw e;
   }
 }
@@ -1135,6 +1216,7 @@ function renderCanvas(){
     </radialGradient>
   </defs>
   <rect x="${vb.x-50}" y="${vb.y-50}" width="${vb.w+100}" height="${vb.h+100}" fill="url(#grid)" data-bg="1"/>`;
+  out+=planBild();
 
   rooms.forEach(r=>{
     const selR = r.id===sel.roomId;
@@ -1445,6 +1527,8 @@ function cancelDrag(){
     Object.assign(d.g, JSON.parse(JSON.stringify(d.orig)));
   } else if((d.kind==='open'||d.kind==='openend') && d.o && d.orig){
     Object.assign(d.o, d.orig);
+  } else if(d.kind==='plan' && d.orig){
+    const pl=planVon(); if(pl){ pl.x=d.orig.x; pl.y=d.orig.y; }
   }
   renderCanvas();
 }
@@ -1476,6 +1560,7 @@ svg.addEventListener('pointerdown', e=>{
   const p=svgPoint(e);
   svg.setPointerCapture(e.pointerId);
   if(mode==='draw'){ handleDrawClick(p); return; }
+  if(mode==='kalib'){ planKalibKlick(p); return; }
   if(mode==='place'){ commitPlace(p); return; }
   if(mode==='objrect'||mode==='objline'){
     drag={kind:mode==='objrect'?'newrect':'newline',
@@ -1518,6 +1603,10 @@ svg.addEventListener('pointerdown', e=>{
     return;
   }
   const t=e.target;
+  if(t.dataset && t.dataset.plan){                 // beweglicher Hintergrundplan
+    const pl=planVon();
+    if(pl){ drag={kind:'plan', start:p, orig:{x:pl.x, y:pl.y}, moved:false}; return; }
+  }
   if(t.dataset && t.dataset.obj && focusRoomId){
     const r=roomById(focusRoomId);
     const g=(r.objects||[]).find(x=>x.id===t.dataset.obj);
@@ -1596,6 +1685,12 @@ svg.addEventListener('pointermove', e=>{
     const dx=(e.clientX-drag.start.x)*scale, dy=(e.clientY-drag.start.y)*scale;
     if(Math.abs(dx)+Math.abs(dy)>0.02) drag.moved=true;
     vb.x=drag.orig.x-dx; vb.y=drag.orig.y-dy; renderCanvas();
+  } else if(drag.kind==='plan'){
+    const pl=planVon(); if(!pl) return;
+    const dx=mm(p.x-drag.start.x), dy=mm(p.y-drag.start.y);
+    if(Math.abs(dx)+Math.abs(dy)>0.01) drag.moved=true;
+    pl.x=mm(drag.orig.x+dx); pl.y=mm(drag.orig.y+dy);
+    renderCanvas();
   } else if(drag.kind==='room'){
     let dx=p.x-drag.start.x, dy=p.y-drag.start.y;
     dx=mm(dx); dy=mm(dy);
@@ -1796,6 +1891,10 @@ svg.addEventListener('pointerup', e=>{
       const moved=reassignObjectRoom(drag.room, drag.g);
       if(moved){ focusRoomId=moved.id; sel={roomId:moved.id, wall:null, vertex:null, objId:drag.g.id}; refocused=true; }
     }
+    if(drag && drag.kind==='plan'){
+      if(drag.moved) save();
+      drag=null; renderCanvas(); return;
+    }
     if(drag && drag.moved && (drag.kind==='room'||drag.kind==='vertex'||drag.kind==='wall'||drag.kind==='open'||drag.kind==='openend'||drag.kind==='objmove'||drag.kind==='objh')){
       syncSharedDoors(); save(); renderAll();
       if(refocused) zoomFit();   // neuen Raum wie beim Raumwechsel zentriert einpassen
@@ -1859,6 +1958,12 @@ function updateDrawHint(){
     if(draft.typed) txt += ` &nbsp;|&nbsp; Eingabe: <b>${draft.typed} m</b> (Enter)`;
     if(n>=3) txt += ' &nbsp;|&nbsp; Doppelklick = schließen';
     h.innerHTML=txt+' &nbsp;|&nbsp; Esc = abbrechen';
+  } else if(mode==='kalib'){
+    h.style.display='block';
+    h.innerHTML=(kalibA
+      ? '<b>Maßstab:</b> jetzt den <b>zweiten</b> Punkt anklicken'
+      : '<b>Maßstab:</b> zwei Punkte im Plan anklicken, deren echten Abstand du kennst')
+      + ' &nbsp;|&nbsp; Esc = abbrechen';
   } else if(mode==='place'){
     h.style.display='block';
     h.innerHTML='Position wählen und <b>klicken</b>, um den Raum zu platzieren &nbsp;|&nbsp; Esc = abbrechen';
@@ -1878,6 +1983,7 @@ function updateDrawHint(){
 }
 function cancelModes(){
   mode='select'; draft={points:[],cursor:null,dir:null,typed:''}; placing=null; pendingSym=null; pendingOpenType=null;
+  kalibA=null;
   updateDrawHint(); renderCanvas(); renderSidebar();
 }
 document.addEventListener('keydown', e=>{
@@ -2126,6 +2232,8 @@ function renderSidebar(){
         <button class="btn" id="modetpl" style="flex:1">▭ Vorlage</button>
       </div></div>`;
 
+    html+=planPanel();
+
     const rooms=floorRooms();
     html+=`<div class="panel"><h3>Räume (${rooms.length})</h3>
       ${rooms.length? rooms.map(x=>{const s=roomStats(x);return `<div class="stat" style="cursor:pointer" data-selroom="${x.id}"><span>▸ ${esc(x.name)}</span><b>${fmt(s.area,2)} m²</b></div>`;}).join('') : '<p class="hint">Noch keine Räume auf dieser Etage. Oben „Frei zeichnen“ oder „Vorlage“ wählen.</p>'}
@@ -2319,6 +2427,45 @@ function wireSidebar(r){
     p.floors=p.floors.filter(x=>x.id!==f.id);
     activeFloorId=p.floors[0].id; focusRoomId=null; sel={roomId:null,wall:null,vertex:null}; save(); renderAll();
   });
+  /* ---- Plan als Hintergrund ---- */
+  on('#planadd','onclick',()=>$('#planfile').click());
+  on('#planat','onclick',planAusAirtable);
+  renderPlanListe();
+  on('#plandel','onclick',()=>{
+    const f=etage(); if(!f.plan) return;
+    if(!confirm('Planbild dieser Etage entfernen?')) return;
+    if(f.plan.id) idbLoeschen([f.plan.id]).catch(()=>{});
+    delete f.plan; mode='select'; kalibA=null; save(); renderAll();
+    melde('Planbild entfernt.');
+  });
+  on('#planbreite','onchange',e=>{
+    const pl=planVon(), v=parseNum(e.target.value);
+    if(pl && isFinite(v) && v>0){ planSkalieren({x:pl.x,y:pl.y}, v/pl.breite); save(); renderAll(); }
+    else renderSidebar();
+  });
+  on('#plandreh','onchange',e=>{
+    const pl=planVon(), v=parseNum(e.target.value);
+    if(pl && isFinite(v)){ pl.drehung=((v%360)+360)%360; save(); renderAll(); } else renderSidebar();
+  });
+  on('#plandeck','oninput',e=>{
+    const pl=planVon(); if(!pl) return;
+    pl.deckkraft=Math.max(0.1, Math.min(1, (+e.target.value||55)/100));
+    renderCanvas();
+  });
+  on('#plandeck','onchange',()=>save());
+  on('#planlock','onclick',()=>{
+    const pl=planVon(); if(!pl) return;
+    pl.gesperrt=!pl.gesperrt;
+    if(pl.gesperrt && mode==='kalib'){ mode='select'; kalibA=null; }
+    save(); renderAll();
+  });
+  on('#plankalib','onclick',()=>{
+    const pl=planVon(); if(!pl) return;
+    if(mode==='kalib'){ cancelModes(); return; }
+    mode='kalib'; kalibA=null; sel={roomId:null,wall:null,vertex:null};
+    renderAll(); updateDrawHint();
+  });
+
   on('#modedraw','onclick',()=>{
     if(mode==='draw'){ cancelModes(); return; }
     focusRoomId=null;
@@ -3074,6 +3221,189 @@ $('#lvEditNone').onclick=()=>{
   save(); renderLvEdit();
 };
 
+/* ================= Plan als Hintergrund =================
+   Ein Bild je Etage (f.plan), hinter allem gezeichnet, in Metern platziert. Die
+   Umwandlung PDF → Bild passiert vorher am Rechner (siehe plan-export.py), damit die
+   App klein und offline-fähig bleibt. Die Bilddaten liegen wie Fotos in IndexedDB. */
+const PLAN_MAXKANTE=4500, PLAN_Q=0.72;
+const etage = () => proj().floors.find(f=>f.id===activeFloorId) || proj().floors[0];
+const planVon = () => { const f=etage(); return f && f.plan && f.plan.src ? f.plan : null; };
+
+function planBild(){
+  const pl=planVon(); if(!pl) return '';
+  // Drehung um die linke obere Ecke — dadurch bleibt das Skalieren beim Kalibrieren exakt
+  const dreh=pl.drehung ? ` transform="rotate(${pl.drehung} ${pl.x} ${pl.y})"` : '';
+  // Gesperrt liegt der Plan völlig durchlässig da — Klicks gehen an Räume und Ansicht
+  const fass=pl.gesperrt ? ' pointer-events="none"' : ' data-plan="1" style="cursor:move"';
+  const rand=pl.gesperrt ? '' :
+    `<rect x="${pl.x}" y="${pl.y}" width="${pl.breite}" height="${pl.hoehe}" fill="none"
+       stroke="#2f6fed" stroke-width="${Math.max(0.02, vb.w/900)}" stroke-dasharray="${vb.w/90} ${vb.w/140}"
+       pointer-events="none"${dreh}/>`;
+  const marke=kalibA
+    ? `<circle cx="${kalibA.x}" cy="${kalibA.y}" r="${vb.w/120}" fill="none" stroke="#e0a300"
+         stroke-width="${vb.w/400}" pointer-events="none"/>`
+    : '';
+  return `<image href="${pl.src}" x="${pl.x}" y="${pl.y}" width="${pl.breite}" height="${pl.hoehe}"
+    opacity="${pl.deckkraft}" preserveAspectRatio="none"${dreh}${fass}/>`+rand+marke;
+}
+
+function planPanel(){
+  const pl=planVon();
+  if(!pl) return `<div class="panel"><h3>Plan als Hintergrund</h3>
+    <div class="row">
+      <button class="btn small primary" id="planat" style="flex:1">☁️ Aus Airtable</button>
+      <button class="btn small" id="planadd" style="flex:1">🖼️ Aus Datei</button>
+    </div>
+    <div id="planListe"></div>
+    <p class="hint" style="margin-top:6px">Pläne liegen bei der Baustelle im Feld <b>Aufmaß Pläne</b>.
+      PDFs vorher am Rechner umwandeln — <code>plan-export.py</code> schreibt die Breite in den Dateinamen,
+      dann stimmt der Maßstab von selbst.</p></div>`;
+  return `<div class="panel"><h3>Plan als Hintergrund</h3>
+    <div class="stat"><span>${esc(pl.name||'Planbild')}</span><b>${fmt(pl.breite,2)} m breit</b></div>
+    <div class="row"><label>Breite (m)</label><input id="planbreite" type="text" inputmode="decimal" value="${fmt(pl.breite,3)}"></div>
+    <div class="row"><label>Drehung °</label><input id="plandreh" type="text" inputmode="decimal" value="${fmt(pl.drehung||0,1)}"></div>
+    <div class="row"><label>Deckkraft</label><input id="plandeck" type="range" min="10" max="100" value="${Math.round(pl.deckkraft*100)}" style="flex:1"></div>
+    <div class="row">
+      <button class="btn small ${mode==='kalib'?'active':''}" id="plankalib" style="flex:1">📏 Maßstab messen</button>
+      <button class="btn small" id="planlock" style="flex:1">${pl.gesperrt?'🔒 Gesperrt':'🔓 Beweglich'}</button>
+    </div>
+    <div class="row">
+      <button class="btn small" id="planat" style="flex:1">☁️ Airtable</button>
+      <button class="btn small" id="planadd" style="flex:1">🖼️ Datei</button>
+      <button class="btn small danger" id="plandel">Entfernen</button>
+    </div>
+    <div id="planListe"></div>
+    <p class="hint" style="margin-top:6px">${mode==='kalib'
+      ? '<b>Zwei Punkte im Plan anklicken</b>, deren Abstand du kennst — danach das Maß eintragen.'
+      : (pl.gesperrt ? 'Gesperrt: Ziehen verschiebt wieder die Ansicht.'
+                     : 'Beweglich: Ziehen auf dem Plan verschiebt ihn. Zum Zeichnen besser sperren.')}</p></div>`;
+}
+
+/* Bild verkleinern — 4500 px lange Kante reichen für ~1 cm Genauigkeit auf A0 */
+function planVerkleinern(file){
+  return new Promise((res,rej)=>{
+    const rd=new FileReader();
+    rd.onerror=()=>rej(new Error('Datei nicht lesbar'));
+    rd.onload=()=>{
+      const img=new Image();
+      img.onerror=()=>rej(new Error('Kein gültiges Bild'));
+      img.onload=()=>{
+        const s=Math.min(1, PLAN_MAXKANTE/Math.max(img.width, img.height));
+        const w=Math.max(1,Math.round(img.width*s)), h=Math.max(1,Math.round(img.height*s));
+        const c=document.createElement('canvas'); c.width=w; c.height=h;
+        const ctx=c.getContext('2d');
+        ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h);          // PNG mit Transparenz → weiß hinterlegen
+        ctx.drawImage(img,0,0,w,h);
+        res({src:c.toDataURL('image/jpeg', PLAN_Q), w, h});
+      };
+      img.src=rd.result;
+    };
+    rd.readAsDataURL(file);
+  });
+}
+// Breite aus dem Dateinamen: „EG Haus 2 [B=46,800m].jpg" → 46.8
+function breiteAusName(name){
+  const m=/\[B\s*=\s*([\d.,]+)\s*m\]/i.exec(name||'');
+  const v=m?parseNum(m[1]):NaN;
+  return isFinite(v) && v>0 ? v : null;
+}
+async function planUebernehmen(file, opt){
+  opt=opt||{};
+  try{
+    melde('Planbild wird vorbereitet …');
+    const bild=await planVerkleinern(file);
+    const f=etage(), alt=f.plan;
+    const ausName=breiteAusName(file.name);
+    const breite = opt.breite || ausName || (alt && alt.breite) || Math.max(5, vb.w*0.8);
+    f.plan={
+      id:'plan_'+uid(), src:bild.src, name:file.name,
+      breite, hoehe: breite*bild.h/bild.w,
+      x: alt ? alt.x : mm(vb.x+vb.w*0.1), y: alt ? alt.y : mm(vb.y+vb.h*0.1),
+      drehung: alt?alt.drehung||0:0, deckkraft: alt?alt.deckkraft:0.55, gesperrt:false
+    };
+    if(opt.quelle) f.plan.quelle=opt.quelle;      // liegt in Airtable → muss nicht mitgesichert werden
+    if(alt && alt.id) idbLoeschen([alt.id]).catch(()=>{});
+    save(); renderAll();
+    melde(`„${file.name}" geladen (${bild.w}×${bild.h} px)`+
+      (ausName||opt.breite ? ` — Maßstab aus dem Dateinamen: ${fmt(breite,3)} m breit.` : ' — jetzt den Maßstab setzen.'));
+  }catch(err){ melde('Planbild konnte nicht geladen werden: '+err.message, true); }
+}
+
+/* ---- Pläne aus Airtable (Feld „Aufmaß Pläne" der gebundenen Baustelle) ---- */
+let planKandidaten=null;
+async function planAusAirtable(){
+  const b=proj().baustelle;
+  const token=localStorage.getItem(AT_TOKEN_KEY)||'';
+  if(!b){ melde('Das Aufmaß hängt an keiner Baustelle — erst über „Projekt ⇅" sichern oder laden.', true); return; }
+  if(!token){ melde('Kein Airtable-Token auf diesem Gerät — einmal über „Projekt ⇅" eintragen und merken lassen.', true); return; }
+  try{
+    melde('Pläne der Baustelle werden geholt …');
+    const base=localStorage.getItem(AT_BASE_KEY)||AT_BASE_DEFAULT;
+    const rec=await atFetch(`${base}/${encodeURIComponent(AT_T_SITES)}/${encodeURIComponent(b.id)}`, token);
+    const alle=((rec.fields||{})[AT_F_PLAENE])||[];
+    planKandidaten=alle.filter(a=>/^image\//.test(a.type||'') || /\.(jpe?g|png|webp)$/i.test(a.filename||''));
+    if(!planKandidaten.length){
+      melde(`Bei „${b.name}" liegt im Feld „${AT_F_PLAENE}" noch kein Planbild.`, true);
+    } else melde(`${planKandidaten.length} Plan/Pläne gefunden.`);
+    renderPlanListe();
+  }catch(err){ melde('Pläne konnten nicht geladen werden: '+clFehler(err), true); }
+}
+function renderPlanListe(){
+  const el=$('#planListe'); if(!el) return;
+  if(!planKandidaten || !planKandidaten.length){ el.innerHTML=''; return; }
+  el.innerHTML=`<div class="panel" style="margin-top:8px; max-height:200px; overflow:auto">
+    ${planKandidaten.map((a,i)=>{
+      const br=breiteAusName(a.filename);
+      return `<div class="stat" style="align-items:center">
+        <span>${esc((a.filename||'').replace(/\.(jpe?g|png|webp)$/i,'').replace(/\s*\[B=[^\]]*\]/i,''))}
+          <span class="hint">· ${br?fmt(br,2)+' m breit':'Breite unbekannt'}</span></span>
+        <button class="btn small primary" data-planat="${i}">Laden</button>
+      </div>`;
+    }).join('')}
+  </div>`;
+  el.querySelectorAll('[data-planat]').forEach(b=>{
+    b.onclick=()=>planVonAirtableLaden(planKandidaten[+b.dataset.planat]);
+  });
+}
+async function planVonAirtableLaden(a){
+  try{
+    melde(`„${a.filename}" wird geladen …`);
+    const r=await fetch(a.url);
+    if(!r.ok) throw new Error('Datei nicht abrufbar ('+r.status+')');
+    const blob=await r.blob();
+    const datei=new File([blob], a.filename, {type:blob.type||'image/jpeg'});
+    planKandidaten=null;
+    await planUebernehmen(datei, {quelle:{rec:proj().baustelle.id, datei:a.filename}});
+  }catch(err){ melde('Plan konnte nicht geladen werden: '+clFehler(err), true); }
+}
+// Skaliert den Plan so, dass der gemessene Abstand dem eingegebenen Maß entspricht.
+// Anker ist der erste angeklickte Punkt, der bleibt liegen.
+function planSkalieren(anker, faktor){
+  const pl=planVon(); if(!pl || !isFinite(faktor) || faktor<=0) return;
+  pl.x = mm(anker.x + (pl.x-anker.x)*faktor);
+  pl.y = mm(anker.y + (pl.y-anker.y)*faktor);
+  pl.breite = mm(pl.breite*faktor);
+  pl.hoehe  = mm(pl.hoehe*faktor);
+}
+let kalibA=null;
+function planKalibKlick(p){
+  const pl=planVon(); if(!pl) return;
+  if(!kalibA){ kalibA={...p}; melde('Erster Punkt gesetzt — jetzt den zweiten anklicken.'); renderCanvas(); return; }
+  const gemessen=dist(kalibA, p);
+  if(gemessen<1e-6){ melde('Die beiden Punkte liegen aufeinander.', true); return; }
+  const eingabe=prompt(`Gemessen im Plan: ${fmt(gemessen,3)} m\n\nWelchen Abstand haben die beiden Punkte in Wirklichkeit? (m)`,
+    fmt(gemessen,3));
+  if(eingabe!==null){
+    const echt=parseNum(eingabe);
+    if(isFinite(echt) && echt>0){
+      planSkalieren(kalibA, echt/gemessen);
+      save();
+      melde(`Maßstab gesetzt — der Plan ist jetzt ${fmt(planVon().breite,2)} m breit.`);
+    } else melde('Keine gültige Länge.', true);
+  }
+  kalibA=null; mode='select'; renderAll(); updateDrawHint();
+}
+
 /* ================= LV-Import (Airtable) =================
    Holt LV-Nummer + Kurztext + Einheit einer Baustelle in das aktuelle Projekt.
    Token liegt separat in localStorage — nie im Projekt/Backup. */
@@ -3226,6 +3556,7 @@ $('#atPasteOk').onclick=()=>{
    So bleibt die JSON-Datei klein und die Fotos sind in Airtable einzeln sichtbar. */
 const AT_F_JSON='Aufmaß JSON';        // Feldnamen — zum Lesen der Datensätze
 const AT_F_FOTOS='Aufmaß Fotos';
+const AT_F_PLAENE='Aufmaß Pläne';     // Planbilder-Ablage je Baustelle (flduDLXNdxFqbrPL6)
 // Der Upload-Endpunkt nimmt die Feld-ID zuverlässiger als den Namen (der Umlaut steckt im
 // URL-Pfad). Läuft die App gegen eine andere Base, greift der Name als Rückfallebene.
 const AT_FID_JSON='fldNQYYSScwqhV3uv';
@@ -3239,6 +3570,7 @@ let clBusy=false;
 /* Alle Foto-Arrays eines Projekts: Raum, Wand, Objekt, Tür/Fenster, LV-Position */
 function fotoListen(p){
   const out=[];
+  (p.floors||[]).forEach(f=>{ if(f.plan) out.push([f.plan]); });   // Planbilder liegen genauso in IndexedDB
   (p.rooms||[]).forEach(r=>{
     if(r.fotos) out.push(r.fotos);
     Object.values(r.wallFotos||{}).forEach(l=>{ if(Array.isArray(l)) out.push(l); });
@@ -3337,12 +3669,12 @@ async function clLadeBaustellen(){
   if(!token){ clStatus('Bitte zuerst einen Zugriffstoken eintragen.', true); return; }
   try{
     clBusy=true; renderClList(); clStatus('Lade Baustellen …');
-    const recs=await atAll(base, AT_T_SITES, token, ['Title', AT_F_JSON, AT_F_FOTOS],
+    const recs=await atAll(base, AT_T_SITES, token, ['Title', AT_F_JSON, AT_F_FOTOS, AT_F_PLAENE],
       n=>clStatus(`Lade Baustellen … ${n}`));
     clSites=recs.map(r=>{
       const f=r.fields||{};
       return {id:r.id, name:String(f.Title||'(ohne Titel)').trim()||'(ohne Titel)',
-        json:(f[AT_F_JSON]||[])[0]||null, fotos:f[AT_F_FOTOS]||[]};
+        json:(f[AT_F_JSON]||[])[0]||null, fotos:f[AT_F_FOTOS]||[], plaene:f[AT_F_PLAENE]||[]};
     }).sort((a,b)=>a.name.localeCompare(b.name,'de'));
     clTokenSichern();
     const mit=clSites.filter(s=>s.json).length;
@@ -3464,7 +3796,8 @@ async function cloudSpeichern(s, ohneRueckfrage){
   if(clBusy) return false;
   const token=clTok(), base=clBas(), p=proj();
   if(!token){ clStatus('Bitte zuerst einen Zugriffstoken eintragen.', true); return false; }
-  const fotos=alleFotos(p).filter(f=>f && typeof f.src==='string' && f.src.startsWith('data:'));
+  // Pläne, die aus Airtable stammen, liegen dort schon — die laden wir nicht noch einmal hoch
+  const fotos=alleFotos(p).filter(f=>f && !f.quelle && typeof f.src==='string' && f.src.startsWith('data:'));
   if(!ohneRueckfrage && s.json && !confirm(`Bei „${s.name}" liegt bereits ein Aufmaß${clStand(s)?' vom '+clStand(s):''} `+
     `(${s.fotos.length} Fotos).\n\nEs wird durch das aktuelle ersetzt. Fortfahren?`)) return false;
   clBusy=true; renderClList(); renderClAktuell();
@@ -3543,7 +3876,7 @@ async function cloudLaden(s, ohneRueckfrage){
       const m=/^foto[_-](.+?)\.[a-z0-9]+$/i.exec(a.filename||'');
       if(m) byId[m[1]]=a;
     });
-    const ziele=alleFotos(p);
+    const ziele=alleFotos(p).filter(f=>!f.quelle);   // Pläne aus der Ablage kommen weiter unten
     let ok=0;
     for(let i=0;i<ziele.length;i++){
       clStatus(`Lade Fotos … ${i+1} von ${ziele.length}`);
@@ -3553,6 +3886,17 @@ async function cloudLaden(s, ohneRueckfrage){
         const bild=await fetch(a.url);
         if(bild.ok){ ziele[i].src=await blobZuDataUrl(await bild.blob()); ok++; }
       }catch(e){ /* einzelnes Foto fehlt — der Rest wird trotzdem geladen */ }
+    }
+    // Pläne aus der Ablage „Aufmaß Pläne" nachladen — die reisen nicht im Projekt mit
+    for(const f of (p.floors||[])){
+      if(!f.plan || f.plan.src || !f.plan.quelle) continue;
+      const a=(s.plaene||[]).find(x=>x.filename===f.plan.quelle.datei);
+      if(!a) continue;
+      try{
+        clStatus(`Lade Plan „${a.filename}" …`);
+        const bild=await fetch(a.url);
+        if(bild.ok) f.plan.src=await blobZuDataUrl(await bild.blob());
+      }catch(e){ /* Plan fehlt — das Aufmaß bleibt trotzdem brauchbar */ }
     }
     fotoListen(p).forEach(l=>{                            // Fotos ohne Bilddaten nicht mitschleppen
       const rein=l.filter(f=>f.src);
@@ -3830,6 +4174,10 @@ function backupEinlesen(text){
   if(d && Array.isArray(d.rooms) && Array.isArray(d.floors)) return d;
   throw new Error('Das ist keine Aufmaß-Datei.');
 }
+$('#planfile').onchange=e=>{
+  const f=e.target.files[0]; e.target.value='';
+  if(f) planUebernehmen(f);
+};
 $('#backupbtn').onclick=()=>{ $('#bkStatus').textContent=''; $('#dlgBackup').showModal(); };
 $('#bkSave').onclick=backupSichern;
 $('#bkLoad').onclick=()=>$('#importfile').click();
@@ -4090,6 +4438,13 @@ syncSharedDoors(); save();   // Altbestand: Türpaare in geteilten Wänden lager
 renderAll();
 renderUndoBtns();
 zoomFit();
+/* Bilder kommen aus IndexedDB nach — der Plan steht schon, die Fotos erscheinen gleich.
+   Beim ersten Start mit dieser Version lagen sie noch im localStorage; der save() oben
+   hat sie dann bereits übernommen und hier ist nichts mehr nachzuladen. */
+bilderNachladen()
+  .then(n=>{ if(n) renderAll(); return bilderAufraeumen(); })   // Bilddaten stehen nicht im
+                                                               // Schnappschuss — Undo bleibt gültig
+  .catch(err=>melde('Bildspeicher nicht verfügbar: '+err.message+' — Fotos fehlen in dieser Sitzung.', true));
 </script>
 </body>
 </html>
