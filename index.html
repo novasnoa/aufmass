@@ -3121,34 +3121,50 @@ function clStatus(msg, err){
   el.textContent=msg||'';
   el.style.color=err?'var(--danger)':'var(--muted)';
 }
+/* Ein Token, der gerade nachweislich funktioniert hat, wird gemerkt — sonst füllt die
+   App beim nächsten Öffnen wieder den alten ein und der Schreibzugriff scheitert. */
+function clTokenSichern(){
+  if(!$('#clRemember').checked) return;
+  localStorage.setItem(AT_TOKEN_KEY, clTok());
+  localStorage.setItem(AT_BASE_KEY, clBas());
+}
 const clFehler = err => /failed to fetch|networkerror|load failed/i.test(err.message)
   ? 'Verbindung zu Airtable fehlgeschlagen — offline, oder der Browser blockiert die Anfrage.'
   : err.message;
 
-async function atPatch(base, recId, token, fields){
-  const res=await fetch(`https://api.airtable.com/v0/${base}/${encodeURIComponent(recId)}`, {
-    method:'PATCH', headers:{Authorization:'Bearer '+token, 'Content-Type':'application/json'},
-    body:JSON.stringify({fields})});
-  if(!res.ok){
+/* Ein Schreibzugriff mit Wiederholung: Airtable lässt nur 5 Anfragen je Sekunde und
+   Base zu (429) — bei vielen Fotos läuft man sonst mitten im Upload dagegen. */
+async function atSend(url, opt, fehlertext){
+  for(let versuch=0;;versuch++){
+    const res=await fetch(url, opt);
+    if(res.ok) return res.json();
+    if((res.status===429 || res.status>=500) && versuch<3){
+      const w=(Number(res.headers.get('retry-after'))*1000) || 900*(versuch+1);
+      clStatus(`Airtable bremst (${res.status}) — neuer Versuch in ${Math.ceil(w/1000)} s …`);
+      await new Promise(r=>setTimeout(r, w));
+      continue;
+    }
     const t=await res.text().catch(()=>'');
-    const err=new Error(`Airtable ${res.status}${res.status===403
-      ? ' — der Token darf an dieser Base nicht schreiben. Fehlt der Scope „data.records:write"?' : ''}\n${t.slice(0,180)}`);
+    const err=new Error(fehlertext(res.status)+'\n'+t.slice(0,180));
     err.status=res.status;
     throw err;
   }
-  return res.json();
+}
+// Achtung: die Tabelle gehört in den Pfad — ohne sie liest Airtable die Datensatz-ID
+// als Tabellennamen und antwortet mit 403 INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND.
+async function atPatch(base, tabelle, recId, token, fields){
+  return atSend(`https://api.airtable.com/v0/${base}/${encodeURIComponent(tabelle)}/${encodeURIComponent(recId)}`,
+    {method:'PATCH', headers:{Authorization:'Bearer '+token, 'Content-Type':'application/json'},
+     body:JSON.stringify({fields})},
+    st=>`Airtable ${st}${st===403
+      ? ' — Schreiben abgelehnt.\nHat der Token den Scope „data.records:write" und Zugriff auf diese Base? (Im Feld oben steht der gemerkte Token.)'
+      : ''}`);
 }
 async function atUpload(base, recId, feld, token, datei){
-  const url=`https://content.airtable.com/v0/${base}/${encodeURIComponent(recId)}/${encodeURIComponent(feld)}/uploadAttachment`;
-  const res=await fetch(url, {method:'POST', headers:{Authorization:'Bearer '+token, 'Content-Type':'application/json'},
-    body:JSON.stringify({contentType:datei.typ, filename:datei.name, file:datei.b64})});
-  if(!res.ok){
-    const t=await res.text().catch(()=>'');
-    const err=new Error(`„${datei.name}" konnte nicht hochgeladen werden (${res.status})\n${t.slice(0,180)}`);
-    err.status=res.status;
-    throw err;
-  }
-  return res.json();
+  return atSend(`https://content.airtable.com/v0/${base}/${encodeURIComponent(recId)}/${encodeURIComponent(feld)}/uploadAttachment`,
+    {method:'POST', headers:{Authorization:'Bearer '+token, 'Content-Type':'application/json'},
+     body:JSON.stringify({contentType:datei.typ, filename:datei.name, file:datei.b64})},
+    st=>`„${datei.name}" konnte nicht hochgeladen werden (${st})`);
 }
 // Erst über die Feld-ID, bei 403/404 einmal über den Feldnamen — welcher Weg trägt,
 // merkt sich atFeldWeg für den Rest des Vorgangs (sonst 2 Fehlversuche je Foto).
@@ -3179,7 +3195,7 @@ async function clLadeBaustellen(){
       return {id:r.id, name:String(f.Title||'(ohne Titel)').trim()||'(ohne Titel)',
         json:(f[AT_F_JSON]||[])[0]||null, fotos:f[AT_F_FOTOS]||[]};
     }).sort((a,b)=>a.name.localeCompare(b.name,'de'));
-    if($('#clRemember').checked){ localStorage.setItem(AT_TOKEN_KEY, token); localStorage.setItem(AT_BASE_KEY, base); }
+    clTokenSichern();
     const mit=clSites.filter(s=>s.json).length;
     clStatus(`${clSites.length} Baustellen — ${mit} mit gespeichertem Aufmaß.`);
   }catch(err){
@@ -3244,8 +3260,8 @@ async function cloudSpeichern(s){
     // Der PATCH läuft immer — er räumt den alten Stand weg und beweist nebenbei,
     // dass der Token schreiben darf. Scheitert danach der Upload, liegt es am Feld.
     clStatus(s.json||s.fotos.length ? 'Alten Stand entfernen …' : 'Schreibzugriff prüfen …');
-    await atPatch(base, s.id, token, {[AT_F_JSON]:[], [AT_F_FOTOS]:[]});
-    darfSchreiben=true;
+    await atPatch(base, AT_T_SITES, s.id, token, {[AT_F_JSON]:[], [AT_F_FOTOS]:[]});
+    darfSchreiben=true; clTokenSichern();               // Token schreibt nachweislich → merken
     clStatus('Projektdatei hochladen …');
     await atUploadFeld(base, s.id, token, AT_FID_JSON, AT_F_JSON,
       {name:`aufmass-${new Date().toISOString().slice(0,10)}.json`, typ:'application/json', b64});
@@ -3329,7 +3345,8 @@ $('#cloudbtn').onclick=()=>{
   $('#clRemember').checked=!!tok;
   $('#clBase').value=localStorage.getItem(AT_BASE_KEY)||AT_BASE_DEFAULT;
   clSites=null; clMode='load'; clBusy=false; $('#clFilter').value='';
-  renderClList(); clStatus('');
+  renderClList();
+  clStatus(tok?'Gemerkter Token eingesetzt.':'');         // sichtbar machen, woher der Token kommt
   dlgCloud.showModal();
   if(tok) clLadeBaustellen();                             // Token da → Liste gleich holen
 };
