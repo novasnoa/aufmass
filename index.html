@@ -363,7 +363,8 @@
       <li><b>Winkelkontrolle:</b> Ecken, die <b>keinen rechten Winkel</b> bilden, werden mit einem <b>roten Viertelkreis</b> und der Gradzahl markiert.</li>
       <li><b>Objekte:</b> In der Raumansicht unter „Objekte“ <b>▭ Fläche</b> oder <b>╱ Linie</b> wählen und im Raum aufziehen (z. B. Podest, Belagsfläche, Sockelleiste). Objekte sind anwählbar, verschiebbar und über Griffe oder Maßeingabe/Laser anpassbar; sie wandern beim Verschieben des Raums mit.</li>
       <li><b>Sanierungs-Symbole:</b> Unter „Objekte“ stehen <b>1-K</b>, <b>2-K</b>, <b>4-K</b> (Kammer-Schleusen, dargestellt als Rechteck mit Kammerteilung) und <b>RFA</b> bereit — Button wählen, dann Position im Raum anklicken. Symbole lassen sich verschieben, in 90°-Schritten drehen und in Breite/Tiefe anpassen.</li>
-      <li><b>Linien mit Knickpunkten:</b> <b>Doppelklick</b> auf eine Linie fügt an der Klickstelle einen Punkt ein, der sich ziehen lässt — so entstehen Polylinien. Angezeigt und bemaßt wird immer die <b>Gesamtlänge</b> aller Segmente; die Längeneingabe skaliert die ganze Linie.</li>
+      <li><b>Linien mit Knickpunkten:</b> Auf die Linie ziehen verschiebt sie als Ganzes. Eine <b>Ecke</b> anklicken wählt sie aus; links <b>„＋ Ecke einfügen“</b> setzt eine neue Ecke daneben, <b>„Ecke löschen“</b> entfernt sie wieder. Angezeigt und bemaßt wird immer die <b>Gesamtlänge</b>; die Längeneingabe skaliert die ganze Linie.</li>
+      <li><b>Anwählen, dann ziehen:</b> Ecken und Wände werden mit dem ersten Klick nur ausgewählt — die grün eingefärbte Zone zeigt, wo du zum Ziehen zufassen kannst. Klick ins Leere wählt wieder ab.</li>
       <li><b>Türen/Fenster:</b> Wand auswählen, dann „+ Tür“ / „+ Fenster“. Danach Tür/Fenster direkt im Plan <b>anklicken</b>: Ziehen verschiebt sie entlang der Wand, die weißen Endgriffe ändern die Breite, das Seitenpanel zeigt Maße und Abstand. Flächen werden automatisch von der Wandfläche abgezogen. Bei Türen lassen sich <b>Anschlag ⇄</b> (Angelpunkt links/rechts) und <b>Aufschlag ⇅</b> (Öffnungsrichtung in den Raum) umschalten — das Symbol zeigt Türblatt und Schwenkbogen.</li>
       <li><b>Türen in geteilten Wänden:</b> Liegen zwei Wände bündig aufeinander, wird eine Tür automatisch in beide Räume übernommen. Breite/Höhe ändern wirkt auf beide Seiten, Löschen entfernt sie ebenfalls beidseitig.</li>
     </ul>
@@ -886,23 +887,9 @@ function objMarks(r, lbl, interactive){
       } else {
         out+=`<polyline points="${ptsStr}" fill="none" stroke="${cols[0]||'#7a4fd0'}" stroke-width="0.05"${dat}/>`;
       }
-      if(interactive){
-        // Je Segment eine eigene Trefferfläche. Der Radius wächst in zwei Stufen:
-        // Linie angewählt → größer, Segment angewählt (= ziehbar) → nochmals deutlich größer.
-        for(let k=0;k<g.points.length-1;k++){
-          const q1=g.points[k], q2=g.points[k+1];
-          const segSel = isSel && sel.objSeg===k;
-          const treffer = lbl*(segSel?2.6:(isSel?1.7:1.1));
-          if(segSel){
-            // Ziehzone als weicher grüner Schlauch entlang des Segments (Kreis, am Segment entlanggezogen)
-            [[1.0,0.10],[0.66,0.16],[0.34,0.24]].forEach(([f,op])=>{
-              out+=`<line x1="${q1.x}" y1="${q1.y}" x2="${q2.x}" y2="${q2.y}" stroke="#0ea06f" stroke-opacity="${op}" stroke-width="${treffer*f}" stroke-linecap="round" style="pointer-events:none"/>`;
-            });
-            out+=`<line x1="${q1.x}" y1="${q1.y}" x2="${q2.x}" y2="${q2.y}" stroke="#2f6fed" stroke-width="0.12" opacity="0.5" style="pointer-events:none"/>`;
-          }
-          out+=`<line x1="${q1.x}" y1="${q1.y}" x2="${q2.x}" y2="${q2.y}" stroke="transparent" stroke-width="${treffer}" stroke-linecap="round" data-obj="${g.id}" data-objseg="${k}" style="cursor:move"/>`;
-        }
-      }
+      // Eine durchgehende Trefferfläche für die ganze Linie — Ziehen verschiebt das Objekt
+      if(interactive)
+        out+=`<polyline points="${ptsStr}" fill="none" stroke="transparent" stroke-width="${lbl*1.4}" stroke-linecap="round" stroke-linejoin="round" data-obj="${g.id}" style="cursor:move"/>`;
       // Nummern-Plakette mittig auf dem mittleren Segment
       const mi=Math.floor((g.points.length-1)/2);
       const ma=g.points[mi], mb=g.points[Math.min(mi+1,g.points.length-1)];
@@ -1249,7 +1236,6 @@ function deleteOpeningEverywhere(r,opId){
 
 /* ---------- Interaktion ---------- */
 let drag=null; // {kind:'pan'|'room', start, orig, moved}
-let lastObjTap=null; // Doppelklick-Erkennung für Linien-Objekte
 let pendingSym=null; // zu platzierendes Symbol (Schleusen/RFA)
 let pendingOpenType=null; // zu platzierende Tür/Fenster ('door'|'window')
 let statsOpen=false; // Raum-Statistik in der Seitenleiste auf-/zugeklappt
@@ -1276,7 +1262,7 @@ function cancelDrag(){
     const n=d.room.points.length;
     d.room.points[d.idx]={...d.origA};
     d.room.points[(d.idx+1)%n]={...d.origB};
-  } else if((d.kind==='objmove'||d.kind==='objh'||d.kind==='objseg') && d.g && d.orig){
+  } else if((d.kind==='objmove'||d.kind==='objh') && d.g && d.orig){
     Object.assign(d.g, JSON.parse(JSON.stringify(d.orig)));
   } else if((d.kind==='open'||d.kind==='openend') && d.o && d.orig){
     Object.assign(d.o, d.orig);
@@ -1357,39 +1343,17 @@ svg.addEventListener('pointerdown', e=>{
     const r=roomById(focusRoomId);
     const g=(r.objects||[]).find(x=>x.id===t.dataset.obj);
     if(g){
-      // Eigene Doppelklick-Erkennung: das dblclick-Event geht verloren, weil der erste
-      // Klick das SVG neu aufbaut. Zwei Klicks auf dieselbe Linie innerhalb 450 ms = Punkt einfügen.
-      const now=Date.now();
-      if(g.type==='line' && t.dataset.objh===undefined
-         && lastObjTap && lastObjTap.id===g.id && now-lastObjTap.t<450
-         && Math.hypot(p.x-lastObjTap.x, p.y-lastObjTap.y) < Math.max(0.2, vb.w/40)){
-        lastObjTap=null;
-        if(insertLineVertex(g, p)){
-          sel={roomId:focusRoomId, wall:null, vertex:null, objId:g.id};
-          save(); renderAll();
-        }
-        return;
-      }
-      lastObjTap={id:g.id, t:now, x:p.x, y:p.y};
       const neuesObjekt = sel.objId!==g.id;
       if(neuesObjekt) sel={roomId:focusRoomId, wall:null, vertex:null, objId:g.id};
       if(t.dataset.objh!==undefined){
         // Ecke/Punkt: erst anwählen, ziehen geht erst beim zweiten Anfassen
         const k=+t.dataset.objh;
         const schon = !neuesObjekt && sel.objH===k;
-        sel={...sel, objH:k, objSeg:null};
+        sel={...sel, objH:k};
         if(schon) drag={kind:'objh', room:r, g, h:k, moved:false, orig:JSON.parse(JSON.stringify(g))};
         renderAll(); return;
       }
-      if(t.dataset.objseg!==undefined){
-        // Liniensegment: erst anwählen, dann verschieben
-        const k=+t.dataset.objseg;
-        const schon = !neuesObjekt && sel.objSeg===k;
-        sel={...sel, objSeg:k, objH:null};
-        if(schon) drag={kind:'objseg', room:r, g, idx:k, start:p, orig:JSON.parse(JSON.stringify(g)), moved:false};
-        renderAll(); return;
-      }
-      sel={...sel, objH:null, objSeg:null};
+      sel={...sel, objH:null};
       if(neuesObjekt) renderAll();
       drag={kind:'objmove', room:r, g, start:p, orig:JSON.parse(JSON.stringify(g)), moved:false};
       return;
@@ -1565,14 +1529,6 @@ svg.addEventListener('pointermove', e=>{
     else { g.x=o.x+dx; g.y=o.y+dy; }
     if(dx||dy) drag.moved=true;
     renderCanvas();
-  } else if(drag.kind==='objseg'){
-    // ganzes Liniensegment verschieben (beide Endpunkte)
-    const dx=mm(p.x-drag.start.x), dy=mm(p.y-drag.start.y);
-    const g=drag.g, k=drag.idx;
-    g.points[k]={x:drag.orig.points[k].x+dx, y:drag.orig.points[k].y+dy};
-    g.points[k+1]={x:drag.orig.points[k+1].x+dx, y:drag.orig.points[k+1].y+dy};
-    if(dx||dy) drag.moved=true;
-    renderCanvas();
   } else if(drag.kind==='objh'){
     const g=drag.g;
     let q={x:mm(p.x), y:mm(p.y)};
@@ -1656,7 +1612,7 @@ svg.addEventListener('pointerup', e=>{
       mode='select'; drag=null; renderAll(); updateDrawHint(); return;
     }
     let refocused=false;
-    if(drag && drag.moved && (drag.kind==='objmove'||drag.kind==='objh'||drag.kind==='objseg')){
+    if(drag && drag.moved && (drag.kind==='objmove'||drag.kind==='objh')){
       // In einen anderen Raum geschoben? Dann dort einsortieren und dorthin wechseln
       const moved=reassignObjectRoom(drag.room, drag.g);
       if(moved){ focusRoomId=moved.id; sel={roomId:moved.id, wall:null, vertex:null, objId:drag.g.id}; refocused=true; }
@@ -1668,36 +1624,9 @@ svg.addEventListener('pointerup', e=>{
     drag=null;
   }
 });
-function insertLineVertex(g, p){
-  const pts=g.points;
-  let best={d:Infinity, idx:0, q:null};
-  for(let i=0;i<pts.length-1;i++){
-    const a=pts[i], b=pts[i+1];
-    const L2=(b.x-a.x)**2+(b.y-a.y)**2; if(L2<1e-6) continue;
-    let t=((p.x-a.x)*(b.x-a.x)+(p.y-a.y)*(b.y-a.y))/L2;
-    t=Math.max(0.05, Math.min(0.95, t));
-    const q={x:a.x+(b.x-a.x)*t, y:a.y+(b.y-a.y)*t};
-    const d=Math.hypot(p.x-q.x, p.y-q.y);
-    if(d<best.d) best={d, idx:i, q};
-  }
-  if(best.q && best.d<0.5){
-    pts.splice(best.idx+1, 0, {x:mm(best.q.x), y:mm(best.q.y)});
-    return true;
-  }
-  return false;
-}
 svg.addEventListener('dblclick', e=>{
-  if(mode==='draw' && draft.points.length>=3){ closeDraft(); return; }
-  // Doppelklick auf eine Linie: Punkt an der Klickstelle einfügen (Gesamtlänge = Summe der Segmente)
-  const t=e.target;
-  if(mode==='select' && focusRoomId && t.dataset && t.dataset.obj){
-    const r=roomById(focusRoomId);
-    const g=(r.objects||[]).find(x=>x.id===t.dataset.obj);
-    if(g && g.type==='line' && insertLineVertex(g, svgPoint(e))){
-      sel={roomId:focusRoomId, wall:null, vertex:null, objId:g.id};
-      save(); renderAll();
-    }
-  }
+  // Nur noch zum Schließen des gezeichneten Raums — Ecken entstehen ausschließlich über die Schalter
+  if(mode==='draw' && draft.points.length>=3) closeDraft();
 });
 svg.addEventListener('wheel', e=>{
   e.preventDefault();
@@ -1947,17 +1876,19 @@ function eckeLoeschen(r, i){
   r.points.splice(i,1);
   return true;
 }
-/* ---------- Linien: Segmente einfügen/löschen ---------- */
-function segmentEinfuegen(g, k){
-  const a=g.points[k], b=g.points[k+1];
-  if(!a||!b) return false;
-  g.points.splice(k+1, 0, {x:mm((a.x+b.x)/2), y:mm((a.y+b.y)/2)});
-  return true;
+/* ---------- Linien: Ecken einfügen/löschen ---------- */
+// Neue Ecke zwischen der gewählten und der nächsten Ecke (bei der letzten: davor)
+function eckeInLinieEinfuegen(g, k){
+  const i = k<g.points.length-1 ? k : k-1;
+  if(i<0) return null;
+  const a=g.points[i], b=g.points[i+1];
+  g.points.splice(i+1, 0, {x:mm((a.x+b.x)/2), y:mm((a.y+b.y)/2)});
+  return i+1;                       // Index der neuen Ecke
 }
-function segmentLoeschen(g, k){
-  if(g.points.length<=2){ alert('Eine Linie braucht mindestens ein Segment.'); return false; }
-  // Randsegment: äußeren Punkt entfernen · Mittelsegment: gemeinsamen Punkt entfernen
-  g.points.splice(k===0 ? 0 : (k===g.points.length-2 ? g.points.length-1 : k+1), 1);
+// Ecke einer Linie entfernen — die Nachbarsegmente verschmelzen
+function punktLoeschen(g, k){
+  if(g.points.length<=2){ alert('Eine Linie braucht mindestens zwei Ecken.'); return false; }
+  g.points.splice(k, 1);
   return true;
 }
 function deleteRoom(id){
@@ -2060,12 +1991,12 @@ function renderSidebar(){
           <div class="row"><label>Gesamtlänge (m)</label><input class="laser objdim" data-f="len" value="${fmt(L,3)}"></div>
           <div class="stat"><span>Punkte</span><b>${selObj.points.length}</b></div>
           <div class="row">
-            <button class="btn small" id="segadd" ${sel.objSeg==null?'disabled title="Erst ein Segment anklicken"':''}>＋ Segment einfügen</button>
-            <button class="btn small danger" id="segdel" ${sel.objSeg==null?'disabled title="Erst ein Segment anklicken"':''}>Segment löschen</button>
+            <button class="btn small" id="ptadd" ${sel.objH==null?'disabled title="Erst eine Ecke anklicken"':''}>＋ Ecke einfügen</button>
+            <button class="btn small danger" id="ptdel" ${sel.objH==null?'disabled title="Erst eine Ecke anklicken"':''}>Ecke löschen</button>
           </div>
-          <p class="hint">${sel.objSeg!=null?`Segment ${sel.objSeg+1} ausgewählt.`:(sel.objH!=null?`Punkt ${sel.objH+1} ausgewählt — nochmal anfassen zum Ziehen.`:'Segment oder Punkt anklicken zum Auswählen.')}</p>
+          <p class="hint">${sel.objH!=null?`Ecke ${sel.objH+1} von ${selObj.points.length} ausgewählt — nochmal anfassen zum Ziehen. „＋ Ecke einfügen“ setzt eine neue Ecke zur nächsten hin.`:'Auf die Linie ziehen verschiebt sie. Ecke anklicken zum Auswählen.'}</p>
           ${btns}
-          <p class="hint"><b>Doppelklick</b> auf die Linie fügt einen Punkt ein. Punktgriffe ziehen (rastet auf 45°), Längeneingabe skaliert die ganze Linie. Entf = löschen, Esc = abwählen.</p></div>`;
+          <p class="hint">Ziehen auf der Linie verschiebt sie. Ecken ziehen rastet auf 45°, die Längeneingabe skaliert die ganze Linie. Entf = Objekt löschen, Esc = abwählen.</p></div>`;
       }
     } else if(selOp){
       /* Tür/Fenster im Fokus (sind Objekte) */
@@ -2336,12 +2267,14 @@ function wireSidebar(r){
         sel.objId=null; save(); renderAll();
       });
       on('#objrot','onclick',()=>{ selObj.rot=((selObj.rot||0)+90)%360; save(); renderAll(); });
-      on('#segadd','onclick',()=>{                        // Segment teilen
-        if(sel.objSeg!=null && segmentEinfuegen(selObj, sel.objSeg)){ save(); renderAll(); }
+      on('#ptadd','onclick',()=>{                         // neue Ecke neben der gewählten
+        if(sel.objH==null) return;
+        const neu=eckeInLinieEinfuegen(selObj, sel.objH);
+        if(neu!=null){ sel={...sel, objH:neu}; save(); renderAll(); }
       });
-      on('#segdel','onclick',()=>{                        // Segment entfernen
-        if(sel.objSeg!=null && segmentLoeschen(selObj, sel.objSeg)){
-          sel={...sel, objSeg:null, objH:null}; save(); renderAll();
+      on('#ptdel','onclick',()=>{                         // Ecke der Linie entfernen
+        if(sel.objH!=null && punktLoeschen(selObj, sel.objH)){
+          sel={...sel, objH:null}; save(); renderAll();
         }
       });
       wireFotos('objfoto', selObj, 'fotos');              // Fotos am Objekt
