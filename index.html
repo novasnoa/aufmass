@@ -26,6 +26,13 @@
   #topbar .spacer{flex:1;}
   .tb{background:#2a3345; color:#fff; border:1px solid #3a465e; border-radius:6px; padding:6px 10px; white-space:nowrap;}
   .tb:hover{background:#374460;}
+  .tb:disabled{opacity:.35;}
+  .tb:disabled:hover{background:#2a3345;}
+  .tb.icon{padding:6px 9px; font-size:15px; line-height:1;}
+  #projname{max-width:260px; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; gap:6px;}
+  #projname .pdot{width:8px; height:8px; border-radius:50%; background:#2fd08a; flex:none;}
+  #projname.frei .pdot{background:#e0a300;}
+  #projname b{font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   #btchip{display:flex; align-items:center; gap:6px; background:#2a3345; border-radius:14px; padding:4px 10px; font-size:12px; color:#aab4c8;}
   #btchip .dot{width:9px; height:9px; border-radius:50%; background:#77808f;}
   #btchip.on .dot{background:#2fd08a;}
@@ -178,8 +185,9 @@
 
 <div id="topbar">
   <span class="logo">📐 Grundriss &amp; Aufmaß</span>
-  <select id="projsel" title="Projekt"></select>
-  <button class="tb" id="projnew" title="Neues Projekt">＋</button>
+  <button class="tb" id="projname" title="Aktuelles Aufmaß — anklicken für Sichern, Laden und Neu"></button>
+  <button class="tb icon" id="undobtn" title="Rückgängig (Strg+Z)" disabled>↶</button>
+  <button class="tb icon" id="redobtn" title="Wiederholen (Strg+Y)" disabled>↷</button>
   <div class="tabs">
     <button id="tabplan" class="active">Plan</button>
     <button id="tablv">LV-Positionen</button>
@@ -340,11 +348,11 @@
 
 <!-- Projekt-Austausch über Airtable -->
 <dialog id="dlgCloud">
-  <div class="dhead">Projekt in Airtable <button data-close>✕</button></div>
+  <div class="dhead">Aufmaß sichern &amp; laden <button data-close>✕</button></div>
   <div class="dbody">
-    <p class="hint" style="margin-bottom:8px">Legt den kompletten Grundriss samt Fotos an einer Baustelle ab —
-      und lädt ihn auf einem anderen Gerät wieder ein. Der Plan landet als <code>aufmass.json</code> im Feld
-      <b>Aufmaß JSON</b>, jedes Foto einzeln im Feld <b>Aufmaß Fotos</b>.</p>
+    <div class="panel" id="clAktuell" style="margin-bottom:10px"></div>
+    <p class="hint" style="margin-bottom:8px">Gesichert wird an der Baustelle in Airtable: der Plan als
+      <code>aufmass.json</code> im Feld <b>Aufmaß JSON</b>, jedes Foto einzeln im Feld <b>Aufmaß Fotos</b>.</p>
     <div class="row"><label>Zugriffstoken</label><input id="clToken" type="password" placeholder="pat…" autocomplete="off"></div>
     <div class="row"><label></label><label class="hint" style="display:flex;gap:5px;align-items:center"><input type="checkbox" id="clRemember"> Token auf diesem Gerät merken</label></div>
     <div class="row"><label>Base-ID</label><input id="clBase" type="text" placeholder="app…"></div>
@@ -353,8 +361,8 @@
       <button class="btn small" id="clForget" title="Gespeicherten Token von diesem Gerät löschen">Token löschen</button>
     </div>
     <div class="row" id="clModes" style="margin-top:4px">
-      <button class="btn" id="clModeLoad">📥 Projekt laden</button>
-      <button class="btn" id="clModeSave">📤 Projekt speichern</button>
+      <button class="btn" id="clModeLoad">📥 Aufmaß laden</button>
+      <button class="btn" id="clModeSave">📤 Baustelle wählen</button>
     </div>
     <div class="row"><label>Suche</label><input id="clFilter" type="text" placeholder="Baustelle filtern …"></div>
     <p class="hint" id="clStatus" style="white-space:pre-line"></p>
@@ -392,6 +400,7 @@
       <li><b>Objekte:</b> In der Raumansicht unter „Objekte“ <b>▭ Fläche</b> oder <b>╱ Linie</b> wählen und im Raum aufziehen (z. B. Podest, Belagsfläche, Sockelleiste). Objekte sind anwählbar, verschiebbar und über Griffe oder Maßeingabe/Laser anpassbar; sie wandern beim Verschieben des Raums mit.</li>
       <li><b>Sanierungs-Symbole:</b> Unter „Objekte“ stehen <b>1-K</b>, <b>2-K</b>, <b>4-K</b> (Kammer-Schleusen, dargestellt als Rechteck mit Kammerteilung) und <b>RFA</b> bereit — Button wählen, dann Position im Raum anklicken. Symbole lassen sich verschieben, in 90°-Schritten drehen und in Breite/Tiefe anpassen.</li>
       <li><b>Linien mit Knickpunkten:</b> Auf die Linie ziehen verschiebt sie als Ganzes. Bei ausgewählter Linie teilt <b>„＋ Ecke einfügen“</b> den längsten Abschnitt; ist eine <b>Ecke</b> angeklickt, entsteht die neue daneben und <b>„Ecke löschen“</b> entfernt sie wieder. Angezeigt und bemaßt wird immer die <b>Gesamtlänge</b>; die Längeneingabe skaliert die ganze Linie.</li>
+      <li><b>Rückgängig / Wiederholen:</b> die Pfeile <b>↶ ↷</b> oben, am Rechner auch <b>Strg+Z</b> und <b>Strg+Y</b>. Es werden die letzten <b>40 Schritte</b> gemerkt — ein Ziehvorgang zählt als ein Schritt. Der Verlauf gilt nur für dieses Gerät und endet beim Neuladen der Seite; das Laden aus Airtable oder Backup lässt sich nicht rückgängig machen.</li>
       <li><b>Anwählen, dann ziehen:</b> Ecken und Wände werden mit dem ersten Klick nur ausgewählt — die grün eingefärbte Zone zeigt, wo du zum Ziehen zufassen kannst. Klick ins Leere wählt wieder ab.</li>
       <li><b>Türen/Fenster:</b> Wand auswählen, dann „+ Tür“ / „+ Fenster“. Danach Tür/Fenster direkt im Plan <b>anklicken</b>: Ziehen verschiebt sie entlang der Wand, die weißen Endgriffe ändern die Breite, das Seitenpanel zeigt Maße und Abstand. Flächen werden automatisch von der Wandfläche abgezogen. Bei Türen lassen sich <b>Anschlag ⇄</b> (Angelpunkt links/rechts) und <b>Aufschlag ⇅</b> (Öffnungsrichtung in den Raum) umschalten — das Symbol zeigt Türblatt und Schwenkbogen.</li>
       <li><b>Türen in geteilten Wänden:</b> Liegen zwei Wände bündig aufeinander, wird eine Tür automatisch in beide Räume übernommen. Breite/Höhe ändern wirkt auf beide Seiten, Löschen entfernt sie ebenfalls beidseitig.</li>
@@ -400,17 +409,23 @@
     <ul style="padding-left:18px; margin-bottom:10px">
       <li><b>CSV-Export</b> erzeugt eine Datei im magicplan-Format („… ITS Statistiken.csv“) mit den Blöcken <i>ATTRIBUTE DER RÄUME</i> und <i>Attribute des Objekts</i> — direkt kompatibel mit deiner Excel-Pipeline (<code>/magicplan-pipeline</code>).</li>
       <li><b>Drucken/PDF</b> erzeugt einen maßbeschrifteten Plan je Etage plus Raum- und LV-Tabellen (im Druckdialog „Als PDF speichern“).</li>
-      <li><b>Backup</b> sichert alle Projekte als JSON-Datei (auch zum Übertragen aufs iPad).</li>
+      <li><b>Backup</b> sichert das Aufmaß als JSON-Datei — der Ausweg, wenn kein Netz da ist.</li>
     </ul>
-    <h3 style="margin-bottom:4px">Projekt ⇅ (Austausch über Airtable)</h3>
+    <h3 style="margin-bottom:4px">Projekt ⇅ (Sichern &amp; Laden über Airtable)</h3>
     <ul style="padding-left:18px; margin-bottom:10px">
-      <li><b>Projekt speichern</b> legt den aktuellen Grundriss an einer Baustelle ab: der Plan als
+      <li>Es gibt immer <b>genau ein Aufmaß</b>. Oben links steht, um welche Baustelle es geht;
+        ein <b>gelber Punkt</b> heißt „noch nicht gesichert" bzw. „seit der letzten Sicherung geändert",
+        ein grüner „Stand ist gesichert".</li>
+      <li><b>Einmal gesichert oder geladen, hängt das Aufmaß an seiner Baustelle.</b> Danach schreibt
+        <b>📤 Sichern</b> immer dorthin — ohne erneute Auswahl. Der Plan landet als
         <code>aufmass-JJJJ-MM-TT.json</code> im Feld <b>Aufmaß JSON</b>, jedes Foto einzeln im Feld
-        <b>Aufmaß Fotos</b>. Ein vorhandener Stand wird nach Rückfrage ersetzt.</li>
-      <li><b>Projekt laden</b> zeigt nur die Baustellen, an denen ein Aufmaß liegt — auswählen, und Plan
-        samt Fotos landen auf diesem Gerät. Ein gleichnamiges Projekt wird nach Rückfrage überschrieben.</li>
-      <li>So kommt das Aufmaß vom iPad an den Rechner (und zurück), ohne Datei-Hin-und-Her. Der Token
-        braucht dafür zusätzlich das Schreibrecht <code>data.records:write</code>.</li>
+        <b>Aufmaß Fotos</b>.</li>
+      <li><b>📥 Aufmaß laden</b> zeigt nur Baustellen, an denen etwas liegt. Das geladene Aufmaß
+        <b>ersetzt das aktuelle</b> — liegen dort ungesicherte Änderungen, fragt die App vorher:
+        erst sichern, als Datei sichern oder verwerfen.</li>
+      <li><b>＋ Neues Aufmaß</b> beginnt leer und ohne Baustelle; die wird beim ersten Sichern festgelegt.
+        <b>📤 Baustelle wählen</b> bindet das Aufmaß an eine andere Baustelle.</li>
+      <li>Der Token braucht dafür zusätzlich das Schreibrecht <code>data.records:write</code>.</li>
     </ul>
     <h3 style="margin-bottom:4px">iPhone / iPad</h3>
     <p>Safari unterstützt kein Bluetooth im Browser. Installiere die kostenlose Browser-App <b>„Bluefy“</b> aus dem App Store und öffne diese Datei dort (z. B. über OneDrive-Link) — dann funktioniert auch die Laser-Anbindung auf iOS.</p>
@@ -528,7 +543,105 @@ db.projects.forEach(p=>{
   });
   all.forEach(g=>{ if(linked.has(g.id) && !g.nr) g.nr=++n; });
 });
+// Es gibt nur noch EIN Aufmaß: Altbestände auf das zuletzt benutzte eindampfen
+if(db.projects.length>1){
+  const akt=db.projects.find(p=>p.id===db.activeProjectId)||db.projects[0];
+  db.projects=[akt]; db.activeProjectId=akt.id;
+}
+
+/* Gesichert-Marke: save() setzt db.rev auf die aktuelle Zeit, eine erfolgreiche
+   Airtable-Sicherung merkt sich diesen Wert. Weicht er ab, gibt es ungesicherte
+   Änderungen. db.rev steckt im Undo-Schnappschuss — springt man auf den gesicherten
+   Stand zurück, gilt er zu Recht wieder als gesichert. */
+const istGeaendert = () => { const p=proj(); return !p.gesichertRev || p.gesichertRev!==db.rev; };
+function standAlsGesichert(){
+  const p=proj();
+  p.gesichertRev=db.rev; p.gesichertAm=Date.now();
+  try{ localStorage.setItem(LS, JSON.stringify(db)); }catch(e){}   // direkt: kein neuer rev
+  renderTopbar();
+}
+
+/* ================= Rückgängig / Wiederholen =================
+   Jede Änderung endet mit save(). Der Stapel merkt sich dabei den Stand VOR dem
+   Speichern — deshalb braucht keine der 49 Aufrufstellen eine eigene Zeile.
+   Weil während eines Ziehvorgangs nicht gespeichert wird, ist ein Zug automatisch
+   ein Schritt. Die Bilddaten stehen nicht im Schnappschuss, sondern einmal im
+   fotoPool; JS teilt sich die Zeichenketten, das kostet also kaum Speicher. */
+const UNDO_MAX=40;
+const fotoPool=new Map();
+let undoStapel=[], redoStapel=[], letzterStand=null, ohneUndoAktiv=false;
+
+function standErfassen(){
+  return JSON.stringify(db, (k,v)=>{
+    if(v && typeof v==='object' && typeof v.id==='string'
+       && typeof v.src==='string' && v.src.startsWith('data:')){
+      fotoPool.set(v.id, v.src);
+      return {...v, src:''};
+    }
+    return v;
+  });
+}
+function standSetzen(json){
+  const neu=JSON.parse(json);
+  (neu.projects||[]).forEach(p=>fotoListen(p).forEach(liste=>liste.forEach(f=>{
+    if(f && !f.src && fotoPool.has(f.id)) f.src=fotoPool.get(f.id);
+  })));
+  db=neu;
+}
+// Für Vorgänge, die keine Zeichenschritte sind: Projektwechsel, Laden aus Airtable/Backup
+function ohneUndo(fn){
+  ohneUndoAktiv=true;
+  try{ return fn(); }
+  finally{ ohneUndoAktiv=false; letzterStand=standErfassen(); renderUndoBtns(); }
+}
+function renderUndoBtns(){
+  const u=$('#undobtn'), r=$('#redobtn');
+  if(!u||!r) return;
+  u.disabled=!undoStapel.length; r.disabled=!redoStapel.length;
+  u.title=undoStapel.length?`Rückgängig (Strg+Z) — ${undoStapel.length} Schritt(e)`:'Nichts rückgängig zu machen';
+  r.title=redoStapel.length?`Wiederholen (Strg+Y) — ${redoStapel.length} Schritt(e)`:'Nichts zu wiederholen';
+}
+// Nach dem Zurückspringen kann die Auswahl auf Gelöschtes zeigen — Zustand geradeziehen
+function zustandPruefen(){
+  if(!db.projects || !db.projects.length) db.projects=seed().projects;
+  if(!db.projects.some(p=>p.id===db.activeProjectId)) db.activeProjectId=db.projects[0].id;
+  const p=proj();
+  if(!p.floors.length) p.floors=[{id:uid(), name:'Erdgeschoss'}];
+  if(!p.floors.some(f=>f.id===activeFloorId)) activeFloorId=p.floors[0].id;
+  if(focusRoomId && !p.rooms.some(r=>r.id===focusRoomId)) focusRoomId=null;
+  sel={roomId:focusRoomId, wall:null, vertex:null};
+}
+function standAnwenden(json){
+  standSetzen(json);
+  letzterStand=json;
+  ohneUndoAktiv=true;
+  try{ save(); } finally{ ohneUndoAktiv=false; }
+  zustandPruefen();
+  renderAll(); renderUndoBtns();
+}
+function undoSchritt(){
+  if(!undoStapel.length) return;
+  redoStapel.push(standErfassen());
+  standAnwenden(undoStapel.pop());
+}
+function redoSchritt(){
+  if(!redoStapel.length) return;
+  undoStapel.push(standErfassen());
+  standAnwenden(redoStapel.pop());
+}
+
 function save(){
+  db.rev=Date.now();                       // Marke für „seit der letzten Sicherung geändert"
+  if(!ohneUndoAktiv){
+    const jetzt=standErfassen();
+    if(letzterStand!=null && letzterStand!==jetzt){
+      undoStapel.push(letzterStand);
+      if(undoStapel.length>UNDO_MAX) undoStapel.shift();
+      redoStapel=[];                       // neue Änderung → Wiederholen verfällt
+    }
+    letzterStand=jetzt;
+    renderUndoBtns(); renderTopbar();      // Kopfzeile zeigt „ungesichert" sofort an
+  }
   try{ localStorage.setItem(LS, JSON.stringify(db)); }
   catch(e){
     // Fotos können den localStorage füllen — verständlich melden statt still zu scheitern
@@ -1741,6 +1854,14 @@ function cancelModes(){
 }
 document.addEventListener('keydown', e=>{
   if(e.target && e.target.matches && e.target.matches('input,textarea,select')) return;
+  // Rückgängig/Wiederholen — nicht, solange ein Dialog offen ist (dort wird bearbeitet)
+  if((e.ctrlKey||e.metaKey) && /^[zyZY]$/.test(e.key)){
+    if(document.querySelector('dialog[open]')) return;
+    e.preventDefault();
+    const zurueck = e.key.toLowerCase()==='z' && !e.shiftKey;
+    if(zurueck) undoSchritt(); else redoSchritt();
+    return;
+  }
   if(e.key==='Escape'){
     if(mode!=='select') cancelModes();
     else if(sel.wall!=null||sel.vertex!=null||sel.openId||sel.objId){ sel={roomId:focusRoomId, wall:null, vertex:null}; renderAll(); }
@@ -3242,14 +3363,84 @@ function renderClList(){
   });
 }
 
+/* Kopfbereich des Dialogs: aktuelles Aufmaß, Bindung, direkter Sichern-Knopf */
+function renderClAktuell(){
+  const el=$('#clAktuell'); if(!el) return;
+  const p=proj(), b=p.baustelle;
+  const stand=p.gesichertAm ? new Date(p.gesichertAm).toLocaleString('de-DE') : null;
+  const zahl=`${p.rooms.length} Raum/Räume · ${alleFotos(p).length} Foto(s)`;
+  el.innerHTML=`
+    <div class="stat" style="align-items:center">
+      <span><b>${esc(b?b.name:(p.name||'Neues Aufmaß'))}</b>
+        <span class="hint">· ${zahl}</span></span>
+      ${b?`<button class="btn small primary" id="clSaveNow" ${clBusy?'disabled':''}>📤 Sichern</button>`:''}
+    </div>
+    <p class="hint" style="margin-top:4px">${b
+      ? (stand ? (istGeaendert()?`zuletzt gesichert ${stand} — seitdem geändert`:`gesichert ${stand}`)
+               : 'an diese Baustelle gebunden, noch nicht gesichert')
+      : 'Noch keiner Baustelle zugeordnet — unten „📤 Baustelle wählen" legt sie fest.'}</p>
+    <div class="row" style="margin-top:6px">
+      <button class="btn small" id="clNeu" ${clBusy?'disabled':''}>＋ Neues Aufmaß</button>
+    </div>`;
+  const sn=$('#clSaveNow');
+  if(sn) sn.onclick=()=>cloudSpeichern({id:b.id, name:b.name, json:null, fotos:[]}, true);
+  $('#clNeu').onclick=cloudNeuesAufmass;
+}
+
+/* Rückfrage, bevor das aktuelle Aufmaß überschrieben wird — mit Ausweg ohne Netz */
+function cloudFrageUeberschreiben(text, weiter){
+  const p=proj(), b=p.baustelle, el=$('#clList');
+  el.innerHTML=`<div class="panel" style="margin-top:8px">
+    <p style="margin-bottom:8px">${text}</p>
+    <div class="row" style="flex-wrap:wrap; gap:6px">
+      ${b?`<button class="btn small primary" id="cfSave">Erst in „${esc(b.name)}" sichern</button>`:''}
+      <button class="btn small" id="cfBackup">Als Datei sichern</button>
+      <button class="btn small danger" id="cfDrop">Verwerfen</button>
+      <button class="btn small" id="cfAbbruch">Abbrechen</button>
+    </div>
+    ${b?'':'<p class="hint" style="margin-top:6px">Dieses Aufmaß hängt an keiner Baustelle — es kann nur als Datei gesichert werden.</p>'}
+  </div>`;
+  const zurueck=()=>renderClList();
+  $('#cfAbbruch').onclick=zurueck;
+  $('#cfDrop').onclick=()=>{ zurueck(); weiter(); };
+  $('#cfBackup').onclick=()=>{
+    download(new Blob([JSON.stringify(db,null,1)],{type:'application/json'}),
+      `aufmass-${(p.baustelle?p.baustelle.name:p.name||'projekt').replace(/[^\wäöüÄÖÜß -]/g,'')}-${new Date().toISOString().slice(0,10)}.json`);
+    clStatus('Backup-Datei erzeugt.');
+    zurueck(); weiter();
+  };
+  const sv=$('#cfSave');
+  if(sv) sv.onclick=async()=>{
+    const ok=await cloudSpeichern({id:b.id, name:b.name, json:null, fotos:[]}, true);
+    if(ok){ zurueck(); weiter(); }
+  };
+}
+// Leeres Aufmaß — ersetzt das aktuelle (nach Rückfrage, falls ungesichert)
+function cloudNeuesAufmass(){
+  const los=()=>{
+    ohneUndo(()=>{
+      const p={id:uid(), name:'Neues Aufmaß', floors:[{id:uid(), name:'Erdgeschoss'}], rooms:[], attrs:[]};
+      db.projects=[p]; db.activeProjectId=p.id; save();
+    });
+    undoStapel=[]; redoStapel=[]; renderUndoBtns();
+    activeFloorId=proj().floors[0].id; focusRoomId=null; sel={roomId:null, wall:null, vertex:null};
+    renderAll(); zoomFit(); renderClAktuell();
+    clStatus('Neues, leeres Aufmaß angelegt.');
+  };
+  if(!istGeaendert() || (!proj().rooms.length && !(proj().attrs||[]).length)){ los(); return; }
+  cloudFrageUeberschreiben(
+    `Das aktuelle Aufmaß hat ungesicherte Änderungen und wird durch ein leeres ersetzt.`, los);
+}
+
 /* Speichern: alten Stand am Datensatz entfernen, dann Plan und Fotos einzeln hochladen */
-async function cloudSpeichern(s){
-  if(clBusy) return;
+async function cloudSpeichern(s, ohneRueckfrage){
+  if(clBusy) return false;
   const token=clTok(), base=clBas(), p=proj();
+  if(!token){ clStatus('Bitte zuerst einen Zugriffstoken eintragen.', true); return false; }
   const fotos=alleFotos(p).filter(f=>f && typeof f.src==='string' && f.src.startsWith('data:'));
-  if(s.json && !confirm(`Bei „${s.name}" liegt bereits ein Aufmaß${clStand(s)?' vom '+clStand(s):''} `+
-    `(${s.fotos.length} Fotos).\n\nEs wird durch „${p.name}" ersetzt. Fortfahren?`)) return;
-  clBusy=true; renderClList();
+  if(!ohneRueckfrage && s.json && !confirm(`Bei „${s.name}" liegt bereits ein Aufmaß${clStand(s)?' vom '+clStand(s):''} `+
+    `(${s.fotos.length} Fotos).\n\nEs wird durch das aktuelle ersetzt. Fortfahren?`)) return false;
+  clBusy=true; renderClList(); renderClAktuell();
   let darfSchreiben=false;
   try{
     const klon=JSON.parse(JSON.stringify(p));
@@ -3274,23 +3465,39 @@ async function cloudSpeichern(s){
       if(roh.length*0.75>AT_MAXBYTES){ clStatus(`Foto ${i+1} ist zu groß und wird übersprungen …`); continue; }
       await atUploadFeld(base, s.id, token, AT_FID_FOTOS, AT_F_FOTOS, {name:`foto_${fotos[i].id}.${ext}`, typ, b64:roh});
     }
-    const fertig=`„${p.name}" bei „${s.name}" gespeichert — Plan + ${fotos.length} Foto(s).`;
+    // Ab jetzt hängt das Aufmaß an dieser Baustelle — Sichern geht künftig direkt dorthin
+    ohneUndo(()=>{ p.baustelle={id:s.id, name:s.name}; p.name=s.name; p.bauvorhaben=s.name; save(); });
+    standAlsGesichert();
+    const fertig=`Bei „${s.name}" gesichert — Plan + ${fotos.length} Foto(s).`;
     clStatus(fertig);
     clBusy=false;
     await clLadeBaustellen();                            // Liste zeigt danach den neuen Stand
     if(clSites) clStatus(fertig);                        // Erfolgsmeldung nicht überschreiben
+    renderAll();
+    return true;
   }catch(err){
     // Schreiben ging, Hochladen nicht → nicht der Token, sondern das Anhangfeld
     clStatus(darfSchreiben && (err.status===403||err.status===404)
       ? `${err.message}\n\nDer Token darf an dieser Baustelle schreiben — Airtable findet aber das Anhangfeld nicht. `+
         `Heißen die Felder in „Baustellen" noch „${AT_F_JSON}" und „${AT_F_FOTOS}"?`
       : clFehler(err), true);
-  }finally{ clBusy=false; renderClList(); }
+    return false;
+  }finally{ clBusy=false; renderClList(); renderClAktuell(); }
 }
 
 /* Laden: Projektdatei holen, Fotos anhand der ID im Dateinamen wieder einhängen */
-async function cloudLaden(s){
+async function cloudLaden(s, ohneRueckfrage){
   if(clBusy || !s.json) return;
+  // Das geladene Aufmaß ersetzt das aktuelle — vorher fragen, wenn dort etwas Ungesichertes liegt.
+  // Die Antwort führt cloudLaden erneut aus, dann ohne Rückfrage (sonst dreht es sich im Kreis).
+  const akt=proj();
+  if(!ohneRueckfrage && istGeaendert() && (akt.rooms.length || (akt.attrs||[]).length)){
+    cloudFrageUeberschreiben(
+      `Das aktuelle Aufmaß${akt.baustelle?` „${esc(akt.baustelle.name)}"`:''} hat ungesicherte Änderungen `+
+      `und wird durch „${esc(s.name)}" ersetzt.`,
+      ()=>cloudLaden(s, true));
+    return;
+  }
   clBusy=true; renderClList();
   try{
     clStatus('Lade Projektdatei …');
@@ -3301,10 +3508,7 @@ async function cloudLaden(s){
     if(!p || !Array.isArray(p.rooms) || !Array.isArray(p.floors))
       throw new Error('Die Datei enthält kein gültiges Projekt.');
     if(!p.floors.length) p.floors=[{id:uid(), name:'Erdgeschoss'}];
-    const alt=db.projects.findIndex(x=>x.id===p.id);
-    if(!confirm(alt>=0
-      ? `Projekt „${p.name}" ist auf diesem Gerät vorhanden und wird komplett ersetzt.\n\nFortfahren?`
-      : `Projekt „${p.name}" laden? (${p.rooms.length} Räume, ${s.fotos.length} Fotos)`)){
+    if(!confirm(`Aufmaß von „${s.name}" laden? (${p.rooms.length} Räume, ${s.fotos.length} Fotos)`)){
       clStatus('Abgebrochen.'); return;
     }
     const byId={};
@@ -3327,16 +3531,21 @@ async function cloudLaden(s){
       const rein=l.filter(f=>f.src);
       if(rein.length!==l.length) l.splice(0, l.length, ...rein);
     });
-    if(alt>=0) db.projects[alt]=p; else db.projects.push(p);
-    db.activeProjectId=p.id;
-    assignLvColors(p); syncLvTexts(p);
-    save();
+    ohneUndo(()=>{                                       // Laden ist kein Zeichenschritt
+      p.baustelle={id:s.id, name:s.name};                // gebunden: Sichern geht künftig hierhin
+      p.name=s.name; p.bauvorhaben=s.name;
+      db.projects=[p]; db.activeProjectId=p.id;          // es gibt immer nur dieses eine Aufmaß
+      assignLvColors(p); syncLvTexts(p);
+      save();
+    });
+    standAlsGesichert();
+    undoStapel=[]; redoStapel=[]; renderUndoBtns();       // Verlauf des alten Standes passt nicht mehr
     activeFloorId=p.floors[0].id; focusRoomId=null; sel={roomId:null, wall:null, vertex:null};
     renderAll(); zoomFit();
-    clStatus(`„${p.name}" geladen — ${p.rooms.length} Räume, ${ok} von ${ziele.length} Foto(s).`);
+    clStatus(`„${s.name}" geladen — ${p.rooms.length} Räume, ${ok} von ${ziele.length} Foto(s).`);
   }catch(err){
     clStatus(clFehler(err), true);
-  }finally{ clBusy=false; renderClList(); }
+  }finally{ clBusy=false; renderClList(); renderClAktuell(); }
 }
 
 $('#cloudbtn').onclick=()=>{
@@ -3345,7 +3554,7 @@ $('#cloudbtn').onclick=()=>{
   $('#clRemember').checked=!!tok;
   $('#clBase').value=localStorage.getItem(AT_BASE_KEY)||AT_BASE_DEFAULT;
   clSites=null; clMode='load'; clBusy=false; $('#clFilter').value='';
-  renderClList();
+  renderClList(); renderClAktuell();
   clStatus(tok?'Gemerkter Token eingesetzt.':'');         // sichtbar machen, woher der Token kommt
   dlgCloud.showModal();
   if(tok) clLadeBaustellen();                             // Token da → Liste gleich holen
@@ -3545,7 +3754,13 @@ $('#importfile').onchange=e=>{
       const d=JSON.parse(rd.result);
       if(!d.projects||!Array.isArray(d.projects)) throw new Error('Format unbekannt');
       if(!confirm(`Backup mit ${d.projects.length} Projekt(en) laden? Aktuelle Daten werden ersetzt.`)) return;
-      db=d; db.projects.forEach(assignLvColors); db.projects.forEach(syncLvTexts); save();
+      ohneUndo(()=>{
+        db=d;
+        db.projects=[db.projects.find(x=>x.id===db.activeProjectId) || db.projects[0]];  // nur ein Aufmaß
+        db.activeProjectId=db.projects[0].id;
+        db.projects.forEach(assignLvColors); db.projects.forEach(syncLvTexts); save();
+      });
+      undoStapel=[]; redoStapel=[]; renderUndoBtns();   // anderer Datenbestand → alter Verlauf passt nicht mehr
       activeFloorId=proj().floors[0].id; sel={roomId:null,wall:null};
       renderAll(); zoomFit();
     }catch(err){ alert('Import fehlgeschlagen: '+err.message); }
@@ -3735,36 +3950,21 @@ $('#printbtn').onclick=async()=>{
   finally{ b.textContent=alt; b.disabled=false; }
 };
 
-/* ================= Topbar / Projekte ================= */
+/* ================= Topbar / Projekt =================
+   Es gibt genau ein Aufmaß. Ist es einmal gesichert oder geladen worden, hängt es an
+   seiner Baustelle (p.baustelle) — Sichern geht dann immer dorthin. */
 function renderTopbar(){
-  $('#projsel').innerHTML=db.projects.map(p=>`<option value="${p.id}" ${p.id===db.activeProjectId?'selected':''}>${esc(p.name)}</option>`).join('');
+  const el=$('#projname'); if(!el) return;
+  const p=proj(), b=p.baustelle, geaendert=istGeaendert();
+  el.classList.toggle('frei', !b || geaendert);
+  el.innerHTML=`<span class="pdot"></span><b>${esc(b?b.name:(p.name||'Neues Aufmaß'))}</b>`;
+  el.title = b
+    ? `Baustelle „${b.name}"`
+      + (p.gesichertAm?`\nzuletzt gesichert: ${new Date(p.gesichertAm).toLocaleString('de-DE')}`:'')
+      + (geaendert?'\nungesicherte Änderungen':'\nStand ist gesichert')
+    : 'Noch keiner Baustelle zugeordnet — beim ersten Sichern wird sie festgelegt';
 }
-$('#projsel').onchange=e=>{
-  db.activeProjectId=e.target.value;
-  activeFloorId=proj().floors[0].id; sel={roomId:null,wall:null};
-  save(); renderAll(); zoomFit();
-};
-$('#projnew').onclick=()=>{
-  const name=prompt('Name des neuen Projekts (z. B. Objektadresse):');
-  if(!name) return;
-  const p={id:uid(), name, floors:[{id:uid(), name:'Erdgeschoss'}], rooms:[], attrs:[]};
-  db.projects.push(p); db.activeProjectId=p.id;
-  activeFloorId=p.floors[0].id; sel={roomId:null,wall:null};
-  save(); renderAll(); zoomFit();
-};
-$('#projsel').ondblclick=()=>{
-  const p=proj();
-  const name=prompt('Projekt umbenennen (leer lassen + OK = löschen):', p.name);
-  if(name===null) return;
-  if(name===''){
-    if(db.projects.length<=1){ alert('Das letzte Projekt kann nicht gelöscht werden.'); return; }
-    if(!confirm(`Projekt „${p.name}“ komplett löschen?`)) return;
-    db.projects=db.projects.filter(x=>x.id!==p.id);
-    db.activeProjectId=db.projects[0].id;
-  } else p.name=name;
-  activeFloorId=proj().floors[0].id; sel={roomId:null,wall:null};
-  save(); renderAll(); zoomFit();
-};
+$('#projname').onclick=()=>$('#cloudbtn').click();
 $('#tabplan').onclick=()=>{ view='plan'; renderAll(); };
 $('#tablv').onclick=()=>{ view='lv'; renderAll(); };
 $('#exportcsv').onclick=exportCsv;
@@ -3791,8 +3991,12 @@ function renderCrumb(){
   const bb=$('#crumbback'); if(bb) bb.onclick=exitRoom;
 }
 window.addEventListener('resize', ()=>{ if(view==='plan') renderCanvas(); });
+$('#undobtn').onclick=undoSchritt;
+$('#redobtn').onclick=redoSchritt;
 syncSharedDoors(); save();   // Altbestand: Türpaare in geteilten Wänden lagerichtig angleichen
+                             // (zugleich der Ausgangsstand für „Rückgängig")
 renderAll();
+renderUndoBtns();
 zoomFit();
 </script>
 </body>
