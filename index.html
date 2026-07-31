@@ -33,6 +33,12 @@
   #projname .pdot{width:8px; height:8px; border-radius:50%; background:#2fd08a; flex:none;}
   #projname.frei .pdot{background:#e0a300;}
   #projname b{font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  #toast{position:fixed; left:50%; bottom:22px; transform:translate(-50%,14px); z-index:99;
+    background:#1c2330; color:#fff; padding:10px 16px; border-radius:10px; max-width:min(560px,92vw);
+    box-shadow:0 6px 22px rgba(0,0,0,.28); font-size:13px; line-height:1.4; text-align:center;
+    opacity:0; pointer-events:none; transition:opacity .18s, transform .18s;}
+  #toast.an{opacity:1; transform:translate(-50%,0);}
+  #toast.fehler{background:#8a1b1b;}
   #btchip{display:flex; align-items:center; gap:6px; background:#2a3345; border-radius:14px; padding:4px 10px; font-size:12px; color:#aab4c8;}
   #btchip .dot{width:9px; height:9px; border-radius:50%; background:#77808f;}
   #btchip.on .dot{background:#2fd08a;}
@@ -373,6 +379,24 @@
   <div class="dfoot"><button class="btn" data-close>Schließen</button></div>
 </dialog>
 
+<!-- Backup als Datei -->
+<dialog id="dlgBackup" style="width:420px">
+  <div class="dhead">Backup-Datei <button data-close>✕</button></div>
+  <div class="dbody">
+    <p class="hint" style="margin-bottom:10px">Sichert das Aufmaß samt Fotos in eine Datei —
+      der Weg ohne Netz. Auf iPhone/iPad öffnet sich das Teilen-Menü: dort
+      <b>„In Dateien sichern"</b> wählen.</p>
+    <div class="row">
+      <button class="btn primary" id="bkSave">💾 Als Datei sichern</button>
+      <button class="btn" id="bkLoad">📂 Aus Datei laden</button>
+    </div>
+    <p class="hint" id="bkStatus" style="margin-top:8px"></p>
+    <p class="hint" style="margin-top:6px">Beim Laden wird das aktuelle Aufmaß ersetzt.
+      Angenommen werden Backup-Dateien und die <code>aufmass.json</code> aus Airtable.</p>
+  </div>
+  <div class="dfoot"><button class="btn" data-close>Schließen</button></div>
+</dialog>
+
 <!-- Hilfe -->
 <dialog id="dlgHelp">
   <div class="dhead">Hilfe <button data-close>✕</button></div>
@@ -409,7 +433,11 @@
     <ul style="padding-left:18px; margin-bottom:10px">
       <li><b>CSV-Export</b> erzeugt eine Datei im magicplan-Format („… ITS Statistiken.csv“) mit den Blöcken <i>ATTRIBUTE DER RÄUME</i> und <i>Attribute des Objekts</i> — direkt kompatibel mit deiner Excel-Pipeline (<code>/magicplan-pipeline</code>).</li>
       <li><b>Drucken/PDF</b> erzeugt einen maßbeschrifteten Plan je Etage plus Raum- und LV-Tabellen (im Druckdialog „Als PDF speichern“).</li>
-      <li><b>Backup</b> sichert das Aufmaß als JSON-Datei — der Ausweg, wenn kein Netz da ist.</li>
+      <li><b>Backup</b> sichert das Aufmaß samt Fotos als JSON-Datei — der Ausweg, wenn kein Netz da ist.
+        Auf iPhone/iPad öffnet sich dafür das <b>Teilen-Menü</b>: dort <b>„In Dateien sichern"</b> wählen.
+        Am Rechner landet die Datei im Download-Ordner. Nach jeder Ausgabe erscheint unten eine
+        Meldung mit Dateiname und Größe. <b>„Aus Datei laden"</b> nimmt Backup-Dateien und die
+        <code>aufmass.json</code> aus Airtable an und ersetzt das aktuelle Aufmaß.</li>
     </ul>
     <h3 style="margin-bottom:4px">Projekt ⇅ (Sichern &amp; Laden über Airtable)</h3>
     <ul style="padding-left:18px; margin-bottom:10px">
@@ -3403,10 +3431,9 @@ function cloudFrageUeberschreiben(text, weiter){
   const zurueck=()=>renderClList();
   $('#cfAbbruch').onclick=zurueck;
   $('#cfDrop').onclick=()=>{ zurueck(); weiter(); };
-  $('#cfBackup').onclick=()=>{
-    download(new Blob([JSON.stringify(db,null,1)],{type:'application/json'}),
-      `aufmass-${(p.baustelle?p.baustelle.name:p.name||'projekt').replace(/[^\wäöüÄÖÜß -]/g,'')}-${new Date().toISOString().slice(0,10)}.json`);
-    clStatus('Backup-Datei erzeugt.');
+  $('#cfBackup').onclick=async()=>{
+    const blob=new Blob([JSON.stringify(db,null,1)],{type:'application/json'});
+    if(!await dateiAusgeben(blob, backupDateiname())){ clStatus('Nicht gesichert — Vorgang abgebrochen.', true); return; }
     zurueck(); weiter();
   };
   const sv=$('#cfSave');
@@ -3731,42 +3758,107 @@ function exportCsv(){
   const csv='﻿'+'sep=;\r\n'+rows.join('\r\n')+'\r\n';
   download(new Blob([csv],{type:'text/csv;charset=utf-8'}), `${p.name} ITS Statistiken.csv`);
 }
-function download(blob, name){
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob); a.download=name;
-  document.body.appendChild(a); a.click();
-  setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},500);
+/* Datei ausgeben — auf iOS führt „a.download" oft ins Leere, dort ist das Teilen-Menü
+   der richtige Weg („In Dateien sichern"). Beides ohne Rückmeldung ist unbrauchbar,
+   deshalb meldet die Funktion immer, was passiert ist. */
+const kb = n => n<1024 ? n+' Bytes'
+  : n<1024*1024 ? Math.round(n/1024)+' KB'
+  : (n/1024/1024).toFixed(1).replace('.',',')+' MB';
+async function dateiAusgeben(blob, name){
+  // 1. Teilen-Menü (iPhone/iPad, auch Bluefy) — braucht die frische Nutzeraktion
+  try{
+    const datei=new File([blob], name, {type:blob.type||'application/octet-stream'});
+    if(navigator.canShare && navigator.canShare({files:[datei]}) && navigator.share){
+      await navigator.share({files:[datei], title:name});
+      melde(`„${name}" geteilt (${kb(blob.size)}).`);
+      return true;
+    }
+  }catch(err){
+    if(err && err.name==='AbortError'){ melde('Abgebrochen.'); return false; }
+    // sonst: weiter mit dem klassischen Weg
+  }
+  // 2. Klassischer Download
+  try{
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=name; a.rel='noopener';
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{URL.revokeObjectURL(url); a.remove();}, 2000);
+    melde(`„${name}" gespeichert (${kb(blob.size)}) — im Download-Ordner.`);
+    return true;
+  }catch(err){
+    melde('Datei konnte nicht ausgegeben werden: '+err.message, true);
+    return false;
+  }
+}
+function download(blob, name){ dateiAusgeben(blob, name); }   // alter Name, gleiche Wirkung
+
+/* Kurze Rückmeldung unten am Bildschirm */
+let meldeTimer=null;
+function melde(text, istFehler){
+  let el=$('#toast');
+  if(!el){ el=document.createElement('div'); el.id='toast'; }
+  // Ein offener Dialog liegt in einer eigenen Ebene — die Meldung muss mit hinein,
+  // sonst verschwindet sie hinter dem Dialog.
+  const wirt=document.querySelector('dialog[open]')||document.body;
+  if(el.parentNode!==wirt) wirt.appendChild(el);
+  el.textContent=text;
+  el.classList.toggle('fehler', !!istFehler);
+  el.classList.add('an');
+  clearTimeout(meldeTimer);
+  meldeTimer=setTimeout(()=>el.classList.remove('an'), istFehler?9000:5000);
 }
 
-/* ================= Backup / Import ================= */
-$('#backupbtn').onclick=()=>{
-  const c=confirm('OK = Backup speichern (JSON)\nAbbrechen = Backup laden');
-  if(c){
-    download(new Blob([JSON.stringify(db,null,1)],{type:'application/json'}),
-      'grundriss-backup-'+new Date().toISOString().slice(0,10)+'.json');
-  } else $('#importfile').click();
-};
+/* ================= Backup als Datei =================
+   Der Ausweg ohne Netz. Auf dem iPad landet die Datei über das Teilen-Menü in
+   „Dateien"/iCloud, am Rechner im Download-Ordner. */
+function backupDateiname(){
+  const p=proj();
+  const wer=(p.baustelle?p.baustelle.name:p.name||'aufmass').replace(/[^\wäöüÄÖÜß ()-]/g,'').trim();
+  return `Aufmass ${wer} ${new Date().toISOString().slice(0,10)}.json`;
+}
+async function backupSichern(){
+  const blob=new Blob([JSON.stringify(db,null,1)],{type:'application/json'});
+  $('#dlgBackup').close();                 // erst schließen: die Meldung soll danach stehen bleiben
+  return dateiAusgeben(blob, backupDateiname());
+}
+// Nimmt beides an: ein Backup (db mit projects) und eine aufmass.json aus Airtable
+function backupEinlesen(text){
+  const d=JSON.parse(text);
+  if(d && Array.isArray(d.projects) && d.projects.length) return d.projects[0];
+  if(d && d.projekt && Array.isArray(d.projekt.rooms)) return d.projekt;
+  if(d && Array.isArray(d.rooms) && Array.isArray(d.floors)) return d;
+  throw new Error('Das ist keine Aufmaß-Datei.');
+}
+$('#backupbtn').onclick=()=>{ $('#bkStatus').textContent=''; $('#dlgBackup').showModal(); };
+$('#bkSave').onclick=backupSichern;
+$('#bkLoad').onclick=()=>$('#importfile').click();
 $('#importfile').onchange=e=>{
-  const f=e.target.files[0]; if(!f) return;
+  const f=e.target.files[0]; e.target.value='';
+  if(!f) return;
   const rd=new FileReader();
+  rd.onerror=()=>{ $('#bkStatus').textContent='Datei nicht lesbar.'; melde('Datei nicht lesbar.', true); };
   rd.onload=()=>{
-    try{
-      const d=JSON.parse(rd.result);
-      if(!d.projects||!Array.isArray(d.projects)) throw new Error('Format unbekannt');
-      if(!confirm(`Backup mit ${d.projects.length} Projekt(en) laden? Aktuelle Daten werden ersetzt.`)) return;
-      ohneUndo(()=>{
-        db=d;
-        db.projects=[db.projects.find(x=>x.id===db.activeProjectId) || db.projects[0]];  // nur ein Aufmaß
-        db.activeProjectId=db.projects[0].id;
-        db.projects.forEach(assignLvColors); db.projects.forEach(syncLvTexts); save();
-      });
-      undoStapel=[]; redoStapel=[]; renderUndoBtns();   // anderer Datenbestand → alter Verlauf passt nicht mehr
-      activeFloorId=proj().floors[0].id; sel={roomId:null,wall:null};
-      renderAll(); zoomFit();
-    }catch(err){ alert('Import fehlgeschlagen: '+err.message); }
+    let p;
+    try{ p=backupEinlesen(rd.result); }
+    catch(err){
+      $('#bkStatus').textContent='Import fehlgeschlagen: '+err.message;
+      melde('Import fehlgeschlagen: '+err.message, true); return;
+    }
+    if(!p.floors || !p.floors.length) p.floors=[{id:uid(), name:'Erdgeschoss'}];
+    if(!confirm(`„${p.name||'Aufmaß'}" aus der Datei laden? (${(p.rooms||[]).length} Räume)\n\n`+
+      'Das aktuelle Aufmaß wird ersetzt.')) return;
+    ohneUndo(()=>{
+      db={activeProjectId:p.id, projects:[p], rev:db.rev};   // es gibt immer nur ein Aufmaß
+      assignLvColors(p); syncLvTexts(p); save();
+    });
+    undoStapel=[]; redoStapel=[]; renderUndoBtns();   // anderer Datenbestand → alter Verlauf passt nicht mehr
+    activeFloorId=p.floors[0].id; focusRoomId=null; sel={roomId:null, wall:null, vertex:null};
+    renderAll(); zoomFit();
+    $('#dlgBackup').close();
+    melde(`„${p.name||'Aufmaß'}" geladen — ${(p.rooms||[]).length} Räume, ${alleFotos(p).length} Foto(s).`);
   };
   rd.readAsText(f);
-  e.target.value='';
 };
 
 /* ================= Druck / PDF =================
