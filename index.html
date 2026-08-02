@@ -125,6 +125,18 @@
   #lvtip i{display:block; margin-top:6px; color:#9aa6bb; font-size:11px; font-style:normal;}
   /* Auf Touch-Geräten ist die Liste schmaler — dort darf der Kasten fast voll breit werden */
   @media (hover:none){ #lvtip{max-width:min(430px,88vw);} }
+  /* Türtypen: Symbolknöpfe statt Auswahlmenü — man sieht, was man bekommt */
+  .tuerrow{gap:5px; flex-wrap:nowrap; margin-top:5px;}
+  .tuerrow button{flex:1 1 0; min-width:0; height:36px; padding:3px 4px; border-radius:6px;
+    border:1px solid var(--line); background:#fff; cursor:pointer;}
+  .tuerrow button.an{border-color:var(--accent); background:#eaf1ff; box-shadow:0 0 0 1px var(--accent);}
+  /* Raumfarben: zwei Reihen gleich breiter Felder */
+  .farbrow{gap:5px; flex-wrap:nowrap; margin-top:5px;}
+  .farbrow button{flex:1 1 0; min-width:0; height:26px; padding:0; border-radius:6px;
+    border:1px solid var(--line); cursor:pointer;}
+  .farbrow button.an{box-shadow:0 0 0 2px var(--accent); border-color:var(--accent);}
+  .farbrow .farbedit{background:#fff; font-size:13px; line-height:1;}
+  .farbrow .farbedit.an{background:var(--accent); color:#fff;}
   /* Fotos an einer LV-Position */
   .fotos{display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;}
   .fotos .fw{position:relative; width:74px; height:74px; border-radius:8px; overflow:hidden;
@@ -1352,6 +1364,68 @@ function wandKoerper(r, opt){
   return `<path d="${dRing}" fill="${fuell}" fill-rule="evenodd" stroke="${linie}"`+
     ` stroke-width="${sw}" stroke-linejoin="miter" pointer-events="none"/>`;
 }
+/* ---------- Türtypen ----------
+   `o.tuerTyp` steuert nur die Darstellung — Maße, LV-Bezug und Flächenrechnung sind
+   für alle gleich. Vorgabe ist die normale Tür (Feld dann gar nicht gesetzt). */
+const TUER_TYPEN=[
+  {id:'tuer',        label:'Tür',                 art:'einfach', glas:false},
+  {id:'offen',       label:'Öffnung (ohne Tür)',  art:'offen',   glas:false},
+  {id:'doppel',      label:'Doppeltür',           art:'doppel',  glas:false},
+  {id:'schiebe',     label:'Schiebetür',          art:'schiebe', glas:false},
+  {id:'glas',        label:'Tür aus Glas',        art:'einfach', glas:true},
+  {id:'glasdoppel',  label:'Doppeltür aus Glas',  art:'doppel',  glas:true},
+  {id:'glasschiebe', label:'Schiebetür aus Glas', art:'schiebe', glas:true}
+];
+const tuerTyp = o => TUER_TYPEN.find(t=>t.id===(o.tuerTyp||'tuer')) || TUER_TYPEN[0];
+/* Kleines Vorschausymbol je Türtyp für die Auswahlknöpfe — dieselbe Bildsprache wie
+   im Plan (Blatt + Schwenkbogen, Glas in Fensterblau), nur stark vereinfacht. */
+function tuerIcon(t){
+  const bl=t.glas?'#4d90d6':'#4a5468', bo=t.glas?'#9cc6ea':'#95a0b2';
+  // Wandstücke links/rechts, dazwischen die Öffnung
+  let s=`<svg viewBox="0 0 26 22" width="100%" height="100%" style="display:block">`+
+    `<path d="M 0 6 L 4 6 M 20 6 L 26 6" stroke="#aab2c0" stroke-width="3" stroke-linecap="butt"/>`;
+  if(t.art==='offen'){
+    s+=`<path d="M 4 3 L 4 9 M 20 3 L 20 9" stroke="#aab2c0" stroke-width="1.4"/>`;
+  } else if(t.art==='doppel'){
+    s+=`<path d="M 4 6 L 4 14 M 20 6 L 20 14" stroke="${bl}" stroke-width="2"/>`+
+      `<path d="M 12 6 A 8 8 0 0 1 4 14" fill="none" stroke="${bo}" stroke-width="1.1" stroke-dasharray="2 1.6"/>`+
+      `<path d="M 12 6 A 8 8 0 0 0 20 14" fill="none" stroke="${bo}" stroke-width="1.1" stroke-dasharray="2 1.6"/>`;
+  } else if(t.art==='schiebe'){
+    s+=`<path d="M 4 11 L 20 11" stroke="${bl}" stroke-width="2.4"/>`+
+      `<path d="M 8 16 L 18 16 M 15 13.5 L 18 16 L 15 18.5" fill="none" stroke="${bo}" stroke-width="1.1"/>`;
+  } else {
+    s+=`<path d="M 4 6 L 4 20" stroke="${bl}" stroke-width="2"/>`+
+      `<path d="M 18 6 A 14 14 0 0 1 4 20" fill="none" stroke="${bo}" stroke-width="1.1" stroke-dasharray="2 1.6"/>`;
+  }
+  return s+'</svg>';
+}
+/* Fenstertypen — Zahl der Flügel; im Plan als Sprossen quer durch die Laibung */
+const FEN_TYPEN=[
+  {id:'einfach',  label:'Einfachfenster',  n:1},
+  {id:'doppel',   label:'Doppelfenster',   n:2},
+  {id:'dreifach', label:'Dreifachfenster', n:3}
+];
+const fenTyp = o => FEN_TYPEN.find(t=>t.id===(o.fenTyp||'einfach')) || FEN_TYPEN[0];
+function fenIcon(t){
+  let s=`<svg viewBox="0 0 26 22" width="100%" height="100%" style="display:block">`+
+    `<path d="M 0 11 L 4 11 M 20 11 L 26 11" stroke="#aab2c0" stroke-width="3"/>`+
+    `<path d="M 4 11 L 20 11" stroke="#4d90d6" stroke-width="3"/>`;
+  for(let i=1;i<t.n;i++){
+    const x=4+16*i/t.n;
+    s+=`<path d="M ${x} 6 L ${x} 16" stroke="#4d90d6" stroke-width="1.4"/>`;
+  }
+  return s+'</svg>';
+}
+/* Ein Türblatt samt Schwenkbogen. H = Angelpunkt, T = Schließkante, W = Blattlänge,
+   perp = Einheitsvektor der Aufschlagseite. */
+function tuerBlatt(H, T, W, perp, blatt, bogen){
+  const tip={x:H.x+perp.x*W, y:H.y+perp.y*W};
+  const cz=(T.x-H.x)*(tip.y-H.y)-(T.y-H.y)*(tip.x-H.x);
+  return `<line x1="${H.x}" y1="${H.y}" x2="${tip.x}" y2="${tip.y}" stroke="${blatt}" stroke-width="0.045"/>`+
+    `<path d="M ${T.x} ${T.y} A ${W} ${W} 0 0 ${cz>0?1:0} ${tip.x} ${tip.y}" fill="none"`+
+    ` stroke="${bogen}" stroke-width="0.02" stroke-dasharray="0.08 0.06"/>`+
+    `<circle cx="${H.x}" cy="${H.y}" r="0.035" fill="${blatt}"/>`;
+}
 function openingMarks(r, lbl){
   let out='';
   (r.openings||[]).forEach(o=>{
@@ -1366,23 +1440,54 @@ function openingMarks(r, lbl){
     out+=`<line x1="${p0.x}" y1="${p0.y}" x2="${q0.x}" y2="${q0.y}" stroke="#2b3345" stroke-width="0.025"/>`;
     out+=`<line x1="${p1.x}" y1="${p1.y}" x2="${q1.x}" y2="${q1.y}" stroke="#2b3345" stroke-width="0.025"/>`;
     if(o.type==='door'){
+      const tt=tuerTyp(o);
+      if(tt.art==='offen') return;                             // Öffnung: nur der Wanddurchbruch
       const s=o.swing||1;
-      const H=o.hinge?p1:p0;                                   // Angelpunkt (Anschlag)
-      const T=o.hinge?p0:p1;                                   // Schließkante
-      const tip={x:H.x-uy*s*o.width, y:H.y+ux*s*o.width};      // Türblatt 90° geöffnet
+      const perp={x:-uy*s, y:ux*s};                            // Aufschlag-/Blattseite
+      // Glas hebt sich in derselben Farbe ab wie die Fenster
+      const blatt = tt.glas ? '#4d90d6' : '#5a6475';
+      const bogen = tt.glas ? '#9cc6ea' : '#8a93a5';
       out+=`<line x1="${p0.x}" y1="${p0.y}" x2="${p1.x}" y2="${p1.y}" stroke="#8a93a5" stroke-width="0.02"/>`;
-      // Verknüpfte Tür (geteilte Wand): Symbol nur in dem Raum zeichnen, in den sie aufschlägt —
-      // sonst erscheinen zwei Türsymbole für dieselbe physische Tür.
-      const probe={x:H.x+(tip.x-H.x)*0.5, y:H.y+(tip.y-H.y)*0.5};
+      /* Verknüpfte Tür (geteilte Wand): Symbol nur in dem Raum zeichnen, in den sie
+         aufschlägt bzw. auf dessen Seite das Blatt liegt — sonst erschienen zwei
+         Symbole für dieselbe physische Tür. */
+      const probe={x:(p0.x+p1.x)/2+perp.x*o.width*0.5, y:(p0.y+p1.y)/2+perp.y*o.width*0.5};
       if(o.link && !pointInPoly(probe, r.points)) return;
-      const cz=(T.x-H.x)*(tip.y-H.y)-(T.y-H.y)*(tip.x-H.x);
-      out+=`<line x1="${H.x}" y1="${H.y}" x2="${tip.x}" y2="${tip.y}" stroke="#5a6475" stroke-width="0.045"/>`;
-      out+=`<path d="M ${T.x} ${T.y} A ${o.width} ${o.width} 0 0 ${cz>0?1:0} ${tip.x} ${tip.y}" fill="none" stroke="#8a93a5" stroke-width="0.02" stroke-dasharray="0.08 0.06"/>`;
-      out+=`<circle cx="${H.x}" cy="${H.y}" r="0.035" fill="#5a6475"/>`;
+      if(tt.art==='doppel'){
+        const halb=o.width/2;
+        const M={x:(p0.x+p1.x)/2, y:(p0.y+p1.y)/2};
+        out+=tuerBlatt(p0, M, halb, perp, blatt, bogen);
+        out+=tuerBlatt(p1, M, halb, perp, blatt, bogen);
+      } else if(tt.art==='schiebe'){
+        // Blatt liegt parallel VOR der Wand, darunter der Laufweg-Pfeil
+        const off=Math.max(0.06, dck*0.45);
+        const A={x:p0.x+perp.x*off, y:p0.y+perp.y*off}, B={x:p1.x+perp.x*off, y:p1.y+perp.y*off};
+        out+=`<line x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}" stroke="${blatt}" stroke-width="0.055"/>`;
+        const pf=off+0.09, ax=o.width*0.30;                    // Pfeil in Laufrichtung (zum Anschlag hin)
+        const ri=o.hinge?-1:1;                                 // Anschlag = Seite, in die es schiebt
+        const M={x:(p0.x+p1.x)/2+perp.x*pf, y:(p0.y+p1.y)/2+perp.y*pf};
+        const E={x:M.x+ux*ri*ax, y:M.y+uy*ri*ax};
+        out+=`<line x1="${M.x-ux*ri*ax}" y1="${M.y-uy*ri*ax}" x2="${E.x}" y2="${E.y}" stroke="${bogen}" stroke-width="0.02"/>`;
+        const sp=0.05;
+        out+=`<path d="M ${E.x} ${E.y} L ${E.x-ux*ri*sp+perp.x*sp} ${E.y-uy*ri*sp+perp.y*sp}`+
+          ` M ${E.x} ${E.y} L ${E.x-ux*ri*sp-perp.x*sp} ${E.y-uy*ri*sp-perp.y*sp}" fill="none"`+
+          ` stroke="${bogen}" stroke-width="0.02"/>`;
+      } else {
+        const H=o.hinge?p1:p0;                                 // Angelpunkt (Anschlag)
+        const T=o.hinge?p0:p1;                                 // Schließkante
+        out+=tuerBlatt(H, T, o.width, perp, blatt, bogen);
+      }
     } else {
-      // Fenster: Rahmen mittig in der Laibung
+      // Fenster: Rahmen mittig in der Laibung, Flügel durch Sprossen getrennt
       const m0={x:p0.x+nn.x*dck*0.5, y:p0.y+nn.y*dck*0.5}, m1={x:p1.x+nn.x*dck*0.5, y:p1.y+nn.y*dck*0.5};
       out+=`<line x1="${m0.x}" y1="${m0.y}" x2="${m1.x}" y2="${m1.y}" stroke="#4d90d6" stroke-width="${Math.min(0.08, dck*0.45)}"/>`;
+      const ft=fenTyp(o);
+      for(let i=1;i<ft.n;i++){                                 // Sprosse quer durch die Laibung
+        const t=i/ft.n;
+        const c0={x:p0.x+(p1.x-p0.x)*t, y:p0.y+(p1.y-p0.y)*t};
+        out+=`<line x1="${c0.x}" y1="${c0.y}" x2="${c0.x+nn.x*dck}" y2="${c0.y+nn.y*dck}"`+
+          ` stroke="#4d90d6" stroke-width="0.03"/>`;
+      }
     }
   });
   // Nummern-Plaketten LV-verknüpfter Türen/Fenster (mittig auf der Öffnung)
@@ -1559,6 +1664,46 @@ function wallMarks(r, lbl){
   }
   return out ? `<g style="pointer-events:none">${out}</g>` : '';
 }
+/* ---------- Raumfarbe (Sanierungsbereiche) ----------
+   `r.farbe` färbt den Raum ein. Deckt der Bereich nur einen TEIL des Raums ab
+   (halbe Halle, Flurabschnitt), begrenzt `r.farbZone` — ein eigenes Vieleck — die
+   Fläche. Gezeichnet wird immer MIT Clip auf das Raumpolygon: so kann die Zone
+   ruhig über die Wand hinausgezogen werden, die Farbe bleibt trotzdem im Raum. */
+const RAUM_FARBEN=[
+  '#e53935','#fb8c00','#fdd835','#7cb342','#00897b','#1e88e5','#5e35b1','#d81b60',
+  '#8d6e63','#546e7a','#c0ca33','#00acc1','#f4511e','#ab47bc','#26a69a'];
+const polyD = pts => pts.map((p,i)=>(i?'L':'M')+p.x+' '+p.y).join(' ')+' Z';
+function zoneStandard(r){                     // Vorgabe = umschließendes Rechteck des Raums
+  const b=bboxOf(r.points);
+  return [{x:b.minx,y:b.miny},{x:b.maxx,y:b.miny},{x:b.maxx,y:b.maxy},{x:b.minx,y:b.maxy}];
+}
+function raumFarbeSvg(r, opts){
+  opts=opts||{};
+  if(!r.farbe) return '';
+  const op=opts.op!=null?opts.op:0.3;
+  const dR=polyD(r.points);
+  if(!r.farbZone || r.farbZone.length<3)
+    return `<path d="${dR}" fill="${r.farbe}" fill-opacity="${op}" style="pointer-events:none"/>`;
+  const cid='rzc'+r.id+(opts.suffix||'');
+  return `<clipPath id="${cid}"><path d="${dR}"/></clipPath>`+
+    `<path d="${polyD(r.farbZone)}" fill="${r.farbe}" fill-opacity="${op}"`+
+    ` clip-path="url(#${cid})" style="pointer-events:none"/>`;
+}
+/* Griffe zum Verschieben/Löschen der Zonen-Ecken — nur im Bearbeiten-Modus */
+let zoneEdit=null;                            // Raum-ID, deren Farbzone gerade bearbeitet wird
+function zoneMarks(r, lbl){
+  if(zoneEdit!==r.id || !r.farbZone || r.farbZone.length<3) return '';
+  let out=`<path d="${polyD(r.farbZone)}" fill="none" stroke="${r.farbe||'#2f6fed'}"`+
+    ` stroke-width="${lbl*0.09}" stroke-dasharray="${lbl*0.4} ${lbl*0.28}" style="pointer-events:none"/>`;
+  r.farbZone.forEach((pt,k)=>{
+    const an=sel.zoneH===k, hs=lbl*(an?0.45:0.35), tr=lbl*(an?2.8:1.5);
+    if(an) out+=`<circle cx="${pt.x}" cy="${pt.y}" r="${tr}" fill="url(#ziehzone)" style="pointer-events:none"/>`;
+    out+=`<rect x="${pt.x-hs}" y="${pt.y-hs}" width="${2*hs}" height="${2*hs}" fill="${an?'#2f6fed':'#fff'}"`+
+      ` stroke="#2f6fed" stroke-width="${lbl*0.08}" data-zoneh="${k}" style="cursor:pointer"/>`;
+    out+=`<circle cx="${pt.x}" cy="${pt.y}" r="${tr}" fill="transparent" data-zoneh="${k}" style="cursor:pointer"/>`;
+  });
+  return out;
+}
 /* Objekte im Raum: rechteckige Flächen und Linien.
    Im Abschlags-Druck verschwindet nichts — Objekte, die nicht zu diesem Abschlag
    gehören, werden nur blass gezeichnet (`ABS_BLASS`). So bleibt der Plan lesbar
@@ -1681,13 +1826,14 @@ function angleMarks(r, lbl){
   return out ? `<g style="pointer-events:none">${out}</g>` : '';
 }
 function focusRoom(id){
-  focusRoomId=id;
+  focusRoomId=id; etagenWahl=null;           // Anwahl gilt nur der Etagenansicht
   sel={roomId:id, wall:null, vertex:null};
+  if(zoneEdit!==id) zoneEdit=null;          // Farbzonen-Bearbeitung gilt nur dem eigenen Raum
   mode='select';
   renderAll(); zoomFit();
 }
 function exitRoom(){
-  focusRoomId=null;
+  focusRoomId=null; zoneEdit=null;
   sel={roomId:null, wall:null, vertex:null};
   renderAll(); zoomFit();
 }
@@ -1716,8 +1862,13 @@ function renderCanvas(){
     rooms.forEach(r=>{
       const d = r.points.map((p,i)=>(i?'L':'M')+p.x+' '+p.y).join(' ')+' Z';
       out+=`<path d="${d}" fill="${r.id===sel.roomId?'#e8f0fe':'#fdfcf8'}" data-roomid="${r.id}"/>`;
+      out+=raumFarbeSvg(r);                    // Sanierungsbereiche auch in der Übersicht
     });
     out+=wandLage(rooms);
+    // Angewählter Raum im Anwahlmodus: kräftiger Rahmen, damit die Wahl eindeutig ist
+    const wr=etagenWahl?rooms.find(r=>r.id===etagenWahl):null;
+    if(wr) out+=`<path d="${polyD(wr.points)}" fill="none" stroke="#2f6fed"`+
+      ` stroke-width="${Math.max(0.03, vb.w/260)}" stroke-linejoin="miter" style="pointer-events:none"/>`;
   }
 
   rooms.forEach(r=>{
@@ -1727,18 +1878,21 @@ function renderCanvas(){
     if(dim) out+='<g opacity="0.35">';
     if(fr){
       out+=`<path d="${d}" fill="${selR?'#e8f0fe':'#fdfcf8'}" data-roomid="${r.id}"${dim?' style="cursor:pointer"':''}/>`;
+      out+=raumFarbeSvg(r);
       out+=wandKoerper(r);
     }
     out+=openingMarks(r, lbl);
     out+=wallMarks(r, lbl);
     out+=objMarks(r, lbl, !!(fr && selR));
+    if(!dim) out+=zoneMarks(r, lbl);
     if(!dim) out+=angleMarks(r, lbl);
     const c=raumMitte(r), st=roomStats(r);
     out+=`<text x="${c.x}" y="${c.y}" text-anchor="middle" font-size="${lbl}" fill="#2b3345" style="pointer-events:none">
       <tspan x="${c.x}" dy="-0.1">${esc(r.name)}</tspan>
       <tspan x="${c.x}" dy="${lbl*1.25}" fill="#6b7484" font-size="${lbl*0.85}">${fmt(st.area,2)} m²</tspan></text>`;
     if(dim){ out+='</g>'; return; }
-    if(selR){
+    // Im Farbzonen-Modus keine Wand-/Eckgriffe zeichnen — sie wären ohnehin gesperrt
+    if(selR && !zoneEdit){
       r.points.forEach((a,i)=>{
         const b=r.points[(i+1)%r.points.length], L=dist(a,b);
         const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
@@ -2000,6 +2154,7 @@ function pushDoorToPartner(R,D){
         P.wall=j; P.offset=Math.round(lo*1000)/1000; P.width=D.width; P.height=D.height;
         P.hinge=pHinge; P.swing=pSwing;
       }
+      if(D.tuerTyp) P.tuerTyp=D.tuerTyp; else delete P.tuerTyp;   // gleiche Tür = gleicher Typ
       return;
     }
   }
@@ -2022,6 +2177,26 @@ function deleteOpeningEverywhere(r,opId){
   dropLvFor(ids);   // verknüpfte LV-Positionen mit löschen
 }
 
+/* ---------- Anwahlmodus der Etagenansicht ----------
+   Ein Raum eine Sekunde halten öffnet ihn zum Bearbeiten, OHNE hineinzuzoomen: rechts
+   stehen Name, Höhe, LV, Farbe und die Raum-LV-Positionen. Ein Tipp auf einen anderen
+   Raum wechselt die Auswahl, ein zweiter Tipp auf den gewählten geht hinein, ein Tipp
+   ins Leere beendet den Modus. */
+let etagenWahl=null;                 // Raum-ID im Anwahlmodus (nur Etagenansicht)
+let haltenTimer=null;
+const HALTEN_MS=1000;                // kurz genug zum flüssigen Arbeiten, lang genug
+                                     // gegen versehentliches Auslösen beim Antippen
+function haltenStarten(id){
+  clearTimeout(haltenTimer);
+  haltenTimer=setTimeout(()=>{
+    haltenTimer=null;
+    if(drag && drag.moved) return;   // wer schiebt, will nicht auswählen
+    cancelDrag(); drag=null;
+    etagenWahl=id; renderAll();
+    melde('Anwahl — Raum antippen zum Wechseln, noch einmal für die Raumansicht, daneben zum Beenden.');
+  }, HALTEN_MS);
+}
+function haltenAbbrechen(){ clearTimeout(haltenTimer); haltenTimer=null; }
 /* ---------- Interaktion ---------- */
 let drag=null; // {kind:'pan'|'room', start, orig, moved}
 let pendingSym=null; // zu platzierendes Symbol (Schleusen/RFA)
@@ -2130,6 +2305,24 @@ svg.addEventListener('pointerdown', e=>{
     return;
   }
   const t=e.target;
+  /* Farbzone bearbeiten ist ein AUSSCHLIESSLICHER Modus: nur die Eckgriffe reagieren,
+     alles andere (Raum wählen, Wände, Ecken, Objekte, Türen) ist gesperrt, bis
+     „Fertig" oder „Ganzer Raum" gedrückt wird. Schieben und Zoomen bleiben erlaubt —
+     ohne sie käme man an entfernte Ecken nicht heran. */
+  if(zoneEdit){
+    const r=roomById(zoneEdit);
+    if(t.dataset && t.dataset.zoneh!==undefined && r && r.farbZone){
+      const k=+t.dataset.zoneh;
+      if(r.farbZone[k]){
+        const schon = sel.zoneH===k;         // erst anwählen, ziehen beim zweiten Anfassen
+        sel={...sel, zoneH:k};
+        if(schon) drag={kind:'zoneh', room:r, h:k, start:p, orig:{...r.farbZone[k]}, moved:false};
+        renderAll(); return;
+      }
+    }
+    drag={kind:'pan', start:{x:e.clientX, y:e.clientY}, orig:{...vb}, moved:false, gesperrt:true};
+    return;
+  }
   if(t.dataset && t.dataset.plan){                 // beweglicher Hintergrundplan
     const pl=planVon();
     if(pl){ drag={kind:'plan', start:p, orig:{x:pl.x, y:pl.y}, moved:false}; return; }
@@ -2205,9 +2398,11 @@ svg.addEventListener('pointerdown', e=>{
   }
   if(t.dataset && t.dataset.roomid && !focusRoomId){
     // Etagenansicht: Ziehen verschiebt den Raum, Klick ohne Bewegung zoomt hinein
+    // bzw. wählt im Anwahlmodus aus. 2 s halten schaltet den Anwahlmodus ein.
     const r=roomById(t.dataset.roomid);
     drag={kind:'room', start:p, orig:r.points.map(q=>({...q})),
       origObjs:JSON.parse(JSON.stringify(r.objects||[])), room:r, moved:false};
+    if(!etagenWahl) haltenStarten(r.id);
     return;
   }
   // Raumansicht: Klick auf ausgegrauten Nachbarraum merken → wechselt bei Klick ohne Bewegung
@@ -2235,7 +2430,7 @@ svg.addEventListener('pointermove', e=>{
   } else if(drag.kind==='room'){
     let dx=p.x-drag.start.x, dy=p.y-drag.start.y;
     dx=mm(dx); dy=mm(dy);
-    if(Math.abs(dx)+Math.abs(dy)>0.01) drag.moved=true;
+    if(Math.abs(dx)+Math.abs(dy)>0.01){ drag.moved=true; haltenAbbrechen(); }   // schieben ≠ halten
     let pts=drag.orig.map(q=>({x:q.x+dx, y:q.y+dy}));
     // Magnet: an Wänden der anderen Räume bündig einrasten
     const others=floorRooms().filter(x=>x.id!==drag.room.id);
@@ -2247,6 +2442,12 @@ svg.addEventListener('pointermove', e=>{
     drag.room.objects=(drag.origObjs||[]).map(g=>g.points
       ? {...g, points:g.points.map(pt=>({x:pt.x+tx, y:pt.y+ty}))}
       : {...g, x:g.x+tx, y:g.y+ty});
+    renderCanvas();
+  } else if(drag.kind==='zoneh'){
+    const z=drag.room.farbZone; if(!z || !z[drag.h]) return;
+    const nx=mm(drag.orig.x+(p.x-drag.start.x)), ny=mm(drag.orig.y+(p.y-drag.start.y));
+    if(Math.hypot(nx-drag.orig.x, ny-drag.orig.y)>0.01) drag.moved=true;
+    z[drag.h]={x:nx, y:ny};
     renderCanvas();
   } else if(drag.kind==='vertex'){
     const r=drag.room, i=drag.idx, n=r.points.length;
@@ -2384,18 +2585,28 @@ svg.addEventListener('pointermove', e=>{
 });
 svg.addEventListener('pointercancel', e=>{
   zeiger.delete(e.pointerId);
+  haltenAbbrechen();
   if(pinch && zeiger.size<2){ pinch=null; drag=null; }
 });
 svg.addEventListener('pointerup', e=>{
   zeiger.delete(e.pointerId);
+  haltenAbbrechen();                        // losgelassen = kein langer Druck mehr
   if(pinch){                      // Ende der Zoom-Geste — kein Klick auslösen
     if(zeiger.size<2){ pinch=null; drag=null; }
     return;
   }
   if(drag){
     if(drag.kind==='room' && !drag.moved && mode==='select'){
-      const id=drag.room.id; drag=null; focusRoom(id); return;
+      const id=drag.room.id; drag=null;
+      if(etagenWahl){
+        // Im Anwahlmodus: anderer Raum = umwählen, derselbe noch einmal = hinein
+        if(etagenWahl===id){ etagenWahl=null; focusRoom(id); }
+        else { etagenWahl=id; sel={roomId:id, wall:null, vertex:null}; renderAll(); }
+        return;
+      }
+      focusRoom(id); return;
     }
+    if(drag.kind==='pan' && drag.gesperrt){ drag=null; return; }   // Farbzonen-Modus: kein Klick wirkt
     if(drag.kind==='pan' && !drag.moved && mode==='select'){
       if(drag.pendingRoom){ const id=drag.pendingRoom; drag=null; focusRoom(id); return; }
       const t=document.elementFromPoint(e.clientX,e.clientY);
@@ -2409,7 +2620,8 @@ svg.addEventListener('pointerup', e=>{
           if(fr2 && !pointInPoly(q, fr2.points)){ drag=null; exitRoom(); return; }
           sel={roomId:focusRoomId, wall:null, vertex:null}; renderAll();
         }
-        else if(!ds.roomid){ sel={roomId:null, wall:null, vertex:null}; renderAll(); }
+        // Etagenansicht: Tipp neben die Räume beendet den Anwahlmodus
+        else if(!ds.roomid){ etagenWahl=null; sel={roomId:null, wall:null, vertex:null}; renderAll(); }
       }
     }
     if(drag && (drag.kind==='newrect'||drag.kind==='newline')){
@@ -2456,6 +2668,10 @@ svg.addEventListener('pointerup', e=>{
       } else if(sel.wall!=null && sel.wall>=r.points.length) sel.wall=null;
       if(drag.moved){ syncSharedDoors(); save(); }
       else if(aufgeraeumt) save();
+      drag=null; renderAll(); return;
+    }
+    if(drag && drag.kind==='zoneh'){
+      if(drag.moved) save();
       drag=null; renderAll(); return;
     }
     if(drag && drag.moved && drag.kind==='vertex' && lockPruefen(drag.room, drag.lockSnap)){
@@ -2563,6 +2779,8 @@ document.addEventListener('keydown', e=>{
     return;
   }
   if(e.key==='Escape'){
+    if(zoneEdit){ zoneEdit=null; sel.zoneH=null; renderAll(); return; }
+    if(etagenWahl){ etagenWahl=null; renderAll(); return; }
     if(mode!=='select') cancelModes();
     else if(sel.wall!=null||sel.vertex!=null||sel.openId||sel.objId){ sel={roomId:focusRoomId, wall:null, vertex:null}; renderAll(); }
     else if(focusRoomId) exitRoom();
@@ -2579,6 +2797,7 @@ document.addEventListener('keydown', e=>{
     }
     updateDrawHint();
   } else if(e.key==='Delete'){
+    if(zoneEdit) return;                       // im Farbzonen-Modus löscht die Taste nichts
     const r=focusRoomId?roomById(focusRoomId):null;
     if(r && sel.objId){
       const g=(r.objects||[]).find(x=>x.id===sel.objId);
@@ -2930,6 +3149,7 @@ function deleteRoom(id){
   p.rooms=p.rooms.filter(x=>x.id!==id);
   p.attrs=p.attrs.filter(a=>a.roomId!==id);
   focusRoomId=null; sel={roomId:null,wall:null,vertex:null};
+  if(etagenWahl===id) etagenWahl=null;
   save(); renderAll(); zoomFit();
 }
 
@@ -2967,6 +3187,28 @@ function fotoPanel(fotos, id, lvs){
     ${fotoStrip(fotos)}
     ${lvListHtml(lvs)}</div>`;
 }
+/* Farbwahl des Raums: zwei Reihen à 8 Felder — 15 Farben, unten rechts der
+   Bearbeiten-Knopf für die Teilfläche. Die aktive Farbe noch einmal antippen
+   nimmt sie wieder weg. */
+function farbReihen(r, ohneZone){
+  const feld=c=>`<button class="${r.farbe===c?'an':''}" data-farbe="${c}" style="background:${c}"
+    title="${r.farbe===c?'Farbe wieder entfernen':'Raum in dieser Farbe markieren'}"></button>`;
+  // Die Teilfläche braucht den großen Plan — in der Etagen-Anwahl gibt es nur die Farbe
+  const bearb=ohneZone
+    ? `<button class="farbedit" disabled title="Teilfläche nur in der Raumansicht">✎</button>`
+    : `<button class="farbedit${zoneEdit===r.id?' an':''}" id="rzone"
+        title="Nur einen Teil des Raums färben: Bereich mit Eckpunkten festlegen">✎</button>`;
+  return `<div class="row farbrow">${RAUM_FARBEN.slice(0,8).map(feld).join('')}</div>`+
+    `<div class="row farbrow">${RAUM_FARBEN.slice(8).map(feld).join('')}${bearb}</div>`+
+    (zoneEdit===r.id ? `<div class="row" style="margin-top:5px">
+      <button class="btn small" id="rzadd">＋ Ecke</button>
+      <button class="btn small danger" id="rzdel" ${sel.zoneH==null?'disabled title="Erst eine Ecke anklicken"':''}>Ecke löschen</button>
+      <button class="btn small" id="rzreset" title="Wieder den ganzen Raum färben">Ganzer Raum</button>
+      <button class="btn small primary" id="rzfertig">Fertig</button>
+    </div>
+    <p class="hint">Ecke antippen wählt sie aus, noch einmal anfassen zieht sie. „＋ Ecke" teilt die
+      längste Kante. Die Farbe endet immer an den Raumwänden.</p>` : '');
+}
 function renderSidebar(){
   const p=proj();
   const fr=focusRoomId?roomById(focusRoomId):null;
@@ -2974,6 +3216,26 @@ function renderSidebar(){
 
   if(!fr){
     /* ---------- Etagenansicht ---------- */
+    /* Anwahlmodus (Raum 2 s halten): der gewählte Raum lässt sich bearbeiten, ohne
+       hineinzuzoomen — deshalb ganz oben. Bewusst dieselben Felder wie in der
+       Raumansicht, nur ohne Objekte/Fotos: die brauchen den großen Plan. */
+    const wr=etagenWahl?roomById(etagenWahl):null;
+    if(wr){
+      html+=`<div class="panel"><h3>Raum angewählt — ${esc(wr.name)}</h3>
+        <div class="row"><label>Name</label><input type="text" id="rname" value="${esc(wr.name)}"></div>
+        <div class="row"><label>Raumhöhe (m)</label><input class="laser" id="rheight" value="${fmt(wr.height,2)}"></div>
+        <div class="row" style="margin-top:4px">
+          <button class="btn green small" id="rlv">＋ LV-Position</button>
+          <button class="btn small" id="rdup">Duplizieren</button>
+          <button class="btn danger small" id="rdel">Löschen</button>
+        </div>
+        ${farbReihen(wr, true)}
+        ${lvListHtml(p.attrs.filter(a=>a.roomId===wr.id && !a.objId && a.wall==null))}
+        <p class="hint" style="margin-top:8px">Anderen Raum antippen wechselt die Anwahl,
+          <b>${esc(wr.name)}</b> noch einmal antippen öffnet die Raumansicht,
+          ein Tipp neben die Räume beendet die Anwahl.</p>
+      </div>`;
+    }
     html+=`<div class="panel"><h3>Etage</h3>
       <div class="row">
         <select id="floorsel" style="flex:1">${p.floors.map(f=>`<option value="${f.id}" ${f.id===activeFloorId?'selected':''}>${esc(f.name)}</option>`).join('')}</select>
@@ -2997,6 +3259,14 @@ function renderSidebar(){
       <p class="hint" style="margin-top:6px">Raum anklicken = hineinzoomen und bearbeiten. Raum ziehen = auf der Etage verschieben.</p>
     </div>`;
 
+  } else if(zoneEdit===fr.id){
+    /* ---------- Sanierungsbereich festlegen: ausschließlicher Modus ----------
+       Es gibt nur dieses eine Panel — kein Zurück, kein Löschen, keine Objekte.
+       Raus geht es allein über „Fertig" oder „Ganzer Raum". */
+    html+=`<div class="panel"><h3>Sanierungsbereich — ${esc(fr.name)}</h3>
+      <p class="hint" style="margin-bottom:6px">Alles andere ist so lange gesperrt.
+        Schieben und Zoomen des Plans geht weiter.</p>
+      ${farbReihen(fr)}</div>`;
   } else {
     /* ---------- Raumansicht: je nach Fokus genau EIN Inhalt ---------- */
     const r=fr;
@@ -3048,15 +3318,24 @@ function renderSidebar(){
     } else if(selOp){
       /* Tür/Fenster im Fokus (sind Objekte) */
       const nrTxt=selOp.nr?` #${selOp.nr}`:'';
-      html+=`<div class="panel"><h3>${selOp.type==='door'?'🚪 Tür':'🪟 Fenster'}${nrTxt} — ausgewählt</h3>
+      html+=`<div class="panel"><h3>${selOp.type==='door'?'🚪 '+esc(tuerTyp(selOp).label):'🪟 '+esc(fenTyp(selOp).label)}${nrTxt} — ausgewählt</h3>
         <div class="row"><label>Breite (m)</label><input class="laser opfld" id="opwidth" data-op="${selOp.id}" data-f="width" value="${fmt(selOp.width,3)}"></div>
         <div class="row"><label>Höhe (m)</label><input class="laser opfld" data-op="${selOp.id}" data-f="height" value="${fmt(selOp.height,3)}"></div>
         <div class="row"><label>Abstand (m)</label><input class="laser opfld" data-op="${selOp.id}" data-f="offset" value="${fmt(selOp.offset,3)}"></div>
-        ${selOp.type==='window'?`<div class="row"><label>Brüstung (m)</label><input class="laser opfld" data-op="${selOp.id}" data-f="sill" value="${fmt(selOp.sill,3)}"></div>`:''}
+        ${selOp.type==='window'?`<div class="row"><label>Brüstung (m)</label><input class="laser opfld" data-op="${selOp.id}" data-f="sill" value="${fmt(selOp.sill,3)}"></div>
+        <div class="row tuerrow">${FEN_TYPEN.map(t=>
+          `<button data-fentyp="${t.id}" class="${(selOp.fenTyp||'einfach')===t.id?'an':''}"
+            title="${esc(t.label)}">${fenIcon(t)}</button>`).join('')}</div>`:''}
         ${selOp.type==='door'?`<div class="row">
           <button class="btn small ophinge" data-op="${selOp.id}" title="Angelpunkt ans andere Ende">Anschlag ⇄</button>
           <button class="btn small opswing" data-op="${selOp.id}" title="Öffnet zur anderen Seite">Aufschlag ⇅</button>
-        </div>`:''}
+        </div>
+        <div class="row tuerrow">${TUER_TYPEN.slice(0,4).map(t=>
+          `<button data-tuertyp="${t.id}" class="${(selOp.tuerTyp||'tuer')===t.id?'an':''}"
+            title="${esc(t.label)}">${tuerIcon(t)}</button>`).join('')}</div>
+        <div class="row tuerrow">${TUER_TYPEN.slice(4).map(t=>
+          `<button data-tuertyp="${t.id}" class="${(selOp.tuerTyp||'tuer')===t.id?'an':''}"
+            title="${esc(t.label)}">${tuerIcon(t)}</button>`).join('')}<span style="flex:1 1 0"></span></div>`:''}
         <div class="row">
           <button class="btn green small" id="objlv">＋ LV-Position</button>
           <button class="btn small" id="opdup">Duplizieren</button>
@@ -3116,6 +3395,7 @@ function renderSidebar(){
           <button class="btn small" id="rdup">Duplizieren</button>
           <button class="btn danger small" id="rdel">Löschen</button>
         </div>
+        ${farbReihen(r)}
         <details id="rstats"${statsOpen?' open':''}><summary class="hint" style="cursor:pointer">Statistik anzeigen</summary>
           <div class="stat"><span>Bodenfläche</span><b>${fmt(st.area,3)} m²</b></div>
           <div class="stat"><span>Umfang</span><b>${fmt(st.per,3)} m</b></div>
@@ -3150,7 +3430,8 @@ function renderSidebar(){
   }
 
   $('#sidebar').innerHTML=html;
-  wireSidebar(fr);
+  // In der Etagen-Anwahl gelten dieselben Raum-Handler wie in der Raumansicht
+  wireSidebar(fr || (etagenWahl?roomById(etagenWahl):null));
 }
 
 function wireSidebar(r){
@@ -3265,16 +3546,58 @@ function wireSidebar(r){
     on('#rheight','onchange',e=>{ const v=parseNum(e.target.value); if(isFinite(v)&&v>0){r.height=v; lastHeight=v; save(); renderAll();} });
     on('#rlv','onclick',()=>openLvDialog(null, r.id));
     on('#rdel','onclick',()=>deleteRoom(r.id));
+    /* ---- Raumfarbe ---- */
+    document.querySelectorAll('[data-farbe]').forEach(b=>{
+      b.onclick=()=>{
+        const c=b.dataset.farbe;
+        if(r.farbe===c){                        // dieselbe Farbe noch einmal = wieder entfernen
+          delete r.farbe; delete r.farbZone;
+          if(zoneEdit===r.id){ zoneEdit=null; sel.zoneH=null; }
+        } else r.farbe=c;
+        save(); renderAll();
+      };
+    });
+    on('#rzone','onclick',()=>{
+      if(zoneEdit===r.id){ zoneEdit=null; sel.zoneH=null; save(); renderAll(); return; }
+      if(!r.farbe){ melde('Erst eine Farbe wählen, dann den Bereich festlegen.', true); return; }
+      if(!r.farbZone || r.farbZone.length<3) r.farbZone=zoneStandard(r);
+      // nichts anderes darf ausgewählt bleiben — im Modus kommt man da nicht mehr heran
+      zoneEdit=r.id;
+      sel={roomId:r.id, wall:null, vertex:null, zoneH:null};
+      save(); renderAll();
+    });
+    on('#rzfertig','onclick',()=>{ zoneEdit=null; sel.zoneH=null; renderAll(); });
+    on('#rzreset','onclick',()=>{                // Teilfläche verwerfen: wieder der ganze Raum
+      delete r.farbZone; zoneEdit=null; sel.zoneH=null; save(); renderAll();
+    });
+    on('#rzadd','onclick',()=>{                  // neue Ecke in der Mitte der längsten Kante
+      const z=r.farbZone; if(!z || z.length<3) return;
+      let best=-1, bi=0;
+      z.forEach((a,i)=>{ const b2=z[(i+1)%z.length], L=dist(a,b2); if(L>best){ best=L; bi=i; } });
+      const a=z[bi], b2=z[(bi+1)%z.length];
+      z.splice(bi+1, 0, {x:mm((a.x+b2.x)/2), y:mm((a.y+b2.y)/2)});
+      sel.zoneH=bi+1; save(); renderAll();
+    });
+    on('#rzdel','onclick',()=>{
+      const z=r.farbZone;
+      if(!z || sel.zoneH==null) return;
+      if(z.length<=3){ alert('Ein Bereich braucht mindestens drei Ecken.'); return; }
+      z.splice(sel.zoneH,1); sel.zoneH=null; save(); renderAll();
+    });
     on('#rdup','onclick',()=>{
       const bb=bboxOf(r.points);
       const nr={...JSON.parse(JSON.stringify(r)), id:uid(), name:r.name+' (Kopie)'};
       const sx=(bb.maxx-bb.minx)+0.5;
       nr.points=nr.points.map(p=>({x:p.x+sx, y:p.y}));
+      if(nr.farbZone) nr.farbZone=nr.farbZone.map(p=>({x:p.x+sx, y:p.y}));   // Farbe wandert mit
       // Kopie erbt keine Tür-Verknüpfungen und keine Objektnummern (LV-Bezug bleibt beim Original)
       nr.openings.forEach(o=>{ o.id=uid(); delete o.link; delete o.nr; });
       (nr.objects||[]).forEach(g=>{ g.id=uid(); delete g.nr;
         if(g.points){ g.points.forEach(pt=>pt.x+=sx); } else { g.x+=sx; } });
-      proj().rooms.push(nr); save(); focusRoom(nr.id);
+      proj().rooms.push(nr); save();
+      // Aus der Etagen-Anwahl heraus nicht hineinzoomen — die Kopie einfach anwählen
+      if(etagenWahl){ etagenWahl=nr.id; sel={roomId:nr.id, wall:null, vertex:null}; renderAll(); return; }
+      focusRoom(nr.id);
     });
     on('#rstats','ontoggle',e=>{ statsOpen=e.target.open; });
     wireFotos('rfoto', r, 'fotos');                       // Fotos am Raum
@@ -3447,6 +3770,21 @@ function wireSidebar(r){
     const selOp = sel.openId ? (r.openings||[]).find(o=>o.id===sel.openId) : null;
     if(selOp){
       wireFotos('opfoto', selOp, 'fotos');                // Fotos an Tür/Fenster
+      document.querySelectorAll('[data-fentyp]').forEach(b=>{    // Fenstertyp (Flügelzahl)
+        b.onclick=()=>{
+          const v=b.dataset.fentyp;
+          if(v==='einfach') delete selOp.fenTyp; else selOp.fenTyp=v;
+          save(); renderAll();
+        };
+      });
+      document.querySelectorAll('[data-tuertyp]').forEach(b=>{   // Türtyp — Partner-Tür zieht mit
+        b.onclick=()=>{
+          const v=b.dataset.tuertyp;
+          if(v==='tuer') delete selOp.tuerTyp; else selOp.tuerTyp=v;
+          pushDoorToPartner(r, selOp);
+          save(); renderAll();
+        };
+      });
       on('#objlv','onclick',()=>openLvDialog(null, r.id, selOp.id));
       on('#opdup','onclick',()=>{
         const c={...selOp, id:uid()}; delete c.link; delete c.nr;
@@ -6275,6 +6613,9 @@ function planSvg(rooms, opts){
     const boden=hl?'#fdecec':(raumAktiv(r)?'#fff':'#f1f1f1');
     out+=`<path d="${d}" fill="${boden}" stroke="${hl?'#d64545':(opts.mini?'#9aa1ad':'#000')}"`+
       ` stroke-width="${hl?w/240:(opts.mini?w/500:0.02)}" stroke-linejoin="miter"/>`;
+    // Sanierungsbereich mitdrucken — in der Mini-Etage blasser, sonst überdeckt er den Grundriss.
+    // Eigener clipPath-Suffix, weil Mini- und Großplan auf derselben Seite stehen.
+    out+=raumFarbeSvg(r, {op:opts.mini?0.22:0.28, suffix:opts.mini?'m':'p'});
   });
   if(!opts.mini) out+=wandLage(rooms, opts.grau
     ? {fuell:'#d9d9d9', linie:'#a9a9a9', sw:Math.max(0.02, w/700)}
@@ -6835,8 +7176,11 @@ function renderAll(){
 }
 function renderCrumb(){
   const fr=focusRoomId?roomById(focusRoomId):null;
+  // Im Farbzonen-Modus führt auch die Brotkrume nicht aus dem Raum heraus
   $('#crumb').innerHTML = fr
-    ? `<button id="crumbback" title="Zurück zur Etagenansicht (Esc)">← ${esc(floorName(fr.floorId))}</button><span>▸</span><b>${esc(fr.name)}</b>`
+    ? (zoneEdit===fr.id
+        ? `<b>${esc(fr.name)}</b><span>▸</span><span>Sanierungsbereich festlegen</span>`
+        : `<button id="crumbback" title="Zurück zur Etagenansicht (Esc)">← ${esc(floorName(fr.floorId))}</button><span>▸</span><b>${esc(fr.name)}</b>`)
     : `<span>Etage: <b>${esc(floorName(activeFloorId))}</b></span>`;
   const bb=$('#crumbback'); if(bb) bb.onclick=exitRoom;
 }
