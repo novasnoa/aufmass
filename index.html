@@ -110,12 +110,21 @@
   .sugbox .it .num{white-space:nowrap; flex:0 0 auto; font-variant-numeric:tabular-nums;}
   .sugbox .it .txt{white-space:normal; overflow-wrap:anywhere; min-width:0;}
   .sugbox .empty{padding:6px 9px; font-size:12px; color:var(--muted);}
-  /* Langtext-Einblendung beim Verweilen auf einem Vorschlag */
-  #lvtip{position:fixed; z-index:60; display:none; max-width:min(430px,62vw); max-height:52vh; overflow:hidden;
+  /* Langtext antippen (Touch) — am Rechner geht weiterhin auch Verweilen */
+  .sugbox .it .lvinfo{flex:0 0 auto; align-self:center; width:26px; height:26px; padding:0; line-height:1;
+    border:1px solid var(--line); border-radius:50%; background:#fff; color:var(--accent);
+    font-size:13px; font-weight:700; cursor:pointer;}
+  .sugbox .it .lvinfo.an{background:var(--accent); color:#fff; border-color:var(--accent);}
+  /* Langtext-Einblendung */
+  #lvtip{position:fixed; z-index:60; display:none; max-width:min(430px,62vw); max-height:52vh; overflow:auto;
     background:#1c2330; color:#fff; border-radius:9px; padding:9px 11px; font-size:12px; line-height:1.5;
-    white-space:pre-wrap; box-shadow:0 10px 30px rgba(0,0,0,.35); pointer-events:none;}
+    white-space:pre-wrap; box-shadow:0 10px 30px rgba(0,0,0,.35); cursor:pointer;
+    -webkit-overflow-scrolling:touch;}
   #lvtip.on{display:block;}
   #lvtip b{display:block; margin-bottom:4px; color:#8fe3bd; font-variant-numeric:tabular-nums;}
+  #lvtip i{display:block; margin-top:6px; color:#9aa6bb; font-size:11px; font-style:normal;}
+  /* Auf Touch-Geräten ist die Liste schmaler — dort darf der Kasten fast voll breit werden */
+  @media (hover:none){ #lvtip{max-width:min(430px,88vw);} }
   /* Fotos an einer LV-Position */
   .fotos{display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;}
   .fotos .fw{position:relative; width:74px; height:74px; border-radius:8px; overflow:hidden;
@@ -491,12 +500,18 @@
   <div class="dbody">
     <div class="panel" id="clAktuell" style="margin-bottom:10px"></div>
     <div id="clAktionen"></div>
-    <div class="row"><label>Baustelle</label><input id="clFilter" type="text" placeholder="suchen …"></div>
+    <div class="row"><label>Suchen</label><input id="clFilter" type="text" placeholder="Baustelle suchen …"></div>
+    <div class="row" id="clStatusFilter" style="gap:6px; flex-wrap:wrap"></div>
     <p class="hint" id="clStatus" style="white-space:pre-line"></p>
+    <div id="clAufmasse"></div>
     <div id="clList"></div>
-    <p class="hint" style="margin-top:10px">Ein Aufmaß gehört zu genau einer Baustelle. Die Auswahl setzt nur die
-      Verbindung (samt Adresse und Zeitraum fürs Deckblatt) — gesichert, geladen und LV-Positionen geholt wird
-      erst mit den Knöpfen darüber. Zugangsdaten stehen unter <b>⚙ Einstellungen</b>.</p>
+    <p class="hint" style="margin-top:10px"><b>Gespeicherte Aufmaße</b> lädt direkt — das aktuelle wird dabei
+      ersetzt (mit Rückfrage, falls dort Ungesichertes liegt) und die Baustelle gleich mit verbunden.
+      <b>Alle Baustellen</b> ist zum <i>Verbinden</i> eines neuen Aufmaßes: das setzt nur die Zuordnung samt
+      Adresse und Zeitraum fürs Deckblatt, geladen wird dabei nichts.
+      Die <b>Status-Knöpfe</b> gelten für beide Listen und merken sich die Auswahl;
+      Einträge mit anderem Status (Lagerorte, Fahrzeuge, Krank/Urlaub …) erscheinen gar nicht erst.
+      Zugangsdaten stehen unter <b>⚙ Einstellungen</b>.</p>
   </div>
   <div class="dfoot"><button class="btn" data-close>Schließen</button></div>
 </dialog>
@@ -4312,20 +4327,39 @@ function lvPairs(alle){
     .filter(x=>alle || !hid[x.lv])            // ausgeblendete Positionen nicht vorschlagen
     .sort((a,b)=>lvCmp(a.lv,b.lv));
 }
-/* Langtext einblenden, wenn der Zeiger auf einem Vorschlag stehen bleibt */
-let lvTipTimer=null;
-function lvTipHide(){ clearTimeout(lvTipTimer); const el=$('#lvtip'); if(el) el.classList.remove('on'); }
-function lvTipShow(anchor, it){
-  const txt=(proj().lvLong||{})[it.lv];
+/* ---------- Langtext zu einem Vorschlag ----------
+   Am Rechner blendet ihn das Verweilen auf einer Zeile ein. Auf dem iPad gibt es kein
+   Verweilen — ein Tipp wählt die Zeile sofort aus. Deshalb hat jede Zeile MIT Langtext
+   zusätzlich einen ℹ-Knopf, der ihn ein- und ausschaltet. */
+let lvTipTimer=null, lvTipLv=null;
+const lvLangtext = lv => (proj().lvLong||{})[lv] || '';
+function lvTipHide(){
+  clearTimeout(lvTipTimer); lvTipLv=null;
+  const el=$('#lvtip'); if(el) el.classList.remove('on');
+  document.querySelectorAll('.lvinfo.an').forEach(b=>b.classList.remove('an'));
+}
+function lvTipShow(anchor, it, fest){
+  const txt=lvLangtext(it.lv);
   if(!txt) return;
   const el=$('#lvtip');
-  el.innerHTML=`<b>${esc(it.lv)}${it.kurz?' · '+esc(it.kurz):''}</b>${esc(txt)}`;
+  el.innerHTML=`<b>${esc(it.lv)}${it.kurz?' · '+esc(it.kurz):''}</b>${esc(txt)}`+
+    (fest?'<i>Zum Schließen antippen</i>':'');
   el.classList.add('on');
+  lvTipLv=fest?it.lv:null;
   const r=anchor.getBoundingClientRect(), w=el.offsetWidth, h=el.offsetHeight;
-  let x=r.right+12; if(x+w>innerWidth-8) x=Math.max(8, r.left-w-12);
-  let y=Math.min(r.top, innerHeight-h-8);
+  // Neben die Zeile, wenn Platz ist — sonst darüber oder darunter (schmale Geräte)
+  let x=r.right+12, y=Math.min(r.top, innerHeight-h-8);
+  if(x+w>innerWidth-8){
+    x=r.left-w-12;
+    if(x<8){                                   // passt seitlich gar nicht: über/unter die Zeile
+      x=Math.max(8, Math.min(r.left, innerWidth-w-8));
+      y = r.top>h+16 ? r.top-h-8 : Math.min(r.bottom+8, innerHeight-h-8);
+    }
+  }
   el.style.left=Math.max(8,x)+'px'; el.style.top=Math.max(8,y)+'px';
 }
+// Tipp auf den Kasten schließt ihn (Touch); am Rechner stört es nicht
+$('#lvtip').addEventListener('mousedown', e=>{ e.preventDefault(); lvTipHide(); });
 /* Eigene Vorschlagsliste (statt datalist) — Filterart je Feld frei wählbar */
 function makeSuggest(inp, box, match, row, onInput){
   let items=[], idx=-1;
@@ -4336,15 +4370,32 @@ function makeSuggest(inp, box, match, row, onInput){
       const r=row(it);
       return `<div class="it${i===idx?' sel':''}" data-i="${i}">`+
         `<b class="${r.num==='a'?'num':'txt'}">${esc(r.a)}</b>`+
-        `<span class="${r.num==='b'?'num':'txt'}">${esc(r.b)}</span></div>`;
+        `<span class="${r.num==='b'?'num':'txt'}">${esc(r.b)}</span>`+
+        // nur wo es etwas zu lesen gibt
+        (lvLangtext(it.lv)?`<button type="button" class="lvinfo" data-info="${i}"
+          title="Langtext anzeigen">ℹ</button>`:'')+
+        `</div>`;
     }).join('');
     box.classList.add('on');
     box.querySelectorAll('[data-i]').forEach(el=>{
       // mousedown statt click: sonst schließt der blur die Liste vor der Auswahl
       el.onmousedown=e=>{ e.preventDefault(); choose(items[+el.dataset.i]); };
-      // Verweilen ohne Klick blendet den Langtext ein
-      el.onmouseenter=()=>{ lvTipHide(); lvTipTimer=setTimeout(()=>lvTipShow(el, items[+el.dataset.i]), 550); };
-      el.onmouseleave=lvTipHide;
+      // Verweilen ohne Klick blendet den Langtext ein (nur Zeigergeräte)
+      el.onmouseenter=()=>{
+        if(lvTipLv) return;                       // festgepinnter Langtext bleibt stehen
+        lvTipHide(); lvTipTimer=setTimeout(()=>lvTipShow(el, items[+el.dataset.i]), 550);
+      };
+      el.onmouseleave=()=>{ if(!lvTipLv) lvTipHide(); };
+    });
+    // ℹ schaltet den Langtext fest ein/aus — ohne die Zeile auszuwählen.
+    // preventDefault hält den Fokus im Eingabefeld, sonst schlösse blur die Liste.
+    box.querySelectorAll('[data-info]').forEach(b=>{
+      b.onmousedown=e=>{
+        e.preventDefault(); e.stopPropagation();
+        const it=items[+b.dataset.info], warAn=lvTipLv===it.lv;
+        lvTipHide();
+        if(!warAn){ lvTipShow(b.closest('.it'), it, true); b.classList.add('an'); }
+      };
     });
   };
   const choose=it=>{
@@ -5092,7 +5143,20 @@ const AT_T_SITES='Baustellen', AT_T_LV='LVs';    // Tabellennamen
 /* Stammdaten der Baustelle, die auf dem Deckblatt landen. „Beginn"/„Ende" sind
    Rollups über die Arbeitsschichten (die wirklich gearbeitete Zeit); sind sie leer,
    nehmen wir ersatzweise die geplanten Termine „Start"/„End". */
-const AT_F_SITE=['Title','Ort','Beginn','Ende','Start','End'];
+const AT_F_SITE=['Title','Ort','Beginn','Ende','Start','End','Status'];
+/* Nur diese Status sind Bauvorhaben — alles andere in „Baustellen" (Lagerorte, LKW,
+   Krank/Urlaub, Heizkörper) ist für ein Aufmaß bedeutungslos und wird beim Einlesen
+   gleich verworfen. Reihenfolge = Reihenfolge der Filterknöpfe. */
+const CL_STATUS=['Baustelle','Wohnung','Beendet'];
+const CL_STATUS_KEY='grundriss-cl-status';
+// Vorauswahl: die laufenden Vorhaben; „Beendet" (mit Abstand die meisten) auf Wunsch
+let clStatusAn=(()=>{
+  try{
+    const g=JSON.parse(localStorage.getItem(CL_STATUS_KEY)||'null');
+    if(Array.isArray(g) && g.length) return g.filter(x=>CL_STATUS.includes(x));
+  }catch(e){}
+  return ['Baustelle','Wohnung'];
+})();
 
 /* Zugangsdaten liegen an EINER Stelle (Dialog „⚙ Einstellungen"). Ist „merken" aus,
    lebt der Token nur in dieser Sitzung — der localStorage bleibt dann leer. */
@@ -5416,13 +5480,18 @@ async function clLadeBaustellen(){
     const recs=await atAll(atBase(), AT_T_SITES, atToken(),
       AT_F_SITE.concat([AT_F_JSON, AT_F_FOTOS, AT_F_PLAENE]),
       n=>clStatus(`Lade Baustellen … ${n}`));
-    clSites=recs.map(r=>{
+    const roh=recs.map(r=>{
       const f=r.fields||{};
-      return Object.assign(atSiteInfo(r), {
+      return Object.assign(atSiteInfo(r), {status:atWert(f.Status),
         json:(f[AT_F_JSON]||[])[0]||null, fotos:f[AT_F_FOTOS]||[], plaene:f[AT_F_PLAENE]||[]});
-    }).sort((a,b)=>a.name.localeCompare(b.name,'de'));
+    });
+    // Lagerorte, Fahrzeuge, Krank/Urlaub … kommen gar nicht erst in die Liste
+    clSites=roh.filter(s=>CL_STATUS.includes(s.status))
+               .sort((a,b)=>a.name.localeCompare(b.name,'de'));
     const mit=clSites.filter(s=>s.json).length;
-    clStatus(`${clSites.length} Baustellen — ${mit} mit gespeichertem Aufmaß.`);
+    const weg=roh.length-clSites.length;
+    clStatus(`${clSites.length} Bauvorhaben — ${mit} mit gespeichertem Aufmaß.`+
+      (weg?` (${weg} andere Einträge ausgeblendet)`:''));
   }catch(err){
     clSites=null;
     clStatus(clFehler(err), true);
@@ -5431,29 +5500,103 @@ async function clLadeBaustellen(){
 // Die gebundene Baustelle mit dem Stand aus der geladenen Liste (Aufmaß, Fotos, Pläne)
 function clGebunden(){
   const b=proj().baustelle; if(!b) return null;
-  return (clSites||[]).find(s=>s.id===b.id) || {id:b.id, name:b.name, json:null, fotos:[], plaene:[]};
+  // `unbekannt` unterscheidet „Liste noch nicht geladen" von „dort liegt kein Aufmaß" —
+  // ohne das wäre der Laden-Knopf gesperrt, solange die Liste unterwegs ist
+  return (clSites||[]).find(s=>s.id===b.id)
+    || {id:b.id, name:b.name, json:null, fotos:[], plaene:[], unbekannt:!clSites};
+}
+/* Stand EINER Baustelle frisch holen — nötig, wenn der Nutzer laden will, bevor
+   (oder ohne dass) die ganze Liste da ist. */
+async function clSiteHolen(id){
+  const j=await atFetch(`${atBase()}/${encodeURIComponent(AT_T_SITES)}/${id}`, atToken());
+  const f=j.fields||{};
+  return Object.assign(atSiteInfo(j), {status:atWert(f.Status),
+    json:(f[AT_F_JSON]||[])[0]||null, fotos:f[AT_F_FOTOS]||[], plaene:f[AT_F_PLAENE]||[]});
 }
 // Speicherdatum steckt im Dateinamen (aufmass-2026-07-31.json) — dann muss die Liste nichts laden
 function clStand(s){
   const m=/(\d{4})-(\d{2})-(\d{2})/.exec((s.json&&s.json.filename)||'');
   return m?`${m[3]}.${m[2]}.${m[1]}`:'';
 }
+// Suchtext für beide Listen
+function clFilterText(){ return (($('#clFilter')||{}).value||'').trim().toLowerCase(); }
+/* Gemeinsamer Filter beider Listen: Suchtext UND Status-Knöpfe. Ohne angehakten
+   Status wäre alles leer — dann gilt „keine Einschränkung", das ist weniger irritierend
+   als eine leere Liste. */
+function clPasst(s){
+  const f=clFilterText();
+  if(f && !s.name.toLowerCase().includes(f)) return false;
+  if(!clStatusAn.length) return true;
+  return clStatusAn.includes(s.status);
+}
+function renderClStatusFilter(){
+  const el=$('#clStatusFilter'); if(!el) return;
+  const zahl={};
+  (clSites||[]).forEach(s=>{ zahl[s.status]=(zahl[s.status]||0)+1; });
+  el.innerHTML=CL_STATUS.map(st=>{
+    const an=clStatusAn.includes(st);
+    return `<button class="btn small${an?' active':''}" data-clstatus="${st}"
+      title="Baustellen mit Status „${st}" ${an?'ausblenden':'einblenden'}">${
+      an?'☑':'☐'} ${st}${clSites?` (${zahl[st]||0})`:''}</button>`;
+  }).join('');
+  el.querySelectorAll('[data-clstatus]').forEach(b=>{
+    b.onclick=()=>{
+      const st=b.dataset.clstatus;
+      clStatusAn = clStatusAn.includes(st) ? clStatusAn.filter(x=>x!==st) : clStatusAn.concat([st]);
+      try{ localStorage.setItem(CL_STATUS_KEY, JSON.stringify(clStatusAn)); }catch(e){}
+      renderClList();
+    };
+  });
+}
+/* Liste der Baustellen, bei denen ein Aufmaß liegt — ein Klick LÄDT es direkt.
+   Bewusst getrennt vom Verbinden: „ich will das Aufmaß von Baustelle X öffnen" ist der
+   häufigste Fall, und der Umweg über „Verbinden" hängt das AKTUELLE Aufmaß erst an die
+   fremde Baustelle — verwirrend und im schlimmsten Fall gefährlich (falsch beschriftet
+   gesichert). Beim Laden setzt `cloudLaden` die Bindung ohnehin selbst. */
+function renderClAufmasse(){
+  const el=$('#clAufmasse'); if(!el) return;
+  if(!clSites){ el.innerHTML=''; return; }
+  const liste=clSites.filter(s=>s.json && clPasst(s));
+  if(!liste.length){ el.innerHTML=''; return; }
+  const b=proj().baustelle;
+  el.innerHTML=`<h3 style="margin:10px 0 0">Gespeicherte Aufmaße (${liste.length})</h3>
+    <div class="panel" style="margin-top:6px; max-height:220px; overflow:auto">
+    ${liste.map(s=>{
+      const stand=clStand(s);
+      const aktiv=b && b.id===s.id;
+      return `<div class="stat" style="align-items:center">
+        <span>${aktiv?'✅ ':''}${esc(s.name)}
+          <span class="hint">· ${stand?'vom '+stand:'gespeichert'} · ${s.fotos.length} Foto(s)</span></span>
+        <button class="btn small primary" data-clopen="${s.id}" ${clBusy?'disabled':''}
+          title="Lädt dieses Aufmaß und ersetzt das aktuelle">📥 Laden</button>
+      </div>`;
+    }).join('')}
+    </div>`;
+  el.querySelectorAll('[data-clopen]').forEach(btn=>{
+    btn.onclick=()=>{
+      const s=clSites.find(x=>x.id===btn.dataset.clopen);
+      if(s) cloudLaden(s);
+    };
+  });
+}
 /* Liste aller Baustellen — ein Klick verbindet das Aufmaß mit ihr. Was danach möglich
    ist (sichern, laden, LV holen), steht im Aktionsfeld darüber. */
 function renderClList(){
+  renderClStatusFilter();             // Filterleiste und beide Listen gemeinsam auffrischen
+  renderClAufmasse();
   const el=$('#clList'); if(!el) return;
   if(!clSites){ el.innerHTML=''; return; }
-  const f=($('#clFilter').value||'').trim().toLowerCase();
-  const liste=clSites.filter(s=>!f || s.name.toLowerCase().includes(f));
+  const liste=clSites.filter(clPasst);
   if(!liste.length){ el.innerHTML='<p class="hint" style="margin-top:8px">Keine Baustelle gefunden.</p>'; return; }
   const b=proj().baustelle;
-  el.innerHTML=`<div class="panel" style="margin-top:8px;max-height:260px;overflow:auto">
+  el.innerHTML=`<h3 style="margin:10px 0 0">Alle Baustellen (${liste.length})</h3>
+    <div class="panel" style="margin-top:6px;max-height:260px;overflow:auto">
     ${liste.map(s=>{
       const stand=clStand(s);
       const info=s.json ? `Aufmaß${stand?' vom '+stand:''} · ${s.fotos.length} Foto(s)` : 'noch kein Aufmaß';
       const aktiv=b && b.id===s.id;
       return `<div class="stat" style="align-items:center">
-        <span>${aktiv?'✅ ':''}${esc(s.name)} <span class="hint">· ${info}</span></span>
+        <span>${aktiv?'✅ ':''}${esc(s.name)} <span class="hint">· ${esc(s.status)} · ${info}</span></span>
         <button class="btn small ${aktiv?'':'primary'}" data-clrec="${s.id}" ${clBusy||aktiv?'disabled':''}>${
           aktiv?'verbunden':'Verbinden'}</button>
       </div>`;
@@ -5465,6 +5608,13 @@ function renderClList(){
       if(!s) return;
       // Verbinden ändert nur die Zuordnung (Name, Adresse, Zeitraum) — nichts wird
       // überschrieben oder hochgeladen. Eine andere Baustelle wählen macht es rückgängig.
+      // ABER: hängt das Aufmaß schon woanders und ist ungesichert, trüge es danach den
+      // falschen Namen — und „Erst in … sichern" lüde es zur FREMDEN Baustelle hoch.
+      const alt=proj().baustelle;
+      if(alt && alt.id!==s.id && istGeaendert() && (proj().rooms.length || (proj().attrs||[]).length)
+        && !confirm(`Das aktuelle Aufmaß hängt an „${alt.name}" und hat ungesicherte Änderungen.\n\n`+
+          `Umhängen auf „${s.name}"? Zum ÖFFNEN des dortigen Aufmaßes brauchst du das nicht — `+
+          `dafür oben in „Gespeicherte Aufmaße" auf „Laden" tippen.`)) return;
       ohneUndo(()=>{ baustelleUebernehmen(proj(), s); save(); });
       clStatus(`Mit „${s.name}" verbunden.`);
       renderAll(); renderClList(); renderClAktuell(); renderClAktionen();
@@ -5481,8 +5631,10 @@ function renderClAktionen(){
   el.innerHTML=`<div class="panel" style="margin-bottom:10px">
     <div class="row" style="flex-wrap:wrap; gap:6px">
       <button class="btn small primary" id="clSave" ${clBusy?'disabled':''}>📤 Aufmaß sichern</button>
-      <button class="btn small" id="clLoad" ${clBusy||!s.json?'disabled':''}
-        title="${s.json?'Ersetzt das aktuelle Aufmaß':'An dieser Baustelle liegt noch kein Aufmaß'}"
+      <button class="btn small" id="clLoad" ${clBusy||(!s.json&&!s.unbekannt)?'disabled':''}
+        title="${s.json?'Ersetzt das aktuelle Aufmaß'
+          :(s.unbekannt?'Holt den Stand dieser Baustelle und ersetzt das aktuelle Aufmaß'
+                       :'An dieser Baustelle liegt noch kein Aufmaß')}"
         >📥 Aufmaß laden${s.json&&stand?` (${stand})`:''}</button>
       <button class="btn small" id="clLv" ${clBusy?'disabled':''}
         title="Holt die LV-Positionen dieser Baustelle: neue kommen dazu, bestehende werden aufgefrischt. Die Zuordnungen im Aufmaß bleiben unberührt.">📋 LV-Positionen holen</button>
@@ -5634,7 +5786,20 @@ async function cloudSpeichern(s, ohneRueckfrage){
 
 /* Laden: Projektdatei holen, Fotos anhand der ID im Dateinamen wieder einhängen */
 async function cloudLaden(s, ohneRueckfrage){
-  if(clBusy || !s.json) return;
+  if(clBusy) return;
+  // Stand noch unbekannt (Liste nicht geladen): erst den einen Datensatz holen
+  if(!s.json && s.unbekannt){
+    if(!atToken()){ clStatus('Kein Zugriffstoken hinterlegt — bitte unter „⚙ Einstellungen" eintragen.', true); return; }
+    clBusy=true; renderClAktionen(); clStatus('Frage den Stand der Baustelle ab …');
+    let frisch=null;
+    try{ frisch=await clSiteHolen(s.id); }
+    catch(err){ clStatus(clFehler(err), true); }
+    finally{ clBusy=false; renderClAktionen(); }
+    if(!frisch) return;
+    if(!frisch.json){ clStatus(`Bei „${frisch.name}" liegt kein gespeichertes Aufmaß.`, true); return; }
+    return cloudLaden(frisch, ohneRueckfrage);
+  }
+  if(!s.json) return;
   // Das geladene Aufmaß ersetzt das aktuelle — vorher fragen, wenn dort etwas Ungesichertes liegt.
   // Die Antwort führt cloudLaden erneut aus, dann ohne Rückfrage (sonst dreht es sich im Kreis).
   const akt=proj();
