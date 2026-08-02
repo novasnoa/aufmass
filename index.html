@@ -483,6 +483,16 @@
         Gerät auslösen; der Wert springt direkt hinein.</p>
       <details><summary class="hint" style="cursor:pointer">Protokoll-Log</summary><div id="btlog"></div></details>
     </fieldset>
+    <fieldset><legend>Bauvorhaben (Deckblatt)</legend>
+      <div class="row"><label>Gebäude</label><input id="setGebaeude" type="text" placeholder="z. B. Haus 2"></div>
+      <div class="row"><label>Bereich</label><input id="setBereich" type="text" placeholder="z. B. Treppenhaus West"></div>
+      <div class="row"><label>Art des Bauvorhabens</label><input id="setArt" type="text" placeholder="z. B. Asbestsanierung"></div>
+      <p class="hint" id="setDeckInfo"></p>
+      <p class="hint">Die drei Angaben stehen im Deckblatt unter „Bauvorhaben“ und gehören zum
+        <b>Aufmaß</b> — sie wandern also mit nach Airtable. <b>Adresse</b> und <b>Zeitraum</b>
+        kommen von der verbundenen Baustelle, <b>Stockwerk</b> aus den Etagen mit Räumen und
+        <b>Abschlag Nr.</b> aus der Druckauswahl; die musst du hier nicht eintragen.</p>
+    </fieldset>
     <fieldset><legend>Abrechnung</legend>
       <div class="row"><label>Laufender Abschlag</label>
         <input id="setAbschlag" type="number" min="1" step="1" style="width:70px; flex:0 0 auto">
@@ -562,6 +572,16 @@
   <div class="dfoot"><button class="btn" data-close>Schließen</button></div>
 </dialog>
 
+<!-- 360°-Aufnahme: Zuordnung bestätigen -->
+<dialog id="dlg360" style="width:min(760px,94vw)">
+  <div class="dhead">360°-Aufnahme zuordnen <button data-close>✕</button></div>
+  <div class="dbody" id="p360Body"></div>
+  <div class="dfoot">
+    <button class="btn" data-close>Abbrechen</button>
+    <button class="btn primary" id="p360ok">Übernehmen</button>
+  </div>
+</dialog>
+
 <!-- Hilfe -->
 <dialog id="dlgHelp">
   <div class="dhead">Hilfe <button data-close>✕</button></div>
@@ -595,6 +615,7 @@
       <li><b>Ecken ziehen:</b> Beim ausgewählten Raum die Eckpunkte anfassen und ziehen — sie lassen sich stufenlos (millimetergenau) setzen und richten sich an den Nachbarecken rechtwinklig aus.</li>
       <li><b>Winkelkontrolle:</b> Ecken, die <b>keinen rechten Winkel</b> bilden, werden mit einem <b>roten Viertelkreis</b> und der Gradzahl markiert.</li>
       <li><b>Objekte:</b> In der Raumansicht unter „Objekte“ <b>▭ Fläche</b> oder <b>╱ Linie</b> wählen und im Raum aufziehen (z. B. Podest, Belagsfläche, Sockelleiste). Objekte sind anwählbar, verschiebbar und über Griffe oder Maßeingabe/Laser anpassbar; sie wandern beim Verschieben des Raums mit.</li>
+      <li><b>📷 360°-Aufnahme:</b> Unter „Objekte“ den Knopf wählen und den Standort im Raum anklicken — es erscheint ein Kreis mit <b>Blickkegel</b>. Die <b>Blickrichtung</b> (Schieber oder Gradzahl im Panel) muss zeigen, wohin die <b>Vorderseite der Kamera</b> gerichtet war; 0° ist oben im Plan. Dann <b>„🖼️ 360°-Bild einlesen“</b>: Die App zerlegt die Kugelaufnahme in <b>sechs Einzelbilder</b> — vier Seitenansichten, Decke und Boden — und schlägt für jede Seitenansicht die Wand vor, auf die sie schaut. Im Dialog lässt sich jedes Bild <b>umhängen oder weglassen</b>, bevor es übernommen wird. Danach sind es ganz normale Wand- und Raumfotos: im Bericht, im Backup und in Airtable.</li>
       <li><b>Sanierungs-Symbole:</b> Unter „Objekte“ stehen <b>1-K</b>, <b>2-K</b>, <b>4-K</b> (Kammer-Schleusen, dargestellt als Rechteck mit Kammerteilung) und <b>RFA</b> bereit — Button wählen, dann Position im Raum anklicken. Symbole lassen sich verschieben, in 90°-Schritten drehen und in Breite/Tiefe anpassen.</li>
       <li><b>Linien mit Knickpunkten:</b> Auf die Linie ziehen verschiebt sie als Ganzes. Bei ausgewählter Linie teilt <b>„＋ Ecke einfügen“</b> den längsten Abschnitt; ist eine <b>Ecke</b> angeklickt, entsteht die neue daneben und <b>„Ecke löschen“</b> entfernt sie wieder. Angezeigt und bemaßt wird immer die <b>Gesamtlänge</b>; die Längeneingabe skaliert die ganze Linie.</li>
       <li><b>Rückgängig / Wiederholen:</b> die Pfeile <b>↶ ↷</b> oben, am Rechner auch <b>Strg+Z</b> und <b>Strg+Y</b>. Es werden die letzten <b>40 Schritte</b> gemerkt — ein Ziehvorgang zählt als ein Schritt. Der Verlauf gilt nur für dieses Gerät und endet beim Neuladen der Seite; das Laden aus Airtable oder Backup lässt sich nicht rückgängig machen.</li>
@@ -800,6 +821,7 @@
 <input type="file" id="fotoInCam" accept="image/*" capture="environment" style="display:none">
 <input type="file" id="importfile" accept=".json" style="display:none">
 <input type="file" id="planfile" accept="image/*" style="display:none">
+<input type="file" id="p360file" accept="image/*" style="display:none">
 
 <script>
 'use strict';
@@ -1733,6 +1755,22 @@ function objMarks(r, lbl, interactive){
           out+=`<circle cx="${px}" cy="${py}" r="${tr}" fill="transparent" data-obj="${g.id}" data-objh="${k}" style="cursor:nwse-resize"/>`;
         });
       }
+    } else if(ist360(g)){
+      /* Standort einer 360°-Aufnahme: Kreis mit Blickkegel. Der Pfeil zeigt, wohin
+         die Kameravorderseite gerichtet war — daraus leitet sich ab, welche der vier
+         Seitenansichten auf welche Wand schaut. */
+      const cx=g.x+g.w/2, cy=g.y+g.h/2, rr=Math.min(g.w,g.h)/2;
+      const st=isSel?'#2f6fed':'#7a3ea8', fl=isSel?'#e8f0fe':'#f3ebfa';
+      const a=(g.rot||0)*Math.PI/180;
+      const dx=Math.sin(a), dy=-Math.cos(a);                 // 0° = nach oben im Plan
+      const sp=rr*3.2, br=rr*1.5;                            // Länge und halbe Breite des Kegels
+      const px=cx+dx*sp, py=cy+dy*sp;
+      out+=`<path d="M ${cx} ${cy} L ${px-dy*br} ${py+dx*br} L ${px+dy*br} ${py-dx*br} Z"
+        fill="${st}" fill-opacity="0.16" stroke="none" style="pointer-events:none"/>`;
+      out+=`<line x1="${cx}" y1="${cy}" x2="${px}" y2="${py}" stroke="${st}" stroke-width="${rr*0.22}" style="pointer-events:none"/>`;
+      out+=`<circle cx="${cx}" cy="${cy}" r="${rr}" fill="${fl}" stroke="${st}" stroke-width="${isSel?rr*0.3:rr*0.2}"${interactive?` data-obj="${g.id}" style="cursor:move"`:''}/>`;
+      out+=`<circle cx="${cx}" cy="${cy}" r="${rr*0.3}" fill="${st}" style="pointer-events:none"/>`;
+      out+=objBadge(g, cx+rr+lbl*0.45, cy-rr-lbl*0.45, lbl, interactive);
     } else if(g.type==='sym'){
       const cx=g.x+g.w/2, cy=g.y+g.h/2;
       const st=isSel?'#2f6fed':'#0e7d5c';
@@ -2214,8 +2252,10 @@ const SYMDEFS={
   '1k':{label:'1-K-Schleuse', w:1.0, h:1.0, k:1},
   '2k':{label:'2-K-Schleuse', w:2.0, h:1.0, k:2},
   '4k':{label:'4-K-Schleuse', w:4.0, h:1.0, k:4},
-  'rfa':{label:'RFA', w:1.2, h:1.2, k:0}
+  'rfa':{label:'RFA', w:1.2, h:1.2, k:0},
+  'p360':{label:'360°-Aufnahme', w:0.6, h:0.6, k:0, foto360:true}
 };
+const ist360 = g => g && g.type==='sym' && g.sub==='p360';
 /* ---------- Zwei-Finger-Gesten: Zoomen und Verschieben (iPad) ---------- */
 const zeiger=new Map();          // aktive Finger/Zeiger
 let pinch=null;
@@ -3362,6 +3402,31 @@ function renderSidebar(){
           <div class="stat"><span>Umfang</span><b>${fmt(2*(selObj.w+selObj.h),3)} m</b></div>
           ${btns}
           <p class="hint">Ziehen verschiebt, Eckgriffe ändern die Größe. Entf = löschen, Esc = abwählen.</p></div>`;
+      } else if(ist360(selObj)){
+        const dir=selObj.rot||0;
+        html+=`<div class="panel"><h3>📷 360°-Aufnahme${nrTxt} — ausgewählt</h3>
+          <div class="row"><label>Name</label><input type="text" id="objname" value="${esc(selObj.name||'')}"></div>
+          <div class="row"><label>Blickrichtung</label>
+            <input id="p360grad" type="number" min="0" max="359" step="1" value="${Math.round(dir)}" style="width:70px; flex:0 0 auto">
+            <span class="hint" style="flex:0 0 auto">°</span>
+            <button class="btn small" id="p360dreh" title="Um 90° weiterdrehen">⟳ 90°</button></div>
+          <div class="row"><input id="p360schieber" type="range" min="0" max="359" step="1" value="${Math.round(dir)}" style="flex:1"></div>
+          <p class="hint" style="margin-bottom:6px">Der Pfeil im Plan zeigt, wohin die <b>Vorderseite der Kamera</b>
+            gerichtet war. 0° = nach oben im Plan.</p>
+          <div class="row"><label>Bildwinkel</label>
+            <input id="p360winkel" type="range" min="90" max="170" step="5" value="${p360Winkel()}" style="flex:1">
+            <b id="p360winkelTxt" style="flex:0 0 auto; min-width:42px; text-align:right">${p360Winkel()}°</b></div>
+          <div class="row"><label>Abbildung</label>
+            <select id="p360proj" style="flex:1">
+              <option value="gerade" ${p360Proj()==='gerade'?'selected':''}>geradlinig — Wände bleiben gerade</option>
+              <option value="fisch" ${p360Proj()==='fisch'?'selected':''}>Fischauge — ruhige Ecken, weiter Winkel</option>
+            </select></div>
+          <p class="hint" style="margin-bottom:6px" id="p360winkelInfo"></p>
+          <div class="row"><button class="btn primary small" id="p360laden" style="flex:1">🖼️ 360°-Bild einlesen</button></div>
+          <p class="hint" id="p360info"></p>
+          ${btns}
+          <p class="hint">Aus der Aufnahme entstehen sechs Einzelbilder: vier Seitenansichten, Decke und Boden.
+            Die Seitenansichten schlägt die App der Wand zu, auf die sie schauen — du bestätigst vorher.</p></div>`;
       } else if(selObj.type==='sym'){
         html+=`<div class="panel"><h3>▣ ${esc((SYMDEFS[selObj.sub]||{}).label||'Symbol')}${nrTxt} — ausgewählt</h3>
           <div class="row"><label>Name</label><input type="text" id="objname" value="${esc(selObj.name||'')}"></div>
@@ -3492,6 +3557,9 @@ function renderSidebar(){
         <div class="row">
           <button class="btn small ${mode==='addopen'&&pendingOpenType==='door'?'active':''}" id="opdoorbtn" style="flex:1">🚪 Tür</button>
           <button class="btn small ${mode==='addopen'&&pendingOpenType==='window'?'active':''}" id="opwinbtn" style="flex:1">🪟 Fenster</button>
+        </div>
+        <div class="row">
+          <button class="btn small symbtn ${mode==='objsym'&&pendingSym==='p360'?'active':''}" data-sym="p360" title="Standort einer 360°-Aufnahme — Pfeil zeigt die Blickrichtung" style="flex:1">📷 360°-Aufnahme</button>
         </div>
         <p class="hint">Objekt-Typ wählen, dann im Raum aufziehen bzw. platzieren (Tür/Fenster: Wand anklicken). Auswahl per Klick im Plan.</p>
       </div>`;
@@ -3824,6 +3892,34 @@ function wireSidebar(r){
         sel.objId=null; save(); renderAll();
       });
       on('#objrot','onclick',()=>{ selObj.rot=((selObj.rot||0)+90)%360; save(); renderAll(); });
+      /* ---- 360°-Aufnahme ---- */
+      const p360Setzen=v=>{
+        selObj.rot=((Math.round(v)%360)+360)%360;
+        const gz=$('#p360grad'), sh=$('#p360schieber');
+        if(gz) gz.value=selObj.rot; if(sh) sh.value=selObj.rot;
+        renderCanvas();
+      };
+      on('#p360schieber','oninput',e=>p360Setzen(+e.target.value));
+      on('#p360schieber','onchange',()=>{ save(); renderAll(); });
+      on('#p360grad','onchange',e=>{ const v=parseNum(e.target.value); if(isFinite(v)){ p360Setzen(v); save(); renderAll(); } });
+      on('#p360dreh','onclick',()=>{ p360Setzen((selObj.rot||0)+90); save(); renderAll(); });
+      const p360WinkelText=()=>{
+        const w=p360Winkel(), el=$('#p360winkelInfo'); if(!el) return;
+        const ueb=w-90;
+        el.innerHTML = ueb<=0
+          ? 'Bei 90° stoßen die Bilder genau aneinander — keine Überlappung.'
+          : `Rundum <b>${ueb}°</b> Überlappung zwischen benachbarten Bildern.`
+            + (w>120 && p360Proj()==='gerade'
+               ? ' <span style="color:var(--danger)">Über 120° zieht „geradlinig" die Ecken stark in die Länge — dafür ist „Fischauge" gedacht.</span>' : '');
+      };
+      p360WinkelText();
+      on('#p360winkel','oninput',e=>{
+        localStorage.setItem(P360_WINKEL_KEY, e.target.value);
+        const t=$('#p360winkelTxt'); if(t) t.textContent=e.target.value+'°';
+        p360WinkelText();
+      });
+      on('#p360proj','onchange',e=>{ localStorage.setItem(P360_PROJ_KEY, e.target.value); p360WinkelText(); });
+      on('#p360laden','onclick',()=>{ p360Ziel={objId:selObj.id, roomId:r.id}; $('#p360file').click(); });
       on('#ptadd','onclick',()=>{                         // neue Ecke — auch ohne gewählte Ecke
         const neu=eckeInLinieEinfuegen(selObj, sel.objH);
         if(neu!=null){ sel={...sel, objH:neu}; save(); renderAll(); }
@@ -5361,6 +5457,220 @@ $('#lvEditNone').onclick=()=>{
   save(); renderLvEdit();
 };
 
+/* ================= 360°-Aufnahme in sechs Einzelbilder =================
+   Ein 360°-Foto ist eine aufgerollte Kugel (äquirektangular, Seitenverhältnis 2:1).
+   Für jeden Bildpunkt einer Zielfläche wird der Blickvektor berechnet, in Längen- und
+   Breitengrad umgerechnet und die Farbe aus der Quelle gelesen — eine Würfelabwicklung.
+   Ergebnis: vier Seitenansichten (je 90°), Decke und Boden.
+   Die Zwischengröße ist kein Zufall: 4096 px auf 360° sind 11,4 px je Grad — genau die
+   Auflösung, die eine 90°-Fläche mit 1024 px braucht. */
+const P360_ARBEIT=4096, P360_KANTE=1024, P360_Q=0.82;
+/* Bildwinkel je Fläche. Bei 90° stoßen die sechs Flächen genau aneinander; darüber
+   überlappen sie sich — 110° geben rundum gut 20° Überdeckung, nichts fällt mehr
+   zwischen zwei Bilder.
+   Zwei Abbildungen zur Wahl:
+   • geradlinig — Wände bleiben gerade, dafür ziehen sich die Ecken mit dem Winkel
+     immer stärker in die Länge (bei 140° schon vierfach).
+   • fischauge  — gleichmäßiger Winkel je Bildpunkt: Kanten biegen sich, dafür bleiben
+     die Ecken ruhig. Erst damit sind Winkel über 120° brauchbar. */
+const P360_WINKEL_KEY='grundriss-360-winkel', P360_PROJ_KEY='grundriss-360-proj';
+const p360Winkel = () => {
+  const v=parseNum(localStorage.getItem(P360_WINKEL_KEY));
+  return isFinite(v) && v>=90 && v<=170 ? v : 110;
+};
+const p360Proj = () => localStorage.getItem(P360_PROJ_KEY)==='fisch' ? 'fisch' : 'gerade';
+// Weltachsen: x rechts, y oben, z vorn (= Bildmitte der Quelle). b=+1 ist die untere Zeile.
+const P360_FLAECHEN=[
+  {id:'vorn',   dir:0,   n:[0,0,1],  r:[1,0,0],  u:[0,-1,0]},
+  {id:'rechts', dir:90,  n:[1,0,0],  r:[0,0,-1], u:[0,-1,0]},
+  {id:'hinten', dir:180, n:[0,0,-1], r:[-1,0,0], u:[0,-1,0]},
+  {id:'links',  dir:270, n:[-1,0,0], r:[0,0,1],  u:[0,-1,0]},
+  {id:'decke',  dir:null, n:[0,1,0],  r:[1,0,0], u:[0,0,1]},
+  {id:'boden',  dir:null, n:[0,-1,0], r:[1,0,0], u:[0,0,-1]}
+];
+const P360_NAME={vorn:'vorn', rechts:'rechts', hinten:'hinten', links:'links',
+                 decke:'Decke', boden:'Boden'};
+
+function p360Bild(file){
+  return new Promise((res,rej)=>{
+    const rd=new FileReader();
+    rd.onerror=()=>rej(new Error('Datei nicht lesbar'));
+    rd.onload=()=>{
+      const img=new Image();
+      img.onerror=()=>rej(new Error('Kein gültiges Bild'));
+      img.onload=()=>res(img);
+      img.src=rd.result;
+    };
+    rd.readAsDataURL(file);
+  });
+}
+/* Zerlegt die Aufnahme. Gibt auch zurück, welche Auflösung tatsächlich ankam —
+   iOS verkleinert sehr große Bilder beim Dekodieren still, das soll sichtbar sein. */
+async function p360Zerlegen(img, melder, opt){
+  opt=opt||{};
+  const winkel=opt.winkel||p360Winkel(), proj=opt.projektion||p360Proj();
+  const halb=winkel*Math.PI/360;                 // halber Bildwinkel im Bogenmaß
+  const k=Math.tan(Math.min(halb, 1.5533));      // geradlinig: Skalierung, bei 178° gedeckelt
+  if(!img.naturalWidth) throw new Error('Bild hat keine Größe');
+  const verh=img.naturalWidth/img.naturalHeight;
+  if(Math.abs(verh-2)>0.06)
+    throw new Error(`Seitenverhältnis ${verh.toFixed(2)}:1 — eine 360°-Aufnahme muss 2:1 sein.`);
+  const W=Math.min(P360_ARBEIT, img.naturalWidth), H=W/2;
+  const qc=document.createElement('canvas'); qc.width=W; qc.height=H;
+  const qctx=qc.getContext('2d', {willReadFrequently:true});
+  qctx.imageSmoothingQuality='high';
+  qctx.drawImage(img, 0, 0, W, H);
+  const sd=qctx.getImageData(0,0,W,H).data;
+
+  const S=P360_KANTE, aus={};
+  for(const f of P360_FLAECHEN){
+    if(melder) melder(`Berechne ${P360_NAME[f.id]} …`);
+    await new Promise(r=>setTimeout(r,0));          // Oberfläche kurz atmen lassen
+    const cv=document.createElement('canvas'); cv.width=S; cv.height=S;
+    const ctx=cv.getContext('2d'), bild=ctx.createImageData(S,S), d=bild.data;
+    for(let y=0;y<S;y++){
+      const b=(2*(y+0.5)/S)-1;
+      for(let x=0;x<S;x++){
+        const a=(2*(x+0.5)/S)-1;
+        let vx, vy, vz;
+        if(proj==='fisch'){
+          // Radius im Bild → Winkel zur Blickachse. Direkt als Vektor gebildet, sonst
+          // kippt die Rechnung jenseits von 90° ins Negative.
+          const rho=Math.hypot(a,b);
+          if(rho<1e-9){ vx=f.n[0]; vy=f.n[1]; vz=f.n[2]; }
+          else {
+            const th=rho*halb, ct=Math.cos(th), st=Math.sin(th), ea=a/rho, eb=b/rho;
+            vx=f.n[0]*ct+(ea*f.r[0]+eb*f.u[0])*st;
+            vy=f.n[1]*ct+(ea*f.r[1]+eb*f.u[1])*st;
+            vz=f.n[2]*ct+(ea*f.r[2]+eb*f.u[2])*st;
+          }
+        } else {
+          vx=f.n[0]+a*k*f.r[0]+b*k*f.u[0];
+          vy=f.n[1]+a*k*f.r[1]+b*k*f.u[1];
+          vz=f.n[2]+a*k*f.r[2]+b*k*f.u[2];
+        }
+        const L=Math.hypot(vx,vy,vz); vx/=L; vy/=L; vz/=L;
+        const lon=Math.atan2(vx,vz), lat=Math.asin(vy);
+        // Weiche Abtastung — ohne sie werden Kanten beim Vergrößern stufig
+        let sx=(lon/(2*Math.PI)+0.5)*W-0.5, sy=(0.5-lat/Math.PI)*H-0.5;
+        sy=Math.max(0, Math.min(H-1.001, sy));
+        const x0=Math.floor(sx), y0=Math.floor(sy);
+        const fx=sx-x0, fy=sy-y0;
+        const xa=((x0%W)+W)%W, xb=(xa+1)%W, ya=y0, yb=Math.min(y0+1, H-1);
+        const i00=(ya*W+xa)*4, i01=(ya*W+xb)*4, i10=(yb*W+xa)*4, i11=(yb*W+xb)*4;
+        const di=(y*S+x)*4;
+        for(let k=0;k<3;k++){
+          const o=(sd[i00+k]*(1-fx)+sd[i01+k]*fx)*(1-fy)
+                + (sd[i10+k]*(1-fx)+sd[i11+k]*fx)*fy;
+          d[di+k]=o;
+        }
+        d[di+3]=255;
+      }
+    }
+    ctx.putImageData(bild,0,0);
+    aus[f.id]=cv.toDataURL('image/jpeg', P360_Q);
+  }
+  return {bilder:aus, quelleW:img.naturalWidth, quelleH:img.naturalHeight, arbeitW:W};
+}
+
+/* Welche Wand des Raums liegt in dieser Richtung? Strahl vom Aufnahmepunkt aus,
+   erste getroffene Wandkante gewinnt. */
+function wandInRichtung(r, punkt, grad){
+  const a=grad*Math.PI/180, dx=Math.sin(a), dy=-Math.cos(a);
+  let best=null;
+  const n=r.points.length;
+  for(let i=0;i<n;i++){
+    const A=r.points[i], B=r.points[(i+1)%n];
+    const ex=B.x-A.x, ey=B.y-A.y;
+    const nen=dx*ey-dy*ex;
+    if(Math.abs(nen)<1e-9) continue;                       // parallel
+    const t=((A.x-punkt.x)*ey-(A.y-punkt.y)*ex)/nen;        // Strecke auf dem Strahl
+    const s=((A.x-punkt.x)*dy-(A.y-punkt.y)*dx)/nen;        // Lage auf der Wand
+    if(t<=1e-6 || s<-0.001 || s>1.001) continue;
+    if(!best || t<best.t) best={i, t};
+  }
+  return best;
+}
+
+let p360Stand=null;          // {objId, roomId, bilder, zuordnung, quelle}
+function p360Starten(file, g, r){
+  const info=$('#p360info');
+  const melde2=t=>{ if(info) info.textContent=t; };
+  melde2('Bild wird gelesen …');
+  p360Bild(file).then(async img=>{
+    const t0=performance.now();
+    const erg=await p360Zerlegen(img, melde2);
+    const ms=Math.round(performance.now()-t0);
+    // Vier Richtungen den Wänden zuordnen
+    const mitte={x:g.x+g.w/2, y:g.y+g.h/2};
+    const zuordnung=P360_FLAECHEN.map(f=>{
+      if(f.dir==null) return {id:f.id, ziel:'raum'};
+      const grad=((g.rot||0)+f.dir)%360;
+      const tr=wandInRichtung(r, mitte, grad);
+      return {id:f.id, ziel: tr?'wand':'raum', wand: tr?tr.i:null, grad, weite: tr?tr.t:null};
+    });
+    p360Stand={objId:g.id, roomId:r.id, bilder:erg.bilder, zuordnung,
+      quelle:`${erg.quelleW} × ${erg.quelleH}`, arbeitW:erg.arbeitW, ms};
+    melde2(`Fertig in ${(ms/1000).toFixed(1)} s.`);
+    p360DialogZeigen();
+  }).catch(err=>{
+    melde2('');
+    melde('360°-Bild konnte nicht verarbeitet werden: '+err.message, true);
+  });
+}
+function p360DialogZeigen(){
+  const s=p360Stand; if(!s) return;
+  const r=roomById(s.roomId);
+  const warnung = s.arbeitW<1024
+    ? `<p class="hint" style="color:var(--danger)">Achtung: Es kamen nur ${s.arbeitW} px Breite an —
+       das Gerät hat die Aufnahme beim Dekodieren stark verkleinert. Die Einzelbilder werden unscharf.</p>` : '';
+  // Auswahlliste je Bild: der berechnete Vorschlag ist vorgewählt, bleibt aber änderbar.
+  // Nötig, weil bei schräg stehender Kamera jede Seitenansicht auf eine Ecke schaut —
+  // dann trifft der Strahl zweimal dieselbe Wand und zwei Wände gehen leer aus.
+  const wandNamen=roomById(s.roomId).points.map((_,i)=>
+    wallNrOf(r,i) ? `Wand ${i+1} (#${wallNrOf(r,i)})` : `Wand ${i+1}`);
+  $('#p360Body').innerHTML=`
+    <p class="hint" style="margin-bottom:8px">Quelle ${s.quelle} px · Arbeitsgröße ${s.arbeitW} px ·
+      berechnet in ${(s.ms/1000).toFixed(1)} s. Der Vorschlag kommt aus der Blickrichtung —
+      jedes Bild lässt sich umhängen oder weglassen.</p>
+    ${warnung}
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px">
+      ${s.zuordnung.map((z,i)=>`
+        <div style="text-align:center; font-size:12px">
+          <img src="${s.bilder[z.id]}" style="width:100%; border-radius:6px; border:1px solid var(--line)">
+          <div style="margin-top:3px"><b>${P360_NAME[z.id]}</b>${z.grad!=null?` <span class="hint">${Math.round(z.grad)}°</span>`:''}</div>
+          <select data-p360="${i}" style="width:100%; margin-top:2px; border:1px solid var(--line); border-radius:6px; padding:3px">
+            <option value="-">— nicht übernehmen</option>
+            <option value="raum" ${z.ziel==='raum'?'selected':''}>Raum</option>
+            ${wandNamen.map((n,k)=>`<option value="${k}" ${z.ziel==='wand'&&z.wand===k?'selected':''}>${esc(n)}</option>`).join('')}
+          </select>
+        </div>`).join('')}
+    </div>`;
+  $('#dlg360').showModal();
+}
+function p360Uebernehmen(){
+  const s=p360Stand; if(!s) return;
+  const r=roomById(s.roomId); if(!r){ melde('Der Raum ist nicht mehr da.', true); return; }
+  const wahl=[...document.querySelectorAll('[data-p360]')].map(el=>el.value);
+  let nW=0, nR=0;
+  s.zuordnung.forEach((z,i)=>{
+    const w=wahl[i];
+    if(w==='-') return;
+    const foto={id:uid(), src:s.bilder[z.id], ts:Date.now()};
+    if(w==='raum'){ (r.fotos=r.fotos||[]).push(foto); nR++; }
+    else {
+      const k=+w;
+      if(!(k>=0 && k<r.points.length)) return;
+      r.wallFotos=r.wallFotos||{};
+      (r.wallFotos[k]=r.wallFotos[k]||[]).push(foto); nW++;
+    }
+  });
+  save(); renderAll();
+  $('#dlg360').close();
+  p360Stand=null;
+  melde(`Übernommen: ${nW} Wandfoto(s), ${nR} Raumfoto(s).`);
+}
+
 /* ================= Plan als Hintergrund =================
    Ein Bild je Etage (f.plan), hinter allem gezeichnet, in Metern platziert. Die
    Umwandlung PDF → Bild passiert vorher am Rechner (siehe plan-export.py), damit die
@@ -5719,16 +6029,41 @@ function abschlagInfo(){
     .map(k=>`Abschlag ${k}: ${n[k]}`);
   return teile.length ? teile.join(' · ') : 'Noch keine LV-Zuordnungen.';
 }
+/* Zeigt, was das Deckblatt aus dem Aufmaß selbst zieht — damit klar ist, warum hier
+   nur drei Felder stehen und wo die anderen herkommen. */
+function deckInfoText(){
+  const p=proj();
+  const teile=[
+    `Adresse: ${p.adresse||'—'}`,
+    `Stockwerk: ${stockwerkeText(p)||'—'}`,
+    `Zeitraum: ${zeitraumText(p)||'—'}`
+  ];
+  return 'Kommt automatisch — '+teile.join(' · ');
+}
 $('#settingsbtn').onclick=()=>{
+  const p=proj();
   $('#setToken').value=atToken();
   $('#setRemember').checked=!!localStorage.getItem(AT_TOKEN_KEY);
   $('#setBase').value=atBase();
   $('#setPaste').value=''; $('#setPasteStatus').textContent='';
-  $('#setAbschlag').value=proj().abschlag;
+  $('#setGebaeude').value=p.gebaeude||'';
+  $('#setBereich').value=p.bereich||'';
+  $('#setArt').value=p.artBauvorhaben||'';
+  $('#setDeckInfo').textContent=deckInfoText();
+  $('#setAbschlag').value=p.abschlag;
   $('#setAbschlagInfo').textContent=abschlagInfo();
   setStatus('');
   dlgSettings.showModal();
 };
+// Deckblattangaben: beim Verlassen des Feldes sichern
+[['#setGebaeude','gebaeude'],['#setBereich','bereich'],['#setArt','artBauvorhaben']]
+  .forEach(([sel,feld])=>{
+    $(sel).onchange=e=>{
+      const wert=e.target.value.trim(), p=proj();
+      if(wert) p[feld]=wert; else delete p[feld];
+      save();
+    };
+  });
 $('#setAbschlagOk').onclick=()=>{
   const n=Math.max(1, Math.round(parseNum($('#setAbschlag').value)||1));
   const p=proj();
@@ -6545,6 +6880,16 @@ $('#planfile').onchange=e=>{
   const f=e.target.files[0]; e.target.value='';
   if(f) planUebernehmen(f);
 };
+let p360Ziel=null;                    // {objId, roomId} — gesetzt beim Klick auf „einlesen"
+$('#p360file').onchange=e=>{
+  const f=e.target.files[0]; e.target.value='';
+  if(!f || !p360Ziel) return;
+  const r=roomById(p360Ziel.roomId);
+  const g=r && (r.objects||[]).find(x=>x.id===p360Ziel.objId);
+  if(!g){ melde('Der Aufnahmepunkt ist nicht mehr da.', true); return; }
+  p360Starten(f, g, r);
+};
+$('#p360ok').onclick=p360Uebernehmen;
 /* Druckumfang: laufender Abschlag, ein früherer zum Nachdrucken, die Schlussrechnung
    (alles noch nicht Abgerechnete) oder das ganze Aufmaß ohne Filter. */
 function agUmfangFuellen(){
