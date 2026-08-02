@@ -1082,6 +1082,7 @@ async function bilderAufraeumen(){
 
 function save(){
   db.rev=Date.now();                       // Marke für „seit der letzten Sicherung geändert"
+  wandNummernPflegen();                    // Wände mit Fotos bekommen eine Nummer
   const text=standErfassen();              // ohne Bilddaten — die liegen in IndexedDB
   if(!ohneUndoAktiv){
     if(letzterStand!=null && letzterStand!==text){
@@ -1108,6 +1109,20 @@ const nextObjNr = () => proj().rooms.reduce((m,r)=>{
   return Object.values(r.wallNr||{}).reduce((k,v)=>Math.max(k, v||0), a);
 }, 0)+1;
 const wallNrOf = (r,i) => r ? (r.wallNr||{})[i] : null;
+/* Eine Wand mit Fotos braucht ebenfalls eine Nummer — sonst steht im Bericht unter dem
+   Bild „Wand 3", und im Plan ist nichts, woran man Wand 3 erkennt. Läuft in `save()`
+   mit, damit jeder Weg erfasst ist: Kamera, Dateiauswahl, Foto-Stapel, 360°-Zerlegung. */
+function wandNummernPflegen(){
+  (proj().rooms||[]).forEach(r=>{
+    const wf=r.wallFotos; if(!wf) return;
+    Object.keys(wf).forEach(k=>{
+      const i=+k;
+      if(!(wf[k]||[]).length || !(i>=0 && i<r.points.length)) return;
+      r.wallNr=r.wallNr||{};
+      if(!r.wallNr[i]) r.wallNr[i]=nextObjNr();
+    });
+  });
+}
 /* Was eine LV-Position bezeichnet: Objekt, nummerierte Wand oder der Raum selbst */
 function lvZielText(a, leerBeiRaum){
   const r=roomById(a.roomId);
@@ -1659,8 +1674,14 @@ function badgeSvg(x, y, rr, col, txt, dat){
   return `<circle cx="${x}" cy="${y}" r="${rr}" fill="${col}" stroke="#fff" stroke-width="${rr*0.12}"${dat}/>`+
     `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" font-size="${rr*1.1}" font-weight="700" fill="${txtOn(col)}"${dat}>${txt}</text>`;
 }
+/* In der Etagenansicht am Bildschirm bleiben alle Nummern aus — dort geht es um die
+   Übersicht, und die Plaketten überdecken bei mehreren Räumen mehr, als sie nützen.
+   Objekte selbst werden weiter gezeichnet. Im Druck und in der Raumansicht bleibt es
+   bei den Nummern; renderCanvas setzt und löscht das Flag um seinen eigenen Durchlauf. */
+let plakettenAus=false;
 /* Nummern-Plakette: nur für Objekte/Öffnungen, die einer LV-Position zugeordnet sind */
 function objBadge(g, x, y, lbl, interactive){
+  if(plakettenAus) return '';
   const p=proj();
   const a=(p.attrs||[]).find(t=>t.objId===g.id && t.lv);
   if(!a || !g.nr) return '';
@@ -1668,21 +1689,27 @@ function objBadge(g, x, y, lbl, interactive){
   const dat=interactive?` data-obj="${g.id}" style="cursor:move"`:'';
   return badgeSvg(x, y, badgeR(lbl), col, g.nr||'', dat);
 }
-/* Nummern-Plaketten der Wände, denen eine LV-Position zugeordnet ist (innen an der Wandmitte) */
+/* Nummern-Plaketten der Wände — mittig IM Mauerwerk, nicht daneben */
 function wallMarks(r, lbl){
+  if(plakettenAus) return '';
   const p=proj();
   let out='';
   const c=centroid(r.points), n=r.points.length;
   for(let i=0;i<n;i++){
     const nr=wallNrOf(r,i); if(!nr) continue;
-    const a=(p.attrs||[]).find(x=>x.roomId===r.id && x.wall===i && x.lv); if(!a) continue;
+    // Auch eine Wand, die ihre Nummer nur einem Foto verdankt, bekommt die Plakette —
+    // sonst steht im Bericht „#3" und im Plan ist nichts, woran man #3 erkennt.
+    const a=(p.attrs||[]).find(x=>x.roomId===r.id && x.wall===i && x.lv);
     const [A,B]=wallPoints(r,i), L=dist(A,B); if(L<0.05) continue;
     const mx=(A.x+B.x)/2, my=(A.y+B.y)/2;
     let nx=-(B.y-A.y)/L, ny=(B.x-A.x)/L;
     if((mx+nx*0.1-c.x)**2+(my+ny*0.1-c.y)**2 > (mx-nx*0.1-c.x)**2+(my-ny*0.1-c.y)**2){nx=-nx;ny=-ny;}
-    const rr=badgeR(lbl);
-    const m=badgeSvg(mx+nx*rr*1.5, my+ny*rr*1.5, rr, lvColor(p, a.lv)||'#8a93a5', nr);
-    out+= wandAktiv(r,i) ? m : `<g opacity="${ABS_BLASS}">${m}</g>`;
+    // Mitte des Mauerwerks: die gezeichnete Linie ist die Innenkante, die Wand wächst
+    // nach AUSSEN. Die Normale oben zeigt zum Schwerpunkt, also nach innen — deshalb
+    // hier die geprüfte Außennormale, die auch bei einspringenden Ecken stimmt.
+    const an=aussenNormale(r,i), tief=wandDicke(r,i)/2, rr=badgeR(lbl);
+    const m=badgeSvg(mx+an.x*tief, my+an.y*tief, rr, (a && lvColor(p, a.lv))||'#8a93a5', nr);
+    out+= wandFotoAktiv(r,i) ? m : `<g opacity="${ABS_BLASS}">${m}</g>`;
   }
   return out ? `<g style="pointer-events:none">${out}</g>` : '';
 }
@@ -1880,6 +1907,7 @@ function renderCanvas(){
   if(focusRoomId && !fr){ focusRoomId=null; sel={roomId:null,wall:null,vertex:null}; }
   // Raumansicht: Nachbarräume ausgegraut dahinter, fokussierter Raum zuletzt (oben)
   const rooms=fr?[...floorRooms().filter(x=>x.id!==fr.id), fr]:floorRooms();
+  plakettenAus=!fr;                    // Etagenansicht: ohne Nummern (am Ende zurückgesetzt)
   const lbl=Math.max(0.14, Math.min(0.6, vb.w/55));
   let out=`<defs>
     <pattern id="grid" width="1" height="1" patternUnits="userSpaceOnUse">
@@ -2038,6 +2066,7 @@ function renderCanvas(){
   }
   svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
   svg.innerHTML=out;
+  plakettenAus=false;                  // Druck und Raumansicht zeigen die Nummern weiter
   svg.classList.toggle('draw', mode==='draw'||mode==='place'||mode==='objrect'||mode==='objline'||mode==='objsym'||mode==='addopen');
 }
 
@@ -5250,6 +5279,15 @@ function bauteilAktiv(list){
 }
 const objAktiv  = g => bauteilAktiv(attrsFuer(a=>a.objId===g.id));
 const wandAktiv = (r,i) => bauteilAktiv(attrsFuer(a=>a.roomId===r.id && a.wall===i));
+/* Für FOTOS gilt eine mildere Regel als fürs Ausgrauen. `bauteilAktiv` liefert im
+   Druck `[].some(…)` = falsch, sobald ein Bauteil GAR KEINE LV-Zuordnung hat — damit
+   verschwanden Wandfotos ohne LV-Position vollständig aus dem Bericht, während
+   Raumfotos immer mitkamen. Ein Bauteil ohne Zuordnung ist aber nicht „nicht
+   abgerechnet", sondern nur noch nicht zugeordnet; seine Aufnahmen dokumentieren den
+   Zustand und gehören in jeden Bericht. Dieselbe Regel gilt am Bildschirm schon. */
+const fotoAktiv = list => !list.length || list.some(imAbschlag);
+const wandFotoAktiv = (r,i) => fotoAktiv(attrsFuer(a=>a.roomId===r.id && a.wall===i));
+const objFotoAktiv  = g => fotoAktiv(attrsFuer(a=>a.objId===g.id));
 // Räume und Etagen werden nur im Druck ausgegraut — am Bildschirm wäre das zu viel
 const raumAktiv = r => !druckFilter || attrsFuer(a=>a.roomId===r.id).some(imAbschlag);
 // Bezeichnung fürs Deckblatt und die Fußzeile
@@ -7253,12 +7291,12 @@ function fotosVonRaum(r){
   const p=proj(), out=[];
   (r.fotos||[]).forEach(f=>out.push({f, tags:[r.name]}));
   Object.entries(r.wallFotos||{}).forEach(([i,list])=>{
-    if(!wandAktiv(r, +i)) return;
+    if(!wandFotoAktiv(r, +i)) return;
     (list||[]).forEach(f=>out.push({f, tags:[r.name, wallNrOf(r,i)?('#'+wallNrOf(r,i)):('Wand '+(+i+1))]}));
   });
-  (r.objects||[]).forEach(g=>{ if(objAktiv(g)) (g.fotos||[]).forEach(f=>
+  (r.objects||[]).forEach(g=>{ if(objFotoAktiv(g)) (g.fotos||[]).forEach(f=>
     out.push({f, tags:[r.name, objAnzeige(g)||g.name||'Objekt']})); });
-  (r.openings||[]).forEach(o=>{ if(objAktiv(o)) (o.fotos||[]).forEach(f=>
+  (r.openings||[]).forEach(o=>{ if(objFotoAktiv(o)) (o.fotos||[]).forEach(f=>
     out.push({f, tags:[r.name, objAnzeige(o)]})); });
   (p.attrs||[]).filter(a=>a.roomId===r.id && imAbschlag(a)).forEach(a=>(a.fotos||[]).forEach(f=>
     out.push({f, tags:[r.name, 'LV '+a.lv]})));
