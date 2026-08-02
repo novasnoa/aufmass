@@ -652,6 +652,22 @@
   <div class="dfoot"><button class="btn" data-close>Abbrechen</button></div>
 </dialog>
 
+<!-- Aufgenommene Fotos sammeln: erst „Fotos benutzen" übernimmt sie ans Ziel -->
+<dialog id="dlgFotoStapel" style="width:min(560px,94vw)">
+  <div class="dhead">Aufgenommene Fotos <button id="fsX">✕</button></div>
+  <div class="dbody">
+    <div class="fotos" id="fsStrip" style="display:flex; gap:8px; flex-wrap:wrap"></div>
+    <div class="row" style="margin-top:8px"><button class="btn" id="fsMehr">📷 Noch ein Foto</button></div>
+    <p class="hint">Foto antippen oder „Editieren": durchblättern, löschen, einkreisen/pixeln/beschriften.
+      Übernommen wird erst mit <b>„Fotos benutzen"</b>.</p>
+  </div>
+  <div class="dfoot">
+    <button class="btn" id="fsAbbr">Verwerfen</button>
+    <button class="btn" id="fsEdit">Editieren</button>
+    <button class="btn primary" id="fsOk">Fotos benutzen</button>
+  </div>
+</dialog>
+
 <!-- LV-Position in weitere Räume kopieren -->
 <dialog id="dlgLvKopie" style="width:min(780px,94vw)">
   <div class="dhead">Position in weitere Räume kopieren <button data-close>✕</button></div>
@@ -700,6 +716,14 @@
       <div class="row"><label>Deckkraft</label><input type="range" id="feOp" min="15" max="100" value="100" style="flex:1"><b id="feOpTxt" style="width:38px; text-align:right">100 %</b></div>
       <div class="row"><label id="feStLabel">Strichstärke</label><input type="range" id="feSt" min="1" max="20" value="5" style="flex:1"><b id="feStTxt" style="width:38px; text-align:right">5</b></div>
     </div>
+    <!-- nur im Stapel-Modus (frisch aufgenommene Fotos): blättern und löschen -->
+    <div class="row" id="feNav" style="display:none; align-items:center; margin-top:6px">
+      <button class="btn small" id="fePrev">◀</button>
+      <b id="fePosTxt" style="min-width:44px; text-align:center">1/1</b>
+      <button class="btn small" id="feNext">▶</button>
+      <span style="flex:1"></span>
+      <button class="btn small danger" id="feDel">🗑 Foto löschen</button>
+    </div>
     <div id="feWrap"><canvas id="feCanvas"></canvas></div>
     <p class="hint" id="feHint"></p>
   </div>
@@ -709,6 +733,7 @@
     <span style="flex:1"></span>
     <button class="btn" data-close>Abbrechen</button>
     <button class="btn primary" id="feSave">Speichern</button>
+    <button class="btn primary" id="feFotosOk" style="display:none">Fotos benutzen</button>
   </div>
 </dialog>
 
@@ -1675,6 +1700,11 @@ function renderCanvas(){
         if((mx+nx*0.1-c2.x)**2+(my+ny*0.1-c2.y)**2 < (mx-nx*0.1-c2.x)**2+(my-ny*0.1-c2.y)**2){nx=-nx;ny=-ny;}
         const isSelW = sel.wall===i;
         out+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${isSelW?'#2f6fed':'transparent'}" stroke-width="${isSelW?0.16:0.4}" data-roomid="${r.id}" data-wall="${i}" style="cursor:pointer" ${isSelW?'':'opacity="0.5"'}/>`;
+        // Touchfläche zusätzlich über den ganzen Wandkörper: die Wandstärke nach außen.
+        // Öffnungs-Zonen kommen später und liegen obenauf — die Tür bleibt auf der Tür wählbar.
+        const anQ=aussenNormale(r,i), dQ=wandDicke(r,i);
+        if(dQ>0) out+=`<path d="M ${a.x} ${a.y} L ${b.x} ${b.y} L ${b.x+anQ.x*dQ} ${b.y+anQ.y*dQ}`+
+          ` L ${a.x+anQ.x*dQ} ${a.y+anQ.y*dQ} Z" fill="transparent" data-roomid="${r.id}" data-wall="${i}" style="cursor:pointer"/>`;
         const dopts={color:isSelW?'#2f6fed':'#8a93a5', tcol:isSelW?'#2f6fed':'#4a5468', bold:isSelW, fs:lbl*0.9,
           wand:wandDicke(r,i),
           lock:!imDruck && wandGesperrt(r,i),   // Schloss vor der Maßzahl — nur Bildschirm
@@ -1701,6 +1731,11 @@ function renderCanvas(){
         const t0=Math.max(0,Math.min(o.offset,L-o.width));
         const q0={x:a.x+ux*t0, y:a.y+uy*t0}, q1={x:a.x+ux*(t0+o.width), y:a.y+uy*(t0+o.width)};
         const isSelO = sel.openId===o.id;
+        // Touchfläche über die ganze Öffnung im Wandkörper (Wandstärke nach außen) —
+        // liegt über den Wand-Zonen, die Breiten-Griffe kommen danach und bleiben obenauf
+        const onQ=aussenNormale(r,o.wall), odQ=wandDicke(r,o.wall);
+        if(odQ>0) out+=`<path d="M ${q0.x} ${q0.y} L ${q1.x} ${q1.y} L ${q1.x+onQ.x*odQ} ${q1.y+onQ.y*odQ}`+
+          ` L ${q0.x+onQ.x*odQ} ${q0.y+onQ.y*odQ} Z" fill="transparent" data-open="${o.id}" style="cursor:${isSelO?'move':'pointer'}"/>`;
         if(isSelO){
           out+=`<line x1="${q0.x}" y1="${q0.y}" x2="${q1.x}" y2="${q1.y}" stroke="#2f6fed" opacity="0.55" stroke-width="0.24" data-open="${o.id}" style="cursor:move"/>`;
           const mx=(q0.x+q1.x)/2, my=(q0.y+q1.y)/2;
@@ -2498,8 +2533,18 @@ document.addEventListener('keydown', e=>{
     updateDrawHint();
   } else if(e.key==='Delete'){
     const r=focusRoomId?roomById(focusRoomId):null;
-    if(r && sel.objId){ r.objects=(r.objects||[]).filter(x=>x.id!==sel.objId); dropLvFor(sel.objId); sel.objId=null; save(); renderAll(); }
-    else if(r && sel.openId){ deleteOpeningEverywhere(r, sel.openId); sel.openId=null; save(); renderAll(); }
+    if(r && sel.objId){
+      const g=(r.objects||[]).find(x=>x.id===sel.objId);
+      if(objLoeschenOk(g?`„${g.name||'Objekt'}"`:'Objekt', sel.objId)){
+        r.objects=(r.objects||[]).filter(x=>x.id!==sel.objId); dropLvFor(sel.objId); sel.objId=null; save(); renderAll();
+      }
+    }
+    else if(r && sel.openId){
+      const o=(r.openings||[]).find(x=>x.id===sel.openId);
+      if(objLoeschenOk(opName(o), openingIds(r, sel.openId))){
+        deleteOpeningEverywhere(r, sel.openId); sel.openId=null; save(); renderAll();
+      }
+    }
     else if(sel.roomId) deleteRoom(sel.roomId);
   }
 });
@@ -2592,6 +2637,28 @@ function dropLvFor(ids){
   const p=proj();
   p.attrs=p.attrs.filter(a=>!(a.objId && set.has(a.objId)));
 }
+/* ---------- Löschen nur nach Rückfrage ----------
+   Grundsatz: jeder Löschvorgang fragt nach — die EINE Ausnahme sind Objekte und
+   Öffnungen ohne LV-Verweise, die gehen ohne Rückfrage weg (nichts Wertvolles dran). */
+function lvVerweise(ids){
+  const set=new Set([].concat(ids));
+  return (proj().attrs||[]).filter(a=>a.objId && set.has(a.objId)).length;
+}
+// true = löschen. ids = Objekt-/Öffnungs-IDs (bei Türen inkl. Partner im Nachbarraum)
+function objLoeschenOk(name, ids){
+  const n=lvVerweise(ids);
+  if(!n) return true;
+  return confirm(`${name} löschen?\n\n${n===1?'Eine LV-Zuordnung wird':n+' LV-Zuordnungen werden'} mit gelöscht.`);
+}
+// Alle IDs, die deleteOpeningEverywhere treffen würde (Tür + Partner-Tür)
+function openingIds(r, opId){
+  const o=(r.openings||[]).find(x=>x.id===opId);
+  const ids=[opId];
+  if(o && o.link) proj().rooms.forEach(rr=>(rr.openings||[]).forEach(x=>{
+    if(x.link===o.link && x.id!==opId) ids.push(x.id); }));
+  return ids;
+}
+const opName = o => o && o.type==='door' ? 'Tür' : 'Fenster';
 
 /* ---------- Wand / Öffnungen ---------- */
 /* ---------- Gesperrte Wände ----------
@@ -2865,6 +2932,7 @@ function renderSidebar(){
         <select id="floorsel" style="flex:1">${p.floors.map(f=>`<option value="${f.id}" ${f.id===activeFloorId?'selected':''}>${esc(f.name)}</option>`).join('')}</select>
         <button class="btn small" id="flooradd" title="Neue Etage">＋</button>
         <button class="btn small" id="floorren" title="Umbenennen">✎</button>
+        <button class="btn small" id="floordup" title="Etage duplizieren">⧉</button>
         <button class="btn small danger" id="floordel" title="Etage löschen">🗑</button>
       </div></div>`;
 
@@ -3053,6 +3121,35 @@ function wireSidebar(r){
     const f=proj().floors.find(f=>f.id===activeFloorId);
     const name=prompt('Etage umbenennen:', f.name); if(name){f.name=name; save(); renderAll();}
   });
+  on('#floordup','onclick',()=>{
+    /* Etage duplizieren: Räume samt Türen/Fenstern IMMER mit (neue IDs, Partner-Türen
+       bleiben paarweise verknüpft — aber als NEUES Paar, sonst würde syncSharedDoors
+       die Etagen koppeln). Objekte (Flächen, Linien, Symbole) nur auf Nachfrage.
+       Beim Original bleiben: LV-Zuordnungen samt Objektnummern, Fotos, Planhintergrund. */
+    const p=proj(), f=p.floors.find(x=>x.id===activeFloorId);
+    const name=prompt('Name der neuen Etage:', f.name+' (Kopie)');
+    if(!name) return;
+    const mitObj=confirm('Objekte (Flächen, Linien, Symbole) mitkopieren?\n\n'+
+      'OK = mit Objekten, Abbrechen = ohne.\nTüren und Fenster werden immer mitkopiert.');
+    const nf={id:uid(), name};
+    const linkMap={};
+    p.rooms.filter(r=>r.floorId===f.id).forEach(r=>{
+      const kopie=JSON.parse(JSON.stringify(r));
+      kopie.id=uid(); kopie.floorId=nf.id;
+      delete kopie.fotos; delete kopie.wallFotos; delete kopie.wallNr;
+      (kopie.openings||[]).forEach(o=>{
+        o.id=uid(); delete o.nr; delete o.fotos;
+        if(o.link){ linkMap[o.link]=linkMap[o.link]||uid(); o.link=linkMap[o.link]; }
+      });
+      if(mitObj) (kopie.objects||[]).forEach(g=>{ g.id=uid(); delete g.nr; delete g.fotos; });
+      else kopie.objects=[];
+      p.rooms.push(kopie);
+    });
+    p.floors.push(nf);
+    activeFloorId=nf.id; focusRoomId=null; sel={roomId:null,wall:null,vertex:null};
+    save(); renderAll(); zoomFit();
+    melde(`Etage „${f.name}" nach „${name}" dupliziert${mitObj?'':' (ohne Objekte)'}.`);
+  });
   on('#floordel','onclick',()=>{
     const p=proj();
     if(p.floors.length<=1){ alert('Die letzte Etage kann nicht gelöscht werden.'); return; }
@@ -3187,7 +3284,10 @@ function wireSidebar(r){
         syncSharedDoors(); save(); renderAll();
       }
     });
-    on('#eckedel','onclick',()=>{                          // Ecke entfernen
+    on('#eckedel','onclick',()=>{                          // Ecke entfernen — nur nach Rückfrage
+      const nE=r.points.length, vorE=(sel.vertex-1+nE)%nE;
+      const sperre=wandGesperrt(r,vorE)||wandGesperrt(r,sel.vertex);   // dann lehnt eckeLoeschen gleich selbst ab
+      if(!sperre && !confirm(`Ecke ${sel.vertex+1} löschen?\n\nDie beiden angrenzenden Wände verschmelzen zu einer.`)) return;
       if(eckeLoeschen(r, sel.vertex)){
         sel={roomId:r.id, wall:null, vertex:null};
         syncSharedDoors(); save(); renderAll();
@@ -3211,7 +3311,11 @@ function wireSidebar(r){
       };
     });
     document.querySelectorAll('.opdel').forEach(btn=>{
-      btn.onclick=()=>{ deleteOpeningEverywhere(r, btn.dataset.op); sel.openId=null; save(); renderAll(); };
+      btn.onclick=()=>{
+        const o=r.openings.find(x=>x.id===btn.dataset.op);
+        if(!objLoeschenOk(opName(o), openingIds(r, btn.dataset.op))) return;
+        deleteOpeningEverywhere(r, btn.dataset.op); sel.openId=null; save(); renderAll();
+      };
     });
     document.querySelectorAll('.ophinge').forEach(btn=>{
       btn.onclick=()=>{ const o=r.openings.find(x=>x.id===btn.dataset.op); if(!o) return;
@@ -3273,6 +3377,7 @@ function wireSidebar(r){
         sel.objId=c.id; save(); renderAll();
       });
       on('#objdel','onclick',()=>{
+        if(!objLoeschenOk(`„${selObj.name||'Objekt'}"`, selObj.id)) return;
         r.objects=r.objects.filter(x=>x.id!==selObj.id);
         dropLvFor(selObj.id);            // verknüpfte LV-Positionen mit löschen
         sel.objId=null; save(); renderAll();
@@ -3283,7 +3388,10 @@ function wireSidebar(r){
         if(neu!=null){ sel={...sel, objH:neu}; save(); renderAll(); }
       });
       on('#ptdel','onclick',()=>{                         // Ecke der Linie entfernen
-        if(sel.objH!=null && punktLoeschen(selObj, sel.objH)){
+        if(sel.objH==null) return;
+        // Objekt-Regel: ohne LV-Verweis keine Rückfrage; mit ändert sich die Länge, die im LV steckt
+        if(lvVerweise(selObj.id) && !confirm(`Ecke löschen?\n\n„${selObj.name||'Linie'}" hat LV-Zuordnungen — ihre Länge ändert sich dadurch.`)) return;
+        if(punktLoeschen(selObj, sel.objH)){
           sel={...sel, objH:null}; save(); renderAll();
         }
       });
@@ -3499,6 +3607,13 @@ function fotoVerkleinern(file){
 // Ziel der nächsten Aufnahme — LV-Dialog oder Raum/Wand/Objekt/Öffnung
 let fotoZiel=null;
 function fotoOeffnen(ziel){ fotoZiel=ziel; dlgFotoSrc.showModal(); }
+/* ---------- Foto-Stapel ----------
+   Aufnahmen landen NICHT sofort am Ziel, sondern in einem Sammel-Dialog: dort kann
+   man weitere Fotos nachschießen, blättern, löschen und markieren — übernommen wird
+   alles zusammen erst mit „Fotos benutzen". */
+const dlgFotoStapel=$('#dlgFotoStapel');
+let fotoStapel=null;                  // [{id,src,ts}] — null = kein Stapel offen
+let fotoQuelle='#fotoInCam';          // zuletzt benutzte Quelle für „Noch ein Foto"
 async function fotosAufnehmen(files){
   const liste=[...files].filter(f=>/^image\//.test(f.type)||/\.(jpe?g|png|heic|webp)$/i.test(f.name));
   if(!liste.length || !fotoZiel) return;
@@ -3508,8 +3623,50 @@ async function fotosAufnehmen(files){
     try{ neu.push({id:uid(), src:await fotoVerkleinern(f), ts:Date.now()}); }
     catch(err){ btLog('Foto: '+err.message); }
   }
-  if(neu.length) fotoZiel.add(neu);
+  if(info && fotoZiel.imDialog) info.textContent='';
+  if(!neu.length) return;
+  fotoStapel=(fotoStapel||[]).concat(neu);
+  fotoStapelRender();
+  if(!dlgFotoStapel.open) dlgFotoStapel.showModal();
 }
+function fotoStapelRender(){
+  const n=fotoStapel?fotoStapel.length:0;
+  $('#fsStrip').innerHTML=(fotoStapel||[]).map(f=>`<div class="fw">
+      <img src="${f.src}" data-fsview="${f.id}" alt="Foto" title="Anklicken: ansehen und bearbeiten">
+      <button data-fsdel="${f.id}" title="Foto entfernen">✕</button>
+    </div>`).join('');
+  $('#fsOk').textContent=`Fotos benutzen (${n})`;
+  document.querySelectorAll('[data-fsview]').forEach(im=>{
+    im.onclick=()=>{ const i=fotoStapel.findIndex(f=>f.id===im.dataset.fsview); if(i>=0) feStapelEdit(i); };
+  });
+  document.querySelectorAll('[data-fsdel]').forEach(b=>{
+    b.onclick=()=>{
+      if(!confirm('Foto löschen?')) return;
+      fotoStapel=fotoStapel.filter(f=>f.id!==b.dataset.fsdel);
+      if(!fotoStapel.length){ fotoStapel=null; dlgFotoStapel.close(); return; }
+      fotoStapelRender();
+    };
+  });
+}
+function fotoStapelBenutzen(){
+  if(!fotoStapel || !fotoStapel.length) return;
+  const n=fotoStapel.length, liste=fotoStapel;
+  fotoStapel=null;                    // vor dem close: der close-Handler des Editors schaut darauf
+  if(dlgFotoStapel.open) dlgFotoStapel.close();
+  if(fotoZiel) fotoZiel.add(liste);
+  melde(`${n} Foto(s) übernommen.`);
+}
+function fotoStapelVerwerfen(){
+  const n=fotoStapel?fotoStapel.length:0;
+  if(n && !confirm(`${n} aufgenommene(s) Foto(s) verwerfen?`)) return;
+  fotoStapel=null; dlgFotoStapel.close();
+}
+$('#fsOk').onclick=fotoStapelBenutzen;
+$('#fsAbbr').onclick=fotoStapelVerwerfen;
+$('#fsX').onclick=fotoStapelVerwerfen;
+dlgFotoStapel.addEventListener('cancel', e=>{ e.preventDefault(); fotoStapelVerwerfen(); });   // Esc
+$('#fsMehr').onclick=()=>$(fotoQuelle).click();
+$('#fsEdit').onclick=()=>{ if(fotoStapel && fotoStapel.length) feStapelEdit(0); };
 /* ================= Foto bearbeiten =================
    Einkreisen, Bereiche verpixeln, beschriften. Solange der Dialog offen ist, liegen
    die Zeichnungen als Objektliste ÜBER dem Bild — „Zurück" und „Verwerfen" kosten
@@ -3685,6 +3842,11 @@ function fePos(e){
 }
 function fotoBearbeiten(src, setzen){
   feZiel=setzen; feObj=[]; feDrag=null; feSel=-1;
+  // Einzel-Modus immer explizit herstellen — falls der Stapel-Modus ohne close-Event endete
+  feStapelModus=false;
+  $('#feNav').style.display='none';
+  $('#feSave').style.display='';
+  $('#feFotosOk').style.display='none';
   feTool=FE_START.tool;
   feFarbeSetzen(FE_START.farbe);
   $('#feSt').value=FE_START.staerke; $('#feStTxt').textContent=FE_START.staerke;
@@ -3712,15 +3874,96 @@ $('#feOp').oninput=e=>{ $('#feOpTxt').textContent=e.target.value+' %'; };
 $('#feSt').oninput=e=>{ $('#feStTxt').textContent=e.target.value; };
 $('#feUndo').onclick=()=>{ feObj.pop(); if(feSel>=feObj.length) feSel=-1; feRender(); };
 $('#feReset').onclick=()=>{ feObj=[]; feSel=-1; feRender(); };
-$('#feSave').onclick=()=>{
+// Bild + Zeichnungen zu einer neuen Datei verrechnen
+function feAusgeben(){
   const c=document.createElement('canvas');
   c.width=feBild.naturalWidth; c.height=feBild.naturalHeight;
   feMalen(c.getContext('2d'));
-  const neu=c.toDataURL('image/jpeg', FOTO_Q_EDIT);
+  return c.toDataURL('image/jpeg', FOTO_Q_EDIT);
+}
+$('#feSave').onclick=()=>{
+  const neu=feAusgeben();
   dlgFotoEdit.close();
   if(feZiel) feZiel(neu);
   melde(`Foto gespeichert — ${Math.round(neu.length*0.75/1024)} KB.`);
 };
+/* ---------- Editor im Stapel-Modus: blättern, löschen, alle benutzen ---------- */
+let feStapelModus=false, feStapelIdx=0;
+function feStapelEdit(i){
+  feStapelModus=true; feZiel=null;
+  if(dlgFotoStapel.open) dlgFotoStapel.close();
+  feTool=FE_START.tool; feFarbeSetzen(FE_START.farbe);
+  $('#feSt').value=FE_START.staerke; $('#feStTxt').textContent=FE_START.staerke;
+  $('#feOp').value=FE_START.deckkraft; $('#feOpTxt').textContent=FE_START.deckkraft+' %';
+  $('#feNav').style.display='flex';
+  $('#feSave').style.display='none';
+  $('#feFotosOk').style.display='';
+  feStapelZeigen(i);
+  if(!dlgFotoEdit.open) dlgFotoEdit.showModal();
+}
+function feStapelZeigen(i){
+  feStapelIdx=i; feObj=[]; feDrag=null; feSel=-1;
+  $('#fePosTxt').textContent=(i+1)+'/'+fotoStapel.length;
+  $('#feFotosOk').textContent=`Fotos benutzen (${fotoStapel.length})`;
+  feBild=new Image();
+  feBild.onerror=()=>melde('Foto konnte nicht geladen werden.', true);
+  feBild.onload=()=>{
+    const c=$('#feCanvas');
+    c.width=feBild.naturalWidth; c.height=feBild.naturalHeight;
+    feHinweis(); feRender();
+  };
+  feBild.src=fotoStapel[i].src;
+}
+// Zeichnungen des aktuellen Fotos ins Stapel-Foto einrechnen (beim Blättern/Übernehmen)
+function feStapelBacken(){
+  if(feObj.length && fotoStapel && fotoStapel[feStapelIdx]){
+    fotoStapel[feStapelIdx].src=feAusgeben();
+  }
+  feObj=[]; feSel=-1;
+}
+function feStapelNav(schritt){
+  if(!fotoStapel) return;
+  feStapelBacken();
+  feStapelZeigen((feStapelIdx+schritt+fotoStapel.length)%fotoStapel.length);
+}
+$('#fePrev').onclick=()=>feStapelNav(-1);
+$('#feNext').onclick=()=>feStapelNav(1);
+$('#feDel').onclick=()=>{
+  if(!fotoStapel || !confirm('Foto löschen?')) return;
+  fotoStapel.splice(feStapelIdx,1);
+  if(!fotoStapel.length){                       // letztes weg: Stapel zu, nichts übernehmen
+    fotoStapel=null; feStapelEnde(); dlgFotoEdit.close();
+    melde('Alle aufgenommenen Fotos verworfen.');
+    return;
+  }
+  feObj=[]; feSel=-1;
+  feStapelZeigen(Math.min(feStapelIdx, fotoStapel.length-1));
+};
+$('#feFotosOk').onclick=()=>{
+  feStapelBacken();
+  fotoStapelBenutzen();                         // leert den Stapel zuerst …
+  feStapelEnde();                               // … dann nur noch Knöpfe zurücksetzen
+  dlgFotoEdit.close();
+};
+/* Stapel-Modus verlassen: Editor-Knöpfe zurück, Übersicht wieder öffnen (falls noch
+   Fotos da sind). Idempotent — wird von allen Ausstiegen gerufen. WICHTIG: nicht nur
+   ans close-Event hängen, das feuert nicht in jedem Browser (Bluefy/eingebettetes
+   Chrome) — deshalb zusätzlich explizit an den Abbrechen/✕-Knöpfen. */
+function feStapelEnde(){
+  if(!feStapelModus) return;
+  feStapelModus=false;
+  $('#feNav').style.display='none';
+  $('#feSave').style.display='';
+  $('#feFotosOk').style.display='none';
+  if(fotoStapel && fotoStapel.length){
+    fotoStapelRender();
+    if(!dlgFotoStapel.open) dlgFotoStapel.showModal();
+  }
+}
+dlgFotoEdit.addEventListener('close', feStapelEnde);
+// nach dem generischen Schließen (onclick) zurück zur Übersicht
+dlgFotoEdit.querySelectorAll('[data-close]').forEach(b=>
+  b.addEventListener('click', ()=>setTimeout(feStapelEnde,0)));
 (()=>{
   const c=$('#feCanvas');
   c.addEventListener('pointerdown', e=>{
@@ -3814,7 +4057,10 @@ function wireFotos(btnId, ent, key){
     };
   });
   box.querySelectorAll('[data-fdel]').forEach(x=>{
-    x.onclick=()=>{ ent[key]=(ent[key]||[]).filter(f=>f.id!==x.dataset.fdel); save(); renderAll(); };
+    x.onclick=()=>{
+      if(!confirm('Foto löschen?')) return;
+      ent[key]=(ent[key]||[]).filter(f=>f.id!==x.dataset.fdel); save(); renderAll();
+    };
   });
 }
 function renderLvFotos(){
@@ -3833,14 +4079,17 @@ function renderLvFotos(){
     };
   });
   box.querySelectorAll('[data-fotodel]').forEach(b=>{
-    b.onclick=()=>{ lvFotos=lvFotos.filter(f=>f.id!==b.dataset.fotodel); renderLvFotos(); };
+    b.onclick=()=>{
+      if(!confirm('Foto löschen?')) return;   // wirksam wird es erst mit „Speichern"
+      lvFotos=lvFotos.filter(f=>f.id!==b.dataset.fotodel); renderLvFotos();
+    };
   });
 }
 $('#lvFotoAdd').onclick=()=>fotoOeffnen({imDialog:true, add:neu=>{ lvFotos.push(...neu); renderLvFotos(); }});
 $('#fotoCam').onclick=()=>{ dlgFotoSrc.close(); $('#fotoInCam').click(); };
 $('#fotoFile').onclick=()=>{ dlgFotoSrc.close(); $('#fotoInFile').click(); };
 ['#fotoInFile','#fotoInCam'].forEach(sel=>{
-  $(sel).onchange=async e=>{ await fotosAufnehmen(e.target.files); e.target.value=''; };
+  $(sel).onchange=async e=>{ fotoQuelle=sel; await fotosAufnehmen(e.target.files); e.target.value=''; };
 });
 
 /* Mehrzeiliges Feld an den Inhalt anpassen (statt horizontal zu scrollen) */
@@ -4368,6 +4617,10 @@ function renderLvDetail(){
     save(); renderLv();
   });
   document.querySelectorAll('[data-lvdel]').forEach(b=>b.onclick=()=>{
+    const a=proj().attrs.find(x=>x.id===b.dataset.lvdel); if(!a) return;
+    const alt=abschlagVon(a)<proj().abschlag
+      ? `\n\nAchtung: gehört zum bereits abgeschlossenen Abschlag ${abschlagVon(a)}.` : '';
+    if(!confirm(`LV-Zuordnung „${a.lv}" (${lvZielText(a)}) löschen?${alt}`)) return;
     proj().attrs=proj().attrs.filter(x=>x.id!==b.dataset.lvdel); save(); renderLv();
   });
 }
@@ -4828,6 +5081,7 @@ $('#setTest').onclick=async()=>{
   }
 };
 $('#setForget').onclick=()=>{
+  if(!confirm('Gespeicherten Airtable-Token von diesem Gerät löschen?')) return;
   localStorage.removeItem(AT_TOKEN_KEY); atTokenSession='';
   $('#setToken').value=''; $('#setRemember').checked=false;
   setStatus('Token von diesem Gerät gelöscht.');
