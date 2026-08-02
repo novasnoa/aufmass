@@ -134,6 +134,11 @@
     box-shadow:0 0 0 1px var(--line); padding:0; cursor:pointer;}
   .feswatch.an{box-shadow:0 0 0 2px var(--accent);}
   #dlgFotoEdit .dfoot{gap:6px;}
+  /* Serienkamera */
+  #kamWrap{background:#20242c; border-radius:8px; overflow:hidden; display:flex; justify-content:center;}
+  #kamVideo{display:block; width:100%; max-height:56vh; object-fit:contain; background:#20242c;}
+  #dlgKamera .dfoot{gap:8px;}
+  #kamShot{border-radius:24px;}
   /* LV-Katalog editieren */
   .lvrow{display:grid; grid-template-columns:34px 34px 108px 1fr 40px; gap:8px; align-items:center;
     padding:4px 0; border-bottom:1px solid var(--line);}
@@ -644,12 +649,30 @@
 <dialog id="dlgFotoSrc" style="width:340px">
   <div class="dhead">Foto hinzufügen <button data-close>✕</button></div>
   <div class="dbody">
-    <div class="row"><button class="btn primary" id="fotoCam" style="flex:1; padding:12px">📷 Kamera</button></div>
+    <div class="row"><button class="btn primary" id="fotoSerie" style="flex:1; padding:12px">📸 Serie aufnehmen</button></div>
+    <div class="row"><button class="btn" id="fotoCam" style="flex:1; padding:12px">📷 Kamera (einzeln)</button></div>
     <div class="row"><button class="btn" id="fotoFile" style="flex:1; padding:12px">🖼️ Gespeichertes Foto</button></div>
-    <p class="hint">Auf iPhone/iPad öffnet „Kamera“ direkt die Kamera. Am PC ohne Kamera-App erscheint die
-      Dateiauswahl. Mehrfachauswahl ist möglich.</p>
+    <p class="hint"><b>Serie</b> zeigt das Kamerabild in der App: Auslöser so oft tippen wie nötig, dann „Fertig“.
+      <b>Kamera (einzeln)</b> nutzt die iOS-Kamera-App — ein Foto je Aufruf.
+      <b>Gespeichertes Foto</b> erlaubt Mehrfachauswahl aus der Mediathek.</p>
   </div>
   <div class="dfoot"><button class="btn" data-close>Abbrechen</button></div>
+</dialog>
+
+<!-- Serienkamera: Live-Bild in der App, beliebig viele Auslösungen am Stück -->
+<dialog id="dlgKamera" style="width:min(560px,96vw)">
+  <div class="dhead">Serie aufnehmen <button id="kamX">✕</button></div>
+  <div class="dbody" style="padding:10px">
+    <div id="kamWrap"><video id="kamVideo" playsinline autoplay muted></video></div>
+    <p class="hint" id="kamHint" style="margin-top:6px"></p>
+  </div>
+  <div class="dfoot">
+    <button class="btn small" id="kamWechsel" title="Vorder-/Rückkamera">🔄</button>
+    <span style="flex:1"></span>
+    <b id="kamZahl" style="align-self:center"></b>
+    <button class="btn primary" id="kamShot" style="padding:10px 20px">⬤ Auslösen</button>
+    <button class="btn" id="kamFertig">Fertig</button>
+  </div>
 </dialog>
 
 <!-- Aufgenommene Fotos sammeln: erst „Fotos benutzen" übernimmt sie ans Ziel -->
@@ -3636,6 +3659,7 @@ function fotoStapelRender(){
       <button data-fsdel="${f.id}" title="Foto entfernen">✕</button>
     </div>`).join('');
   $('#fsOk').textContent=`Fotos benutzen (${n})`;
+  $('#fsMehr').textContent = fotoQuelle==='serie' ? '📸 Serie fortsetzen' : '📷 Noch ein Foto';
   document.querySelectorAll('[data-fsview]').forEach(im=>{
     im.onclick=()=>{ const i=fotoStapel.findIndex(f=>f.id===im.dataset.fsview); if(i>=0) feStapelEdit(i); };
   });
@@ -3665,7 +3689,11 @@ $('#fsOk').onclick=fotoStapelBenutzen;
 $('#fsAbbr').onclick=fotoStapelVerwerfen;
 $('#fsX').onclick=fotoStapelVerwerfen;
 dlgFotoStapel.addEventListener('cancel', e=>{ e.preventDefault(); fotoStapelVerwerfen(); });   // Esc
-$('#fsMehr').onclick=()=>$(fotoQuelle).click();
+// „Noch ein Foto" nimmt die zuletzt benutzte Quelle — bei der Serie das Live-Bild
+$('#fsMehr').onclick=()=>{
+  if(fotoQuelle==='serie'){ dlgFotoStapel.close(); kameraStarten(); }
+  else $(fotoQuelle).click();
+};
 $('#fsEdit').onclick=()=>{ if(fotoStapel && fotoStapel.length) feStapelEdit(0); };
 /* ================= Foto bearbeiten =================
    Einkreisen, Bereiche verpixeln, beschriften. Solange der Dialog offen ist, liegen
@@ -4086,11 +4114,119 @@ function renderLvFotos(){
   });
 }
 $('#lvFotoAdd').onclick=()=>fotoOeffnen({imDialog:true, add:neu=>{ lvFotos.push(...neu); renderLvFotos(); }});
-$('#fotoCam').onclick=()=>{ dlgFotoSrc.close(); $('#fotoInCam').click(); };
-$('#fotoFile').onclick=()=>{ dlgFotoSrc.close(); $('#fotoInFile').click(); };
+$('#fotoSerie').onclick=()=>{ dlgFotoSrc.close(); kameraStarten(); };
+$('#fotoCam').onclick=()=>{ dlgFotoSrc.close(); fotoQuelle='#fotoInCam'; $('#fotoInCam').click(); };
+$('#fotoFile').onclick=()=>{ dlgFotoSrc.close(); fotoQuelle='#fotoInFile'; $('#fotoInFile').click(); };
 ['#fotoInFile','#fotoInCam'].forEach(sel=>{
   $(sel).onchange=async e=>{ fotoQuelle=sel; await fotosAufnehmen(e.target.files); e.target.value=''; };
 });
+
+/* ================= Serienkamera =================
+   Das Kamerabild läuft IN der App (getUserMedia): beliebig viele Auslösungen am
+   Stück, jedes Foto direkt in den Stapel. Grund: `<input capture>` gibt auf iOS
+   nach JEDEM Foto die Kontrolle zurück — Serien sind damit nicht möglich.
+   Klappt der Zugriff nicht (Berechtigung, kein HTTPS, Browser ohne Unterstützung),
+   fällt die App auf die iOS-Kamera-App zurück, statt nur zu meckern. */
+const dlgKamera=$('#dlgKamera');
+let kamStream=null, kamFacing='environment', kamZaehler=0;
+function kamMoeglich(){
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+}
+async function kameraStarten(){
+  if(!kamMoeglich()){ kameraFallback('Dieser Browser gibt kein Kamerabild frei'); return; }
+  kamZaehler=0; $('#kamZahl').textContent='';
+  if(!dlgKamera.open) dlgKamera.showModal();
+  await kamStreamHolen();
+}
+async function kamStreamHolen(){
+  kamStreamStoppen();
+  kamBereit(false, 'Kamera wird geöffnet …');
+  try{
+    kamStream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:{ideal:kamFacing}, width:{ideal:1920}, height:{ideal:1440}}, audio:false});
+  }catch(err){
+    dlgKamera.close();
+    kameraFallback('Kamerazugriff nicht möglich: '+(err && err.message ? err.message : err));
+    return false;
+  }
+  const v=$('#kamVideo');
+  v.srcObject=kamStream;
+  // NICHT awaiten: play() kann in Hintergrund-Tabs/verdeckten Ansichten ewig offen
+  // bleiben und würde die Freigabe des Auslösers blockieren
+  try{ const pr=v.play(); if(pr && pr.catch) pr.catch(()=>{}); }catch(e){}
+  await kamMasseAbwarten(v);
+  kamBereit(true, 'Auslöser so oft tippen wie nötig. „Fertig" schließt die Serie ab.');
+  return true;
+}
+/* Nach einem Quellenwechsel meldet das <video> seine Maße erst mit „loadedmetadata" —
+   bis dahin liefert ein Auslösen ein leeres Bild. Darum warten und den Auslöser
+   solange sperren. */
+function kamMasseAbwarten(v){
+  if(v.videoWidth && v.videoHeight) return Promise.resolve();
+  return new Promise(res=>{
+    let fertig=false, t=null;
+    const ok=()=>{
+      if(fertig) return;
+      fertig=true; clearInterval(t);
+      v.removeEventListener('loadedmetadata', ok); res();
+    };
+    v.addEventListener('loadedmetadata', ok);
+    // Zusätzlich pollen: beim erneuten Anhängen einer Quelle bleibt das Ereignis
+    // in manchen Browsern aus, obwohl die Maße längst stehen
+    let n=0;
+    t=setInterval(()=>{ if((v.videoWidth && v.videoHeight) || ++n>30) ok(); }, 100);
+  });
+}
+function kamBereit(an, hinweis){
+  $('#kamShot').disabled=!an;
+  $('#kamWechsel').disabled=!an;
+  $('#kamHint').textContent=hinweis;
+}
+function kamStreamStoppen(){
+  if(kamStream){ kamStream.getTracks().forEach(t=>t.stop()); kamStream=null; }
+  $('#kamVideo').srcObject=null;
+}
+// Kein Kamerabild → der bisherige Weg über die iOS-Kamera-App
+function kameraFallback(grund){
+  melde(grund+' — es öffnet die Kamera-App (ein Foto je Aufnahme).', true);
+  fotoQuelle='#fotoInCam';
+  $('#fotoInCam').click();
+}
+$('#kamShot').onclick=()=>{
+  const v=$('#kamVideo');
+  let vw=v.videoWidth, vh=v.videoHeight;
+  if(!vw||!vh){
+    // Quelle noch einmal anstoßen — hilft, wenn das Video nach dem Wiederöffnen hängt
+    if(kamStream){ v.srcObject=kamStream; const pr=v.play(); if(pr&&pr.catch) pr.catch(()=>{}); }
+    melde('Kamerabild noch nicht bereit — bitte gleich noch einmal auslösen.', true);
+    return;
+  }
+  const s=Math.min(1, FOTO_MAX/Math.max(vw,vh));
+  const c=document.createElement('canvas');
+  c.width=Math.max(1,Math.round(vw*s)); c.height=Math.max(1,Math.round(vh*s));
+  c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+  fotoStapel=(fotoStapel||[]).concat([{id:uid(), src:c.toDataURL('image/jpeg', FOTO_Q), ts:Date.now()}]);
+  kamZaehler++;
+  $('#kamZahl').textContent=kamZaehler+' aufgenommen';
+  $('#kamHint').textContent='Foto '+kamZaehler+' im Stapel. Weiter auslösen oder „Fertig".';
+};
+$('#kamWechsel').onclick=async()=>{
+  kamFacing = kamFacing==='environment' ? 'user' : 'environment';
+  await kamStreamHolen();
+};
+function kameraBeenden(){
+  kamStreamStoppen();
+  if(dlgKamera.open) dlgKamera.close();
+  if(fotoStapel && fotoStapel.length){
+    fotoQuelle='serie';                            // „Noch ein Foto" öffnet wieder die Serie
+    fotoStapelRender();
+    if(!dlgFotoStapel.open) dlgFotoStapel.showModal();
+  }
+}
+$('#kamFertig').onclick=kameraBeenden;
+$('#kamX').onclick=kameraBeenden;
+dlgKamera.addEventListener('cancel', e=>{ e.preventDefault(); kameraBeenden(); });   // Esc
+dlgKamera.addEventListener('close', kamStreamStoppen);                              // Sicherheitsnetz
 
 /* Mehrzeiliges Feld an den Inhalt anpassen (statt horizontal zu scrollen) */
 function autoGrow(el){
