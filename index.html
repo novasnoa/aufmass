@@ -1960,7 +1960,15 @@ function renderCanvas(){
   if(mode==='draw' && draft.points.length){
     const d=draft.points.map((p,i)=>(i?'L':'M')+p.x+' '+p.y).join(' ');
     out+=`<path d="${d}" fill="none" stroke="#2f6fed" stroke-width="0.08" stroke-dasharray="0.15 0.1"/>`;
-    draft.points.forEach((p,i)=>{ out+=`<circle cx="${p.x}" cy="${p.y}" r="${lbl*0.4}" fill="${i===0?'#0ea06f':'#2f6fed'}"/>`; });
+    // Gesetzte Punkte sind anfassbar; der Startpunkt zieht an (Raum schließen)
+    const zielt = drag && drag.kind==='drafth' ? drag.aufPunkt : null;
+    draft.points.forEach((p,i)=>{
+      const start=i===0, gefangen=zielt===i;
+      const rr=lbl*(gefangen?0.75:(start?0.5:0.4));
+      if(gefangen) out+=`<circle cx="${p.x}" cy="${p.y}" r="${lbl*1.6}" fill="url(#ziehzone)" style="pointer-events:none"/>`;
+      out+=`<circle cx="${p.x}" cy="${p.y}" r="${rr}" fill="${start?'#0ea06f':'#2f6fed'}" stroke="#fff" stroke-width="${lbl*0.1}" data-drafth="${i}" style="cursor:move"/>`;
+      out+=`<circle cx="${p.x}" cy="${p.y}" r="${lbl*1.5}" fill="transparent" data-drafth="${i}" style="cursor:move"/>`;
+    });
     if(draft.cursor){
       const a=draft.points[draft.points.length-1], b=draft.cursor;
       out+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#0ea06f" stroke-width="0.06"/>`;
@@ -2261,7 +2269,19 @@ svg.addEventListener('pointerdown', e=>{
   if(zeiger.size>2) return;
   const p=svgPoint(e);
   svg.setPointerCapture(e.pointerId);
-  if(mode==='draw'){ handleDrawClick(p); return; }
+  /* Zeichnen: der Punkt entsteht erst beim LOSLASSEN und nur, wenn der Finger
+     stehen geblieben ist — Schieben und Zoomen dürfen keinen Punkt setzen.
+     Gesetzte Punkte lassen sich anfassen und verschieben. */
+  if(mode==='draw'){
+    const zt=e.target;
+    if(zt && zt.dataset && zt.dataset.drafth!==undefined){
+      const i=+zt.dataset.drafth;
+      drag={kind:'drafth', idx:i, start:p, orig:{...draft.points[i]}, aufPunkt:null, moved:false};
+      return;
+    }
+    drag={kind:'pan', start:{x:e.clientX,y:e.clientY}, orig:{...vb}, moved:false, zeichnen:true};
+    return;
+  }
   if(mode==='kalib'){ planKalibKlick(p); return; }
   if(mode==='place'){ commitPlace(p); return; }
   if(mode==='objrect'||mode==='objline'){
@@ -2413,7 +2433,23 @@ svg.addEventListener('pointermove', e=>{
   if(zeiger.has(e.pointerId)) zeiger.set(e.pointerId, {x:e.clientX, y:e.clientY});
   if(pinch){ if(zeiger.size>=2) updatePinch(); return; }
   const p=svgPoint(e);
-  if(mode==='draw'){ draft.cursor=snapDir(p); renderCanvas(); updateDrawHint(); return; }
+  if(mode==='draw'){
+    if(drag && drag.kind==='drafth'){          // gesetzten Punkt ziehen (mit Magnet)
+      const s=draftSnap(p, drag.idx);
+      if(dist(s, drag.orig)>0.005) drag.moved=true;
+      drag.aufPunkt = s.aufPunkt!=null ? s.aufPunkt : null;
+      draft.points[drag.idx]={x:s.x, y:s.y};
+      renderCanvas(); return;
+    }
+    if(drag && drag.kind==='pan'){             // Schieben statt Punkt setzen
+      const scale=vb.w/svg.getBoundingClientRect().width;
+      const dx=(e.clientX-drag.start.x)*scale, dy=(e.clientY-drag.start.y)*scale;
+      if(Math.abs(dx)+Math.abs(dy)>0.02) drag.moved=true;
+      if(drag.moved){ vb.x=drag.orig.x-dx; vb.y=drag.orig.y-dy; }
+      renderCanvas(); return;
+    }
+    draft.cursor=snapDir(p); renderCanvas(); updateDrawHint(); return;
+  }
   if(mode==='place'){ if(placing){placing.at=p; renderCanvas();} return; }
   if(!drag) return;
   if(drag.kind==='pan'){
@@ -2595,6 +2631,22 @@ svg.addEventListener('pointerup', e=>{
     if(zeiger.size<2){ pinch=null; drag=null; }
     return;
   }
+  if(drag && mode==='draw'){
+    const d=drag; drag=null;
+    if(d.kind==='drafth'){
+      const n=draft.points.length;
+      // Auf den Startpunkt gezogen (bzw. Start auf das Ende) = Raum schließen
+      const schliesst = d.aufPunkt!=null &&
+        ((d.idx===n-1 && d.aufPunkt===0) || (d.idx===0 && d.aufPunkt===n-1));
+      if(schliesst && n>=4){ draft.points.splice(d.idx,1); closeDraft(); return; }
+      if(!d.moved) draft.points[d.idx]={...d.orig};     // reiner Tipp ändert nichts
+      renderCanvas(); updateDrawHint(); return;
+    }
+    // Schieben/Zoomen setzt keinen Punkt — nur der stehende Tipp tut es
+    if(d.kind==='pan' && !d.moved) handleDrawClick(svgPoint(e));
+    else renderCanvas();
+    return;
+  }
   if(drag){
     if(drag.kind==='room' && !drag.moved && mode==='select'){
       const id=drag.room.id; drag=null;
@@ -2712,10 +2764,28 @@ function snapDir(p){
 }
 function handleDrawClick(p){
   const sp=snapDir(p);
-  if(draft.points.length>=3 && dist(sp, draft.points[0]) < vb.w/60){ closeDraft(); return; }
+  if(draft.points.length>=3 && dist(sp, draft.points[0]) < zeichenFang()){ closeDraft(); return; }
   draft.points.push(sp);
   draft.typed='';
   renderCanvas(); updateDrawHint();
+}
+/* Fangradius beim Zeichnen — bildschirmkonstant, damit er auf dem iPad bei jedem
+   Zoom gleich gut zu treffen ist. */
+const zeichenFang = () => vb.w/28;
+/* Beim Ziehen eines gesetzten Punktes: an die anderen Punkte des Entwurfs und an
+   Wände/Ecken der vorhandenen Räume einrasten. Der ERSTE Punkt zieht besonders an —
+   auf ihn zu ziehen schließt den Raum. */
+function draftSnap(p, idx){
+  const f=zeichenFang();
+  let best=null, bd=f;
+  draft.points.forEach((q,i)=>{
+    if(i===idx) return;
+    const d=dist(p,q);
+    if(d<bd){ bd=d; best={x:q.x, y:q.y, aufPunkt:i}; }
+  });
+  if(best) return best;
+  const s=snapPointToOthers(p, floorRooms(), f, f*0.8);
+  return s ? {x:s.x, y:s.y} : {x:mm(p.x), y:mm(p.y)};
 }
 function addSegment(L){
   if(!draft.points.length || !draft.dir || !isFinite(L) || L<=0) return;
@@ -2735,10 +2805,11 @@ function updateDrawHint(){
   if(mode==='draw'){
     h.style.display='block';
     const n=draft.points.length;
-    let txt = n===0 ? 'Ersten Eckpunkt klicken' :
-      `Punkt ${n} gesetzt — Richtung zeigen, dann <b>klicken</b>, <b>Laser auslösen</b> oder Länge tippen`;
+    let txt = n===0 ? 'Ersten Eckpunkt antippen' :
+      `Punkt ${n} gesetzt — Richtung zeigen, dann <b>antippen</b>, <b>Laser auslösen</b> oder Länge tippen`;
     if(draft.typed) txt += ` &nbsp;|&nbsp; Eingabe: <b>${draft.typed} m</b> (Enter)`;
-    if(n>=3) txt += ' &nbsp;|&nbsp; Doppelklick = schließen';
+    if(n>=1) txt += ' &nbsp;|&nbsp; Punkte lassen sich verschieben';
+    if(n>=3) txt += ' &nbsp;|&nbsp; auf den <b>grünen Startpunkt</b> ziehen oder Doppelklick = schließen';
     h.innerHTML=txt+' &nbsp;|&nbsp; Esc = abbrechen';
   } else if(mode==='kalib'){
     h.style.display='block';
