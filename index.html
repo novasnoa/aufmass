@@ -623,6 +623,9 @@
       <li><b>Anwählen, dann ziehen:</b> Ecken und Wände werden mit dem ersten Klick nur ausgewählt — die grün eingefärbte Zone zeigt, wo du zum Ziehen zufassen kannst. Klick ins Leere wählt wieder ab.</li>
       <li><b>Türen/Fenster:</b> Wand auswählen, dann „+ Tür“ / „+ Fenster“. Danach Tür/Fenster direkt im Plan <b>anklicken</b>: Ziehen verschiebt sie entlang der Wand. Für die Breite einen <b>Endgriff anklicken</b> — er wird gefüllt und bekommt die grüne Ziehzone, dann noch einmal anfassen und ziehen (genau wie bei Flächen und Linien). Das Seitenpanel zeigt Maße und Abstand. Flächen werden automatisch von der Wandfläche abgezogen. Bei Türen lassen sich <b>Anschlag ⇄</b> (Angelpunkt links/rechts) und <b>Aufschlag ⇅</b> (Öffnungsrichtung in den Raum) umschalten — das Symbol zeigt Türblatt und Schwenkbogen.</li>
       <li><b>Wandstärken:</b> Jede Wand hat im Wand-Panel ein Feld <b>„Stärke (m)"</b> (Vorgabe 0,24) — „alle" überträgt den Wert auf den ganzen Raum. <b>Deine gezeichnete Linie ist und bleibt die Innenkante</b>, die Stärke wächst nach außen. Bodenfläche, Umfang und Wandfläche sind deshalb weiter das <b>lichte Maß</b>, das du mit dem Laser misst — an diesen Zahlen und am CSV-Export ändert sich nichts. Neu dazu kommen in der Statistik <b>Laibungen</b> (Öffnungsumfang × Wandstärke) und <b>Wandvolumen</b>.</li>
+      <li><b>Magnet:</b> Beim Ziehen zeigt ein <b>grünes Feld</b>, an welche fremde Wand oder Ecke gerade eingerastet wird. Im Wand-Panel lässt er sich mit <b>🧲</b> ganz abschalten, wenn er im Weg ist.</li>
+      <li><b>Ecken ziehen mit:</b> Schiebst du eine Wand und kommst dabei einer <b>Ecke eines Nachbarraums</b> nahe, rastet die Wand auf deren Höhe ein — aber nur in <b>Zugrichtung</b>, seitlich verschiebt sich nichts. Die anstoßenden Wände werden dabei entsprechend länger oder kürzer.</li>
+      <li><b>🔗 Mit Nachbar verbinden:</b> Stehen zwei Räume leicht schief zueinander, findet die Tür in der gemeinsamen Wand ihren Partner nicht mehr — sie erscheint dann nur in einem der beiden Räume. Der Knopf setzt die <b>Wandstärke</b> so, dass das Mauerwerk den Nachbarn überall erreicht; <b>am Raum ändert sich nichts</b>, deine gemessenen Maße bleiben also exakt. Vorher legt die App einen <b>Rückkehrpunkt</b> an — darüber kommst du mit einem Griff auf den Stand davor zurück.</li>
       <li><b>Angrenzende Räume:</b> Der Magnet rastet jetzt mit genau einer <b>Wandstärke Abstand</b> ein statt bündig. Beide Räume behalten ihr lichtes Maß, dazwischen liegt eine Wand — so, wie du misst und wie der Plan aussehen soll.</li>
       <li><b>Türen in geteilten Wänden:</b> Eine Tür in der gemeinsamen Wand wird automatisch in beide Räume übernommen, auch über die Wandstärke hinweg. Breite/Höhe ändern wirkt auf beide Seiten, Löschen entfernt sie ebenfalls beidseitig.</li>
     </ul>
@@ -1869,6 +1872,24 @@ function objMarks(r, lbl, interactive){
   });
   return interactive ? out : (out ? `<g style="pointer-events:none">${out}</g>` : '');
 }
+/* Grünes Magnetfeld: zeigt während des Ziehens, WORAN gerade eingerastet wird —
+   ein Band längs der fremden Wand bzw. ein Kreis an der fremden Ecke. */
+function magnetFeld(lbl){
+  if(!magnetTreffer.length || !drag) return '';
+  let out='';
+  magnetTreffer.forEach(t=>{
+    if(t.typ==='ecke'){
+      out+=`<circle cx="${t.p.x}" cy="${t.p.y}" r="${lbl*2.6}" fill="url(#ziehzone)"/>`;
+      out+=`<circle cx="${t.p.x}" cy="${t.p.y}" r="${lbl*0.42}" fill="none" stroke="#0ea06f" stroke-width="${lbl*0.14}"/>`;
+    } else if(t.a && t.b){
+      out+=`<line x1="${t.a.x}" y1="${t.a.y}" x2="${t.b.x}" y2="${t.b.y}"
+        stroke="#0ea06f" stroke-opacity="0.22" stroke-width="${lbl*2.2}" stroke-linecap="round"/>`;
+      out+=`<line x1="${t.a.x}" y1="${t.a.y}" x2="${t.b.x}" y2="${t.b.y}"
+        stroke="#0ea06f" stroke-width="${lbl*0.16}" stroke-linecap="round"/>`;
+    }
+  });
+  return `<g style="pointer-events:none">${out}</g>`;
+}
 /* Nicht rechte Winkel rot markieren: Viertelkreis-Bogen + Gradzahl an der Ecke */
 function angleMarks(r, lbl){
   let out='';
@@ -2064,6 +2085,7 @@ function renderCanvas(){
     const d=placing.points.map((p,i)=>(i?'L':'M')+(p.x-c.x+placing.at.x)+' '+(p.y-c.y+placing.at.y)).join(' ')+' Z';
     out+=`<path d="${d}" fill="#e8f0fe" stroke="#2f6fed" stroke-width="0.1" opacity="0.8"/>`;
   }
+  out+=magnetFeld(lbl);
   svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
   svg.innerHTML=out;
   plakettenAus=false;                  // Druck und Raumansicht zeigen die Nummern weiter
@@ -2093,7 +2115,21 @@ function zoomBy(f, cx, cy){
 /* ---------- Magnetisches Einrasten ---------- */
 // Kandidaten: parallele Wände anderer Räume in der Nähe von Segment a1→b1.
 // Liefert Korrekturvektoren (senkrecht zur fremden Wand), die die Wände bündig machen.
+/* ---------- Magnet: an/aus ----------
+   Der Schalter greift an EINER Stelle — in den drei Kandidatenfunktionen. Damit ist
+   sichergestellt, dass kein Weg (Raum ziehen, Wand ziehen, Ecke ziehen, Zeichnen) den
+   Magneten heimlich doch benutzt. */
+const MAGNET_KEY='grundriss-magnet-aus';
+const magnetAn = () => localStorage.getItem(MAGNET_KEY)!=='1';
+function magnetUmschalten(){
+  const aus=magnetAn();
+  localStorage.setItem(MAGNET_KEY, aus?'1':'0');
+  renderAll();
+  melde(aus ? 'Magnet aus — Wände und Ecken rasten nicht mehr ein.'
+            : 'Magnet an — Wände und Ecken rasten wieder ein.');
+}
 function segSnapCandidates(a1, b1, others, thresh){
+  if(!magnetAn()) return [];
   const out=[];
   const L1=dist(a1,b1); if(L1<0.05) return out;
   const d1={x:(b1.x-a1.x)/L1, y:(b1.y-a1.y)/L1};
@@ -2114,7 +2150,7 @@ function segSnapCandidates(a1, b1, others, thresh){
       const t1=(a1.x-a2.x)*d2.x+(a1.y-a2.y)*d2.y;                // Überlappung entlang der Wand
       const t2=(b1.x-a2.x)*d2.x+(b1.y-a2.y)*d2.y;
       if(Math.min(Math.max(t1,t2),L2)-Math.max(Math.min(t1,t2),0) < 0.05) continue;
-      out.push({dx:-nx*korr, dy:-ny*korr, mag:Math.abs(korr)});
+      out.push({dx:-nx*korr, dy:-ny*korr, mag:Math.abs(korr), seg:[a2,b2]});
     }
   });
   return out;
@@ -2122,6 +2158,7 @@ function segSnapCandidates(a1, b1, others, thresh){
 // Senkrecht auftreffende Wände (T-Stoß): Wandende rastet bündig auf die fremde Wandlinie.
 // Liefert Korrekturvektoren senkrecht zur fremden Wand, damit die Wände sauber anschließen.
 function perpSnapCandidates(a1, b1, others, thresh){
+  if(!magnetAn()) return [];
   const out=[];
   const L1=dist(a1,b1); if(L1<0.05) return out;
   const d1={x:(b1.x-a1.x)/L1, y:(b1.y-a1.y)/L1};
@@ -2139,7 +2176,7 @@ function perpSnapCandidates(a1, b1, others, thresh){
         if(Math.abs(dd)>thresh || Math.abs(dd)<0.0005) return;
         const t=(p.x-a2.x)*d2.x+(p.y-a2.y)*d2.y;                 // Auftreffpunkt entlang der fremden Wand
         if(t<-0.05 || t>L2+0.05) return;                         // trifft das Wandsegment nicht
-        out.push({dx:-nx*dd, dy:-ny*dd, mag:Math.abs(dd)});
+        out.push({dx:-nx*dd, dy:-ny*dd, mag:Math.abs(dd), seg:[a2,b2]});
       });
     }
   });
@@ -2147,6 +2184,11 @@ function perpSnapCandidates(a1, b1, others, thresh){
 }
 // Beste Korrektur für ein ganzes Polygon: kleinste Verschiebung, plus eine
 // zweite (nahezu orthogonale) für sauberes Eck-Andocken.
+/* Was der Magnet gerade greift — wird beim Ziehen gefüllt und von renderCanvas als
+   grünes Feld gezeichnet, damit sichtbar ist, WORAN eingerastet wird. */
+let magnetTreffer=[];
+const magnetMerken = (...c) => { magnetTreffer=c.filter(Boolean).map(x=>x.seg
+  ? {typ:'wand', a:x.seg[0], b:x.seg[1]} : x); };
 function magneticDelta(points, others, thresh){
   let cands=[];
   const n=points.length;
@@ -2154,17 +2196,39 @@ function magneticDelta(points, others, thresh){
     cands.push(...segSnapCandidates(points[i], points[(i+1)%n], others, thresh));
     cands.push(...perpSnapCandidates(points[i], points[(i+1)%n], others, thresh));
   }
-  if(!cands.length) return {dx:0, dy:0};
+  if(!cands.length){ magnetMerken(); return {dx:0, dy:0}; }
   cands.sort((a,b)=>a.mag-b.mag);
   const first=cands[0];
   let dx=first.dx, dy=first.dy;
   const u1={x:first.dx/first.mag, y:first.dy/first.mag};
   const second=cands.find(c=>Math.abs(u1.x*(c.dx/c.mag)+u1.y*(c.dy/c.mag))<0.3);
   if(second){ dx+=second.dx; dy+=second.dy; }
+  magnetMerken(first, second);
   return {dx, dy};
 }
 // Punkt an Ecken/Wänden anderer Räume einrasten (für Ecken-Drag).
+/* Fremde ECKEN ziehen eine bewegte Wand an — aber nur mit ihrem Anteil in
+   Zugrichtung. Die Wand wandert ohnehin ausschließlich längs ihrer Normalen; quer dazu
+   darf nichts passieren, sonst würde der Magnet die Wand verschieben statt sie
+   auszurichten. Gesucht wird der Versatz, bei dem die Wandlinie durch die Ecke läuft.
+   Seitlich muss die Ecke ungefähr auf Höhe der Wand liegen (Wandlänge + 1 m), sonst
+   zöge jede beliebige Ecke der Etage. */
+function eckenInZugrichtung(A2, B2, nx, ny, others, thresh){
+  if(!magnetAn()) return [];
+  const L=dist(A2,B2); if(L<0.05) return [];
+  const ux=(B2.x-A2.x)/L, uy=(B2.y-A2.y)/L;
+  const out=[];
+  others.forEach(o=>(o.points||[]).forEach(q=>{
+    const t=(q.x-A2.x)*ux+(q.y-A2.y)*uy;
+    if(t<-1.0 || t>L+1.0) return;
+    const d=(q.x-A2.x)*nx+(q.y-A2.y)*ny;
+    if(Math.abs(d)>thresh || Math.abs(d)<0.0005) return;
+    out.push({korr:d, mag:Math.abs(d), ecke:{x:q.x, y:q.y}});
+  }));
+  return out;
+}
 function snapPointToOthers(pt, others, vt, et){
+  if(!magnetAn()) return null;
   for(const o of others) for(const q of o.points)
     if(Math.hypot(pt.x-q.x, pt.y-q.y)<vt) return {x:q.x, y:q.y};
   for(const o of others){
@@ -2292,7 +2356,7 @@ let pinch=null;
 // sonst verschiebt die Zoom-Geste ungewollt Räume oder Objekte.
 function cancelDrag(){
   if(!drag) return;
-  const d=drag; drag=null;
+  const d=drag; drag=null; magnetTreffer=[];
   if(d.kind==='room' && d.room && d.orig){
     d.room.points=d.orig.map(q=>({...q}));
     if(d.origObjs) d.room.objects=JSON.parse(JSON.stringify(d.origObjs));
@@ -2567,7 +2631,8 @@ svg.addEventListener('pointermove', e=>{
     // Magnet: an Ecken/Wänden der Nachbarräume einrasten
     const vOthers=floorRooms().filter(x=>x.id!==r.id);
     const snapped=snapPointToOthers({x:nx, y:ny}, vOthers, 0.15, 0.12);
-    if(snapped){ nx=snapped.x; ny=snapped.y; }
+    if(snapped){ nx=snapped.x; ny=snapped.y; magnetTreffer=[{typ:'ecke', p:snapped}]; }
+    else magnetTreffer=[];
     if(Math.hypot(nx-drag.orig.x, ny-drag.orig.y)>0.01) drag.moved=true;
     r.points[i]={x:nx, y:ny};
     renderCanvas();
@@ -2588,14 +2653,20 @@ svg.addEventListener('pointermove', e=>{
     // Nur der Anteil quer zur Wand zählt, sonst verlässt die Ecke ihre Nachbarwand.
     const wOthers=floorRooms().filter(x=>x.id!==r.id);
     const cands=[...segSnapCandidates(A2, B2, wOthers, 0.2), ...perpSnapCandidates(A2, B2, wOthers, 0.2)];
-    if(cands.length){
-      cands.sort((a,b)=>a.mag-b.mag);
-      const quer=cands[0].dx*nx + cands[0].dy*ny;
-      if(Math.abs(quer)>1e-9){
-        s=mm(s+quer);
-        A2=rutsch(A, drag.gA, s); B2=rutsch(B, drag.gB, s);
-      }
-    }
+    // Wände und Ecken gemeinsam bewerten — es zählt nur der Anteil quer zur Wand,
+    // also in Zugrichtung. Der kleinste Versatz gewinnt.
+    const zieher=[
+      ...cands.map(c=>{ const k=c.dx*nx+c.dy*ny; return {korr:k, mag:Math.abs(k), seg:c.seg}; }),
+      ...eckenInZugrichtung(A2, B2, nx, ny, wOthers, 0.2)   // gleicher Fangbereich wie bei Wänden
+    ].filter(c=>Math.abs(c.korr)>1e-9);
+    if(zieher.length){
+      zieher.sort((a,b)=>a.mag-b.mag);
+      const w=zieher[0];
+      s=mm(s+w.korr);
+      A2=rutsch(A, drag.gA, s); B2=rutsch(B, drag.gB, s);
+      magnetTreffer = w.ecke ? [{typ:'ecke', p:w.ecke}]
+                             : (w.seg ? [{typ:'wand', a:w.seg[0], b:w.seg[1]}] : []);
+    } else magnetTreffer=[];
     r.points[i]=A2;
     r.points[(i+1)%n]=B2;
     renderCanvas();
@@ -2695,6 +2766,7 @@ svg.addEventListener('pointercancel', e=>{
 });
 svg.addEventListener('pointerup', e=>{
   zeiger.delete(e.pointerId);
+  magnetTreffer=[];                     // grünes Feld nur solange gezogen wird
   haltenAbbrechen();                        // losgelassen = kein langer Druck mehr
   if(pinch){                      // Ende der Zoom-Geste — kein Klick auslösen
     if(zeiger.size<2){ pinch=null; drag=null; }
@@ -3189,6 +3261,93 @@ function eckeEinfuegen(r, i){
   if(r.wallDicke && r.wallDicke[i]!=null) r.wallDicke[i+1]=r.wallDicke[i];   // Hälfte erbt die Stärke
   return true;
 }
+/* ---------- Rückkehrpunkt ----------
+   Ein benannter Stand, zu dem sich mit einem Griff zurückkehren lässt. Gedacht für
+   Eingriffe, deren Folgen man erst später bemerkt — das Verbinden von Wänden ändert
+   auch, welche Türen als gemeinsam gelten. Der normale Verlauf (40 Schritte) bleibt
+   davon unberührt; hier zählt, dass EIN bestimmter Zustand sicher wiederkommt. */
+let rueckkehrPunkt=null;
+function rueckkehrSetzen(was){
+  rueckkehrPunkt={stand:standErfassen(), was, zeit:Date.now()};
+}
+function rueckkehrZurueck(){
+  if(!rueckkehrPunkt) return;
+  if(!confirm(`Zurück zum Stand vor „${rueckkehrPunkt.was}"?\n\nAlles, was seitdem geändert wurde, geht verloren.`)) return;
+  const stand=rueckkehrPunkt.stand, was=rueckkehrPunkt.was;
+  undoStapel.push(standErfassen());          // auch der Rücksprung bleibt widerrufbar
+  if(undoStapel.length>UNDO_MAX) undoStapel.shift();
+  redoStapel=[];
+  standAnwenden(stand);
+  rueckkehrPunkt=null;
+  melde(`Zurück auf den Stand vor „${was}".`);
+}
+
+/* ---------- Wand mit dem Nachbarraum verbinden ----------
+   Sucht auf der Außenseite eine annähernd parallele Wand eines anderen Raums und setzt
+   NUR die Wandstärke so, dass das Mauerwerk den Nachbarn überall erreicht. Der Raum
+   selbst — und damit jedes gemessene lichte Maß — bleibt unangetastet.
+   Stehen die Wände leicht schief zueinander, ist der Abstand an den Enden verschieden;
+   maßgeblich ist der GRÖSSERE, sonst klafft an einem Ende eine Lücke. Dass die Wand
+   dadurch am anderen Ende etwas in den Nachbarn ragt, fällt nicht auf: die Wandkörper
+   einer Etage werden ohnehin als eine Fläche gezeichnet.
+   Der Sinn der Übung sind die Türen — `pushDoorToPartner` erkennt eine gemeinsame Wand
+   nur innerhalb der Wandstärke. */
+function nachbarWandSuchen(r, i){
+  const [A,B]=wallPoints(r,i), L=dist(A,B);
+  if(L<0.2) return null;
+  const u={x:(B.x-A.x)/L, y:(B.y-A.y)/L};
+  const n=aussenNormale(r,i);
+  let best=null;
+  floorRooms().filter(o=>o.id!==r.id).forEach(o=>{
+    const m=o.points.length;
+    for(let j=0;j<m;j++){
+      const C=o.points[j], D=o.points[(j+1)%m], L2=dist(C,D);
+      if(L2<0.2) continue;
+      const v={x:(D.x-C.x)/L2, y:(D.y-C.y)/L2};
+      if(Math.abs(u.x*v.y-u.y*v.x)>0.20) continue;            // mehr als ~11° schief
+      const nf={x:-v.y, y:v.x};
+      const nenner=n.x*nf.x+n.y*nf.y;
+      if(Math.abs(nenner)<0.5) continue;
+      // Abstand an beiden Enden — entlang der eigenen Außennormalen gemessen
+      const tVon = pt => ((C.x-pt.x)*nf.x+(C.y-pt.y)*nf.y)/nenner;
+      const tA=tVon(A), tB=tVon(B);
+      if(tA<0.01 || tB<0.01) continue;                        // liegt nicht außen
+      if(Math.max(tA,tB)>0.8) continue;                       // zu weit weg für eine Wand
+      // Überdeckung längs der eigenen Wand
+      const p1=(C.x-A.x)*u.x+(C.y-A.y)*u.y, p2=(D.x-A.x)*u.x+(D.y-A.y)*u.y;
+      const ueber=Math.min(Math.max(p1,p2), L)-Math.max(Math.min(p1,p2), 0);
+      if(ueber<0.3) continue;
+      const wert=Math.max(tA,tB);
+      if(!best || wert<best.dicke) best={raum:o, wand:j, dicke:wert, min:Math.min(tA,tB), ueber};
+    }
+  });
+  return best;
+}
+function wandVerbinden(r, i){
+  const tr=nachbarWandSuchen(r, i);
+  if(!tr){
+    melde('Auf der Außenseite dieser Wand liegt kein passender Nachbarraum '+
+          '(höchstens 80 cm entfernt, annähernd parallel, mindestens 30 cm Überdeckung).', true);
+    return;
+  }
+  const alt=wandDicke(r,i), neu=mm(tr.dicke);
+  const schief=tr.dicke-tr.min;
+  const txt=`Wand ${i+1} mit „${tr.raum.name}" verbinden?\n\n`+
+    `Wandstärke ${fmt3(alt)} m → ${fmt3(neu)} m`+
+    (schief>0.003 ? `\nDie Wände stehen leicht schief: Abstand ${fmt3(tr.min)} bis ${fmt3(tr.dicke)} m — `+
+      `maßgeblich ist der größere Wert.` : '')+
+    `\n\nAm Raum ändert sich nichts. Türen in dieser Wand werden danach für beide Räume geführt.`;
+  if(!confirm(txt)) return;
+  rueckkehrSetzen(`Wand ${i+1} verbinden`);
+  r.wallDicke=r.wallDicke||{};
+  r.wallDicke[i]=neu;
+  syncSharedDoors();
+  save(); renderAll();
+  const tueren=(r.openings||[]).filter(o=>o.wall===i && o.type==='door' && o.link).length;
+  melde(`Verbunden mit „${tr.raum.name}" — Wandstärke ${fmt3(neu)} m`+
+        (tueren?`, ${tueren} Tür(en) beidseitig geführt.`:'.')+' Rückkehrpunkt gesetzt.');
+}
+
 /* Vorbereitung fürs Wandziehen.
    Beim Ziehen soll jede Nachbarwand ihre Richtung behalten und nur länger oder kürzer
    werden — die gemeinsame Ecke rutscht dafür auf der Nachbarwand entlang. Läuft die
@@ -3542,6 +3701,14 @@ function renderSidebar(){
           <button class="btn small" id="wallsplit" title="Teilt diese Wand in der Mitte — es entsteht eine neue Ecke">＋ Ecke einfügen</button>
         </div>
         <div class="row">
+          <button class="btn small ${magnetAn()?'active':''}" id="magnettoggle" style="flex:1"
+            title="Wände und Ecken rasten beim Ziehen an Nachbarräumen ein">${magnetAn()?'🧲 Magnet an':'🧲 Magnet aus'}</button>
+          <button class="btn small" id="wandverbinden" style="flex:1"
+            title="Wandstärke so setzen, dass die Wand den Nachbarraum erreicht — der Raum selbst bleibt unverändert">🔗 Mit Nachbar verbinden</button>
+        </div>
+        ${rueckkehrPunkt?`<div class="row"><button class="btn small danger" id="rueckkehr" style="flex:1"
+          title="Stellt den Stand vor diesem Eingriff wieder her">↩ Zurück vor „${esc(rueckkehrPunkt.was)}"</button></div>`:''}
+        <div class="row">
           <button class="btn green small" id="walllv">＋ LV-Position</button>
           <button class="btn small" id="walldesel" title="Schließt nur die Wand-Ansicht — Raum und Wand bleiben erhalten">Entfernen</button>
         </div>
@@ -3800,6 +3967,9 @@ function wireSidebar(r){
       if(isFinite(v) && v>0 && v<2){ r.wallDicke=r.wallDicke||{}; r.wallDicke[sel.wall]=mm(v); save(); }
       renderAll();
     });
+    on('#magnettoggle','onclick',magnetUmschalten);
+    on('#wandverbinden','onclick',()=>wandVerbinden(r, sel.wall));
+    on('#rueckkehr','onclick',rueckkehrZurueck);
     on('#wdickeall','onclick',()=>{
       const v=wandDicke(r, sel.wall);
       r.wallDicke={};
