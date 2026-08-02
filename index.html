@@ -664,6 +664,7 @@
   <div class="dhead">Serie aufnehmen <button id="kamX">✕</button></div>
   <div class="dbody" style="padding:10px">
     <div id="kamWrap"><video id="kamVideo" playsinline autoplay muted></video></div>
+    <div class="row" id="kamLinsen" style="gap:6px; flex-wrap:wrap; margin-top:6px; display:none"></div>
     <p class="hint" id="kamHint" style="margin-top:6px"></p>
   </div>
   <div class="dfoot">
@@ -4129,26 +4130,40 @@ $('#fotoFile').onclick=()=>{ dlgFotoSrc.close(); fotoQuelle='#fotoInFile'; $('#f
    fällt die App auf die iOS-Kamera-App zurück, statt nur zu meckern. */
 const dlgKamera=$('#dlgKamera');
 let kamStream=null, kamFacing='environment', kamZaehler=0;
+let kamGeraete=[], kamGeraetId=null;      // verfügbare Kameras (Linsen) und die aktive
 function kamMoeglich(){
   return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 }
 async function kameraStarten(){
   if(!kamMoeglich()){ kameraFallback('Dieser Browser gibt kein Kamerabild frei'); return; }
   kamZaehler=0; $('#kamZahl').textContent='';
+  kamGeraete=[]; kamGeraetId=null;
   if(!dlgKamera.open) dlgKamera.showModal();
-  await kamStreamHolen();
+  const ok=await kamStreamHolen();
+  if(ok) await kamLinsenLaden();           // erst NACH der Freigabe stehen die Namen
 }
-async function kamStreamHolen(){
+// wahl: {deviceId} für eine bestimmte Linse, sonst facingMode
+async function kamStreamHolen(wahl){
   kamStreamStoppen();
   kamBereit(false, 'Kamera wird geöffnet …');
+  const video = wahl && wahl.deviceId
+    ? {deviceId:{exact:wahl.deviceId}, width:{ideal:1920}, height:{ideal:1440}}
+    : {facingMode:{ideal:kamFacing}, width:{ideal:1920}, height:{ideal:1440}};
   try{
-    kamStream=await navigator.mediaDevices.getUserMedia({
-      video:{facingMode:{ideal:kamFacing}, width:{ideal:1920}, height:{ideal:1440}}, audio:false});
+    kamStream=await navigator.mediaDevices.getUserMedia({video, audio:false});
   }catch(err){
+    if(wahl && wahl.deviceId){             // Linse verweigert: zurück auf die Standardkamera
+      melde('Diese Linse ließ sich nicht öffnen — zurück zur Standardkamera.', true);
+      return kamStreamHolen();
+    }
     dlgKamera.close();
     kameraFallback('Kamerazugriff nicht möglich: '+(err && err.message ? err.message : err));
     return false;
   }
+  const spur=kamStream.getVideoTracks()[0];
+  const einst=spur && spur.getSettings ? spur.getSettings() : {};
+  kamGeraetId=einst.deviceId||null;
+  kamLinsenRender();
   const v=$('#kamVideo');
   v.srcObject=kamStream;
   // NICHT awaiten: play() kann in Hintergrund-Tabs/verdeckten Ansichten ewig offen
@@ -4157,6 +4172,50 @@ async function kamStreamHolen(){
   await kamMasseAbwarten(v);
   kamBereit(true, 'Auslöser so oft tippen wie nötig. „Fertig" schließt die Serie ab.');
   return true;
+}
+/* ---------- Linsenwahl (iPhone: 0,5× Ultraweit, 1×, Tele) ----------
+   Die einzelnen Objektive sind eigene „Geräte". Ihre NAMEN gibt der Browser aber erst
+   heraus, wenn die Kamera schon freigegeben ist — deshalb wird die Liste erst nach
+   dem ersten Stream geholt. */
+const KAM_LINSEN=[
+  {re:/ultra.?wide|ultraweit|ultra.?weit/i,      kurz:'0,5×', titel:'Ultraweitwinkel'},
+  {re:/telephoto|tele/i,                          kurz:'2×',   titel:'Teleobjektiv'},
+  {re:/triple|dual\s*wide|dual/i,                 kurz:'Auto', titel:'Automatik (mehrere Linsen)'},
+  {re:/back|rück|rear|environment/i,              kurz:'1×',   titel:'Hauptkamera'},
+  {re:/front|selfie/i,                            kurz:'Selfie', titel:'Frontkamera'}
+];
+function kamLinseName(label, i){
+  const t=KAM_LINSEN.find(x=>x.re.test(label||''));
+  return t ? {kurz:t.kurz, titel:t.titel+(label?' — '+label:'')}
+           : {kurz:'Kamera '+(i+1), titel:label||('Kamera '+(i+1))};
+}
+async function kamLinsenLaden(){
+  if(!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+  try{
+    const alle=await navigator.mediaDevices.enumerateDevices();
+    kamGeraete=alle.filter(d=>d.kind==='videoinput');
+  }catch(e){ kamGeraete=[]; }
+  kamLinsenRender();
+}
+function kamLinsenRender(){
+  const box=$('#kamLinsen');
+  if(!box) return;
+  if(kamGeraete.length<2){                 // eine einzige Kamera: keine Wahl nötig
+    box.style.display='none'; box.innerHTML='';
+    $('#kamWechsel').style.display='';
+    return;
+  }
+  box.style.display='flex';
+  $('#kamWechsel').style.display='none';   // die Linsenleiste ersetzt den Umschalter
+  box.innerHTML=kamGeraete.map((d,i)=>{
+    const n=kamLinseName(d.label, i);
+    const an=kamGeraetId && d.deviceId===kamGeraetId;
+    return `<button class="btn small${an?' active':''}" data-kamlinse="${d.deviceId}"`+
+      ` title="${esc(n.titel)}">${esc(n.kurz)}</button>`;
+  }).join('');
+  box.querySelectorAll('[data-kamlinse]').forEach(b=>{
+    b.onclick=async()=>{ if(b.dataset.kamlinse!==kamGeraetId) await kamStreamHolen({deviceId:b.dataset.kamlinse}); };
+  });
 }
 /* Nach einem Quellenwechsel meldet das <video> seine Maße erst mit „loadedmetadata" —
    bis dahin liefert ein Auslösen ein leeres Bild. Darum warten und den Auslöser
@@ -4180,6 +4239,7 @@ function kamMasseAbwarten(v){
 function kamBereit(an, hinweis){
   $('#kamShot').disabled=!an;
   $('#kamWechsel').disabled=!an;
+  document.querySelectorAll('[data-kamlinse]').forEach(b=>{ b.disabled=!an; });
   $('#kamHint').textContent=hinweis;
 }
 function kamStreamStoppen(){
