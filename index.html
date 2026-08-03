@@ -8044,7 +8044,15 @@ document.addEventListener('focusin', e=>{
 const ZAHLFELD='input.laser, input.lvz:not([type=number]), #wdicke, #planbreite, #plandreh, #kalibMass, #btmanual';
 const TASTFELD='input:not([type=checkbox]):not([type=radio]):not([type=range])'
              + ':not([type=color]):not([type=file]):not([type=password]), textarea';
-const fingerGeraet = window.matchMedia && matchMedia('(pointer:coarse)').matches;
+/* Ob die Leiste überhaupt erscheint, hängt an dieser einen Abfrage — geht sie daneben,
+   steht der Nutzer wieder ohne „Übernehmen" da (Ticket #7). Darum drei Signale statt
+   einem: `pointer:coarse` ist der Normalfall auf dem iPad, `any-pointer:coarse` greift
+   zusätzlich, wenn eine Maus oder ein Trackpad angesteckt ist (dann meldet iPadOS den
+   PRIMÄREN Zeiger als fein), und `maxTouchPoints` fängt den Rest. Am Rechner ohne
+   Bildschirmtastatur ist alles drei falsch — dort bleibt die Leiste weg. */
+const fingerGeraet = !!(window.matchMedia &&
+    (matchMedia('(pointer:coarse)').matches || matchMedia('(any-pointer:coarse)').matches))
+  || (navigator.maxTouchPoints||0) > 0;
 
 function zahlenfelderHerrichten(wurzel){
   if(!wurzel || wurzel.nodeType!==1) return;
@@ -8072,12 +8080,24 @@ function leisteSetzen(){
   const vv=window.visualViewport;
   bar.style.bottom=(vv ? Math.max(0, Math.round(window.innerHeight-(vv.height+vv.offsetTop))) : 0)+'px';
 }
+/* Beschriftung für die Leiste — damit man beim halb verdeckten Bildschirm weiß, was man
+   tippt. Die Felder sitzen unterschiedlich: die meisten in einer `.row` mit `<label>`,
+   die Anmerkungen im LV-Dialog in einem `<fieldset><legend>`, die am Raum in einem
+   schlichten `<div>` mit einem Hinweis-`<label>` darüber. */
+function feldName(el){
+  const zeile=el.closest('.row'), satz=el.closest('fieldset');
+  const lab=(zeile && zeile.querySelector('label'))
+    || (satz && satz.querySelector('legend'))
+    || (el.parentElement && el.parentElement.querySelector('label'));
+  let t=(lab?lab.textContent:'').trim().replace(/\s+/g,' ');
+  t=t.split(' — ')[0];      // „Anmerkung — erscheint im Druck unter dem Plan" → „Anmerkung"
+  if(!t) return 'Eingabe';
+  return t.length>40 ? t.slice(0,38)+'…' : t;
+}
 function leisteZeigen(el){
   const bar=$('#tastleiste'); if(!bar) return;
   tastFeld=el; tastAlt=el.value;
-  // Beschriftung der Zeile, damit man beim halb verdeckten Bildschirm weiß, was man tippt
-  const zeile=el.closest('.row'), lab=zeile?zeile.querySelector('label'):null;
-  bar.querySelector('.feld').textContent=(lab?lab.textContent.trim():'') || el.placeholder || 'Eingabe';
+  bar.querySelector('.feld').textContent=feldName(el);
   // Ein offener Dialog liegt in einer eigenen Ebene — die Leiste muss mit hinein, sonst
   // ist sie verdeckt und obendrein nicht anklickbar (wie schon bei `melde`).
   const wirt=el.closest('dialog')||document.body;
@@ -8094,8 +8114,11 @@ function leisteAnwenden(){
   leisteWeg();
   /* Erst Enter: „Manuell (m)" im Laser-Panel und „Maßstab setzen" hören ausschließlich
      darauf — und ausgerechnet die zeigen auf iOS den Ziffernblock, der keine Enter-Taste
-     hat. Ohne das wären beide Felder auf dem iPad überhaupt nicht zu benutzen. */
-  el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', code:'Enter', keyCode:13, which:13, bubbles:true, cancelable:true}));
+     hat. Ohne das wären beide Felder auf dem iPad überhaupt nicht zu benutzen.
+     **Nicht bei mehrzeiligen Feldern:** In einer Anmerkung heißt Enter „neue Zeile", nicht
+     „fertig" — dort wäre es schlicht die falsche Taste (Ticket #7). */
+  if(el.tagName!=='TEXTAREA')
+    el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', code:'Enter', keyCode:13, which:13, bubbles:true, cancelable:true}));
   if(!document.body.contains(el)) return;    // Enter hat die Seitenleiste neu gebaut
   /* Dann `blur()`: es löst von selbst ein `change` aus, wenn getippt wurde — darauf warten
      die übrigen Handler. Kam keines (Wert unverändert oder vom Laser gesetzt), schicken wir
