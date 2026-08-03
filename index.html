@@ -504,7 +504,14 @@
         hochzusetzen. Einzelne Zuordnungen lassen sich im LV-Dialog umhängen.</p>
     </fieldset>
     <fieldset><legend>LV-Positionen ohne Airtable</legend>
-      <p class="hint">Notausgang, wenn der Browser die Anfrage blockiert (CORS) oder kein Netz da ist.
+      <p class="hint">Ein <b>GAEB-Leistungsverzeichnis</b> lässt sich direkt einlesen — ohne Netz, ohne
+        Airtable, auch auf dem iPad. Gelesen wird GAEB DA XML, also die Endungen
+        <code>.X81</code> bis <code>.X86</code>. Übernommen werden Ordnungszahl, Kurztext, Menge,
+        Einheit und Langtext; Preise interessieren die App nicht. Wie beim Import: neue Nummern
+        kommen dazu, bestehende werden aufgefrischt — <b>Zuordnungen bleiben unberührt</b>.</p>
+      <button class="btn small" id="setGaeb">📂 GAEB-Datei einlesen</button>
+      <p class="hint" id="setGaebStatus"></p>
+      <p class="hint" style="margin-top:10px">Notausgang, wenn der Browser die Anfrage blockiert (CORS) oder kein Netz da ist.
         Je Zeile: <code>LV-Nummer;Kurztext;Einheit;Menge;Langtext</code> (Semikolon oder Tab,
         Menge und Langtext optional). Wie beim Import: neue Nummern kommen dazu, bestehende werden
         aufgefrischt — <b>Zuordnungen bleiben unberührt</b>.</p>
@@ -603,7 +610,7 @@
     </ul>
     <h3 style="margin-bottom:4px">Etagen- und Raumansicht</h3>
     <ul style="padding-left:18px; margin-bottom:10px">
-      <li><b>Etagenansicht:</b> Übersicht aller Räume der Etage. Raum <b>ziehen</b> = auf der Etage verschieben, Raum <b>anklicken</b> = hineinzoomen.</li>
+      <li><b>Etagenansicht:</b> Übersicht aller Räume der Etage. Raum <b>anklicken</b> = hineinzoomen, Ziehen = Ansicht schieben. <b>Verschieben geht nur im Anwahlmodus:</b> einen Raum <b>1 Sekunde halten</b>, dann lässt er sich ziehen — so rutscht beim Navigieren kein eingemessener Raum aus seiner Lage.</li>
       <li><b>Magnetisches Einrasten:</b> Beim Ziehen von Räumen, Wänden oder Ecken springen nahe Wände automatisch bündig aneinander (Räume: ab ca. 25 cm Abstand, Wände/Ecken: ab ca. 15–20 cm).</li>
       <li><b>Raumansicht:</b> Der gewählte Raum ist im Fokus, Nachbarräume bleiben ausgegraut sichtbar. Hier werden Wände, Ecken, Türen/Fenster und Maße bearbeitet. Klick auf einen Nachbarraum wechselt direkt dorthin. Zurück über den Button oben links (oder Esc).</li>
     </ul>
@@ -622,7 +629,7 @@
       <li><b>Wand ziehen = Raum umformen:</b> Eine Wand verschiebt sich parallel, die <b>Nachbarwände behalten ihre Richtung</b> und werden nur länger oder kürzer — aus einem Rechteck bleibt beim Ziehen ein Rechteck. Trifft die Wand auf eine <b>parallele</b> Nachbarwand (also nach dem Teilen), entsteht dort automatisch eine <b>neue senkrechte Wand</b>. So baust du Vorsprünge: <b>„＋ Ecke einfügen“</b> teilt die Wand, dann eine Hälfte herausziehen — fertig ist der rechtwinklige Anbau. Zweimal teilen und das mittlere Stück ziehen ergibt einen Erker. Zurückgezogen verschwindet die Ecke von selbst wieder.</li>
       <li><b>Anwählen, dann ziehen:</b> Ecken und Wände werden mit dem ersten Klick nur ausgewählt — die grün eingefärbte Zone zeigt, wo du zum Ziehen zufassen kannst. Klick ins Leere wählt wieder ab.</li>
       <li><b>Türen/Fenster:</b> Wand auswählen, dann „+ Tür“ / „+ Fenster“. Danach Tür/Fenster direkt im Plan <b>anklicken</b>: Ziehen verschiebt sie entlang der Wand. Für die Breite einen <b>Endgriff anklicken</b> — er wird gefüllt und bekommt die grüne Ziehzone, dann noch einmal anfassen und ziehen (genau wie bei Flächen und Linien). Das Seitenpanel zeigt Maße und Abstand. Flächen werden automatisch von der Wandfläche abgezogen. Bei Türen lassen sich <b>Anschlag ⇄</b> (Angelpunkt links/rechts) und <b>Aufschlag ⇅</b> (Öffnungsrichtung in den Raum) umschalten — das Symbol zeigt Türblatt und Schwenkbogen.</li>
-      <li><b>Wandstärken:</b> Jede Wand hat im Wand-Panel ein Feld <b>„Stärke (m)"</b> (Vorgabe 0,24) — „alle" überträgt den Wert auf den ganzen Raum. <b>Deine gezeichnete Linie ist und bleibt die Innenkante</b>, die Stärke wächst nach außen. Bodenfläche, Umfang und Wandfläche sind deshalb weiter das <b>lichte Maß</b>, das du mit dem Laser misst — an diesen Zahlen und am CSV-Export ändert sich nichts. Neu dazu kommen in der Statistik <b>Laibungen</b> (Öffnungsumfang × Wandstärke) und <b>Wandvolumen</b>.</li>
+      <li><b>Wandstärken:</b> Jede Wand hat im Wand-Panel ein Feld <b>„Stärke (m)"</b> (Vorgabe 0,24) — „alle" überträgt den Wert auf den ganzen Raum. <b>Deine gezeichnete Linie ist und bleibt die Innenkante</b>, die Stärke wächst nach außen. Bodenfläche, Umfang und Wandfläche sind deshalb weiter das <b>lichte Maß</b>, das du mit dem Laser misst — an diesen Zahlen und am CSV-Export ändert sich nichts. Neu dazu kommen in der Statistik <b>Laibungen</b> (Öffnungsumfang × Wandstärke) und <b>Wandvolumen</b>. Unter dem Feld liegt ein <b>Schieberegler</b> von 0,08 bis 1,00 m für das stufenlose Einstellen; trägst du oben von Hand einen Wert außerhalb dieser Spanne ein, wird der Regler <b>rot</b>. Läuft dieselbe Wand im Nachbarraum weiter, übernehmen die Knöpfe <b>„Stärke von links/rechts"</b> (bei senkrechten Wänden „von oben/unten") deren Stärke — gibt es dort keine Wand, sind sie ausgegraut.</li>
       <li><b>Magnet:</b> Beim Ziehen zeigt ein <b>grünes Feld</b>, an welche fremde Wand oder Ecke gerade eingerastet wird. Im Wand-Panel lässt er sich mit <b>🧲</b> ganz abschalten, wenn er im Weg ist.</li>
       <li><b>Ecken ziehen mit:</b> Schiebst du eine Wand und kommst dabei einer <b>Ecke eines Nachbarraums</b> nahe, rastet die Wand auf deren Höhe ein — aber nur in <b>Zugrichtung</b>, seitlich verschiebt sich nichts. Die anstoßenden Wände werden dabei entsprechend länger oder kürzer.</li>
       <li><b>🔗 Mit Nachbar verbinden:</b> Stehen zwei Räume leicht schief zueinander, findet die Tür in der gemeinsamen Wand ihren Partner nicht mehr — sie erscheint dann nur in einem der beiden Räume. Der Knopf setzt die <b>Wandstärke</b> so, dass das Mauerwerk den Nachbarn überall erreicht; <b>am Raum ändert sich nichts</b>, deine gemessenen Maße bleiben also exakt. Vorher legt die App einen <b>Rückkehrpunkt</b> an — darüber kommst du mit einem Griff auf den Stand davor zurück.</li>
@@ -823,6 +830,9 @@
 <input type="file" id="fotoInFile" accept="image/*" multiple style="display:none">
 <input type="file" id="fotoInCam" accept="image/*" capture="environment" style="display:none">
 <input type="file" id="importfile" accept=".json" style="display:none">
+<!-- Ohne accept: iOS ordnet .X81/.X83 keinem bekannten Dateityp zu und würde die
+     Dateien in „Dateien" ausgrauen. Geprüft wird darum erst beim Einlesen. -->
+<input type="file" id="gaebfile" style="display:none">
 <input type="file" id="planfile" accept="image/*" style="display:none">
 <input type="file" id="p360file" accept="image/*" style="display:none">
 
@@ -844,11 +854,17 @@ const fmt3 = n => fmt(n,3);
 const dist = (a,b) => Math.hypot(b.x-a.x, b.y-a.y);
 // Kein Raster-Einrasten mehr: nur auf Millimeter runden (verhindert Fließkomma-Reste)
 const mm = v => Math.round(v*1000)/1000;
-function polyArea(pts){
+/* Vorzeichen der doppelten Fläche = Umlaufsinn des Polygons. Ein frei gezeichneter Raum
+   kann in beide Richtungen entstehen, je nachdem, herum man klickt — überall dort, wo
+   die Richtung zählt (Außennormale, Wandringe), wird sie darum ausdrücklich abgefragt. */
+function polyUmlauf(pts){
   let s=0;
   for(let i=0;i<pts.length;i++){ const a=pts[i], b=pts[(i+1)%pts.length]; s += a.x*b.y - b.x*a.y; }
-  return Math.abs(s)/2;
+  return s;
 }
+// Polygon in eine bestimmte Drehrichtung bringen — die Form bleibt dieselbe
+const polyDreh = (pts, positiv) => (polyUmlauf(pts)>0)===positiv ? pts : [...pts].reverse();
+function polyArea(pts){ return Math.abs(polyUmlauf(pts))/2; }
 function polyPerimeter(pts){
   let s=0;
   for(let i=0;i<pts.length;i++) s += dist(pts[i], pts[(i+1)%pts.length]);
@@ -1250,6 +1266,10 @@ let messungLaeuft=false;
    Wandfläche entsprechen damit dem lichten Maß, das du mit dem Laser misst.
    Die Stärke wächst nach außen und dient Darstellung, Volumen und Laibungen. */
 const WAND_STD=0.24;
+// Spanne des Schiebereglers im Wand-Panel. Von Hand darf man auch daneben liegen —
+// der Regler wird dann rot, damit der Ausreißer nicht unbemerkt bleibt.
+const WAND_MIN=0.08, WAND_MAX=1.0;
+const dickeImBereich = v => Number.isFinite(v) && v>=WAND_MIN-1e-9 && v<=WAND_MAX+1e-9;
 const wandDicke = (r,i) => {
   const v=(r.wallDicke||{})[i];
   if(Number.isFinite(v) && v>0) return v;
@@ -1260,9 +1280,7 @@ const wandDicke = (r,i) => {
 function aussenNormale(r,i){
   const n=r.points.length, A=r.points[i], B=r.points[(i+1)%n];
   const L=dist(A,B); if(L<1e-9) return {x:0,y:0};
-  let s=0;
-  for(let k=0;k<n;k++){ const a=r.points[k], b=r.points[(k+1)%n]; s+=a.x*b.y-b.x*a.y; }
-  const vz = s>0 ? -1 : 1;
+  const vz = polyUmlauf(r.points)>0 ? -1 : 1;
   return {x:-(B.y-A.y)/L*vz, y:(B.x-A.x)/L*vz};
 }
 function linienSchnitt(a1,a2,b1,b2){
@@ -1372,12 +1390,20 @@ function pointInPoly(pt, pts){
 }
 /* Der Wandkörper als Ring zwischen Innenkante (dem Raumpolygon) und Außenkante.
    Er fängt keine Klicks — dafür sind die unsichtbaren Wandlinien zuständig. */
-// Pfaddaten eines Wandrings: Außenkontur + umgekehrte Innenkontur (ergibt das Loch)
+/* Pfaddaten eines Wandrings: Außenkontur + gegenläufige Innenkontur (ergibt das Loch).
+
+   **Beide Ringe werden ausdrücklich gedreht**, statt sich auf die Reihenfolge der
+   Raumpunkte zu verlassen. Ein frei gezeichneter Raum entsteht je nach Klickrichtung
+   mit dem einen oder dem anderen Umlaufsinn; Vorlagen dagegen immer gleich. In
+   `wandLage()` liegen alle Wandkörper einer Etage als EIN Pfad mit `nonzero`
+   übereinander — laufen zwei aneinanderstoßende Räume gegenläufig, heben sich ihre
+   Umlaufzahlen dort auf, wo die Wände sich überlappen, und an der Stoßstelle klaffte
+   ein weißes Loch mitten im Mauerwerk. */
 function wandRingD(r){
   const aussen=aussenPolygon(r);
   if(!aussen.length) return '';
-  return aussen.map((p,i)=>(i?'L':'M')+p.x+' '+p.y).join(' ')+' Z '
-    + [...r.points].reverse().map((p,i)=>(i?'L':'M')+p.x+' '+p.y).join(' ')+' Z';
+  const d=pts=>pts.map((p,i)=>(i?'L':'M')+p.x+' '+p.y).join(' ')+' Z';
+  return d(polyDreh(aussen, true))+' '+d(polyDreh(r.points, false));
 }
 /* Alle Wände einer Etage als EINE Lage.
    Stoßen zwei verschieden dicke Wände aneinander, lägen sonst ihre Innenkanten als
@@ -1891,23 +1917,46 @@ function magnetFeld(lbl){
   return `<g style="pointer-events:none">${out}</g>`;
 }
 /* Nicht rechte Winkel rot markieren: Viertelkreis-Bogen + Gradzahl an der Ecke */
-function angleMarks(r, lbl){
-  let out='';
+/* Winkel an einer Ecke, in Grad (0…180), samt der beiden Schenkelrichtungen.
+   Liegt ein Schenkel zu dicht an der Ecke, gibt es keinen sinnvollen Winkel → null. */
+function eckWinkel(r,i){
+  const n=r.points.length, p=r.points[i], prev=r.points[(i-1+n)%n], next=r.points[(i+1)%n];
+  const L1=dist(p,prev), L2=dist(p,next);
+  if(L1<0.05||L2<0.05) return null;
+  const u1={x:(prev.x-p.x)/L1, y:(prev.y-p.y)/L1}, u2={x:(next.x-p.x)/L2, y:(next.y-p.y)/L2};
+  const grad=Math.acos(Math.max(-1,Math.min(1, u1.x*u2.x+u1.y*u2.y)))*180/Math.PI;
+  return {grad, u1, u2, L1, L2, p};
+}
+/* Gerade Ecke = rechter Winkel oder gestreckt (die entstehen beim Einfügen einer Ecke
+   in eine Wand). Alles dazwischen ist schief und wird rot markiert. */
+const winkelGerade = g => g==null || Math.abs(g-90)<0.5 || Math.abs(g-180)<0.5;
+const eckFarbe = g => winkelGerade(g) ? '#2b3345' : 'var(--danger)';
+// Die Ecken, deren Winkel sich ändern, wenn Ecke i bewegt wird: sie selbst und beide Nachbarn
+function eckenUmher(r,i){
   const n=r.points.length;
-  for(let i=0;i<n;i++){
-    const p=r.points[i], prev=r.points[(i-1+n)%n], next=r.points[(i+1)%n];
-    const L1=dist(p,prev), L2=dist(p,next);
-    if(L1<0.05||L2<0.05) continue;
-    const u1={x:(prev.x-p.x)/L1, y:(prev.y-p.y)/L1}, u2={x:(next.x-p.x)/L2, y:(next.y-p.y)/L2};
-    const ang=Math.acos(Math.max(-1,Math.min(1, u1.x*u2.x+u1.y*u2.y)))*180/Math.PI;
-    if(Math.abs(ang-90)<0.5) continue;                       // rechter Winkel → keine Markierung
-    const rr=Math.min(lbl*1.5, L1*0.3, L2*0.3);
-    const A={x:p.x+u1.x*rr, y:p.y+u1.y*rr}, B={x:p.x+u2.x*rr, y:p.y+u2.y*rr};
-    const cz=u1.x*u2.y-u1.y*u2.x;                            // Drehrichtung des Bogens
-    out+=`<path d="M ${A.x} ${A.y} A ${rr} ${rr} 0 0 ${cz>0?1:0} ${B.x} ${B.y}" fill="none" stroke="var(--danger)" stroke-width="${lbl*0.1}"/>`;
-    const bx=u1.x+u2.x, by=u1.y+u2.y, bl=Math.hypot(bx,by)||1;
-    const tx=p.x+bx/bl*rr*1.75, ty=p.y+by/bl*rr*1.75;
-    out+=`<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="middle" font-size="${lbl*0.7}" fill="var(--danger)" font-weight="700">${fmt(ang,1)}°</text>`;
+  return [...new Set([(i-1+n)%n, i, (i+1)%n])];
+}
+/* Winkelbogen mit Gradzahl.
+   Am Bildschirm nur noch, solange eine Ecke gezogen wird, und dann nur an den drei Ecken,
+   deren Winkel sich dabei überhaupt ändert (`zeigen`) — sonst wird der Plan unlesbar. Im
+   Ruhezustand sagt allein die Farbe des Eckpunkts, ob der Winkel gerade ist (`eckFarbe`).
+   Ohne `zeigen` bleibt es beim alten Verhalten (alle schiefen Ecken) — so druckt die
+   PDF die Winkel weiter mit, dort sind sie Dokumentation und nicht Beiwerk. */
+function angleMarks(r, lbl, zeigen){
+  let out='';
+  const idx = zeigen || r.points.map((_,i)=>i);
+  for(const i of idx){
+    const w=eckWinkel(r,i); if(!w) continue;
+    // Ohne Auswahl wie bisher: rechte Winkel bleiben unbeschriftet
+    if(!zeigen && Math.abs(w.grad-90)<0.5) continue;
+    const farbe=eckFarbe(w.grad);
+    const rr=Math.min(lbl*1.5, w.L1*0.3, w.L2*0.3);
+    const A={x:w.p.x+w.u1.x*rr, y:w.p.y+w.u1.y*rr}, B={x:w.p.x+w.u2.x*rr, y:w.p.y+w.u2.y*rr};
+    const cz=w.u1.x*w.u2.y-w.u1.y*w.u2.x;                    // Drehrichtung des Bogens
+    out+=`<path d="M ${A.x} ${A.y} A ${rr} ${rr} 0 0 ${cz>0?1:0} ${B.x} ${B.y}" fill="none" stroke="${farbe}" stroke-width="${lbl*0.1}"/>`;
+    const bx=w.u1.x+w.u2.x, by=w.u1.y+w.u2.y, bl=Math.hypot(bx,by)||1;
+    const tx=w.p.x+bx/bl*rr*1.75, ty=w.p.y+by/bl*rr*1.75;
+    out+=`<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="middle" font-size="${lbl*0.7}" fill="${farbe}" font-weight="700">${fmt(w.grad,1)}°</text>`;
   }
   return out ? `<g style="pointer-events:none">${out}</g>` : '';
 }
@@ -1942,6 +1991,12 @@ function renderCanvas(){
   </defs>
   <rect x="${vb.x-50}" y="${vb.y-50}" width="${vb.w+100}" height="${vb.h+100}" fill="url(#grid)" data-bg="1"/>`;
   out+=planBild();
+  /* Liegt ein Plan dahinter, kommt die ganze Zeichnung — Böden, Wände, Maße, Objekte,
+     Beschriftungen — in eine gemeinsame durchscheinende Lage. Als EINE Gruppe, nicht je
+     Element: sonst würden sich überlappende Teile gegenseitig durchscheinen und die Wände
+     sähen fleckig aus. Die Griffe beim Zeichnen bleiben außen vor (siehe unten). */
+  const durch=planDurchsicht();
+  if(durch<1) out+=`<g opacity="${durch.toFixed(2)}">`;   // kein fmt() — SVG will den Punkt
 
   // Etagenansicht: erst alle Böden, dann die Wände als eine gemeinsame Lage —
   // sonst zerschneiden sich benachbarte Wandkörper gegenseitig mit ihren Konturen
@@ -1972,7 +2027,10 @@ function renderCanvas(){
     out+=wallMarks(r, lbl);
     out+=objMarks(r, lbl, !!(fr && selR));
     if(!dim) out+=zoneMarks(r, lbl);
-    if(!dim) out+=angleMarks(r, lbl);
+    /* Winkelbögen nur in der Raumansicht und nur, solange eine Ecke DIESES Raums in der
+       Hand ist — der Rest der Zeit tragen die Eckpunkte die Aussage über ihre Farbe. */
+    if(!dim && fr && drag && drag.kind==='vertex' && drag.room===r)
+      out+=angleMarks(r, lbl, eckenUmher(r, drag.idx));
     const c=raumMitte(r), st=roomStats(r);
     out+=`<text x="${c.x}" y="${c.y}" text-anchor="middle" font-size="${lbl}" fill="#2b3345" style="pointer-events:none">
       <tspan x="${c.x}" dy="-0.1">${esc(r.name)}</tspan>
@@ -2006,10 +2064,15 @@ function renderCanvas(){
           out+=dimSvg(a, b, nx, ny, lbl, dopts);
         }
         const isSelV = sel.vertex===i;
+        /* Farbe der Ecke sagt in der Raumansicht, ob der Winkel gerade ist: schwarz bei
+           90° oder 180°, sonst rot. Die Auswahl steckt im blauen Ring statt in der Füllung
+           — sonst ginge die Aussage ausgerechnet an der Ecke verloren, an der man arbeitet.
+           In der Etagenansicht bleibt es beim Schwarz von früher. */
+        const eckF = fr ? eckFarbe((eckWinkel(r,i)||{}).grad) : '#2b3345';
         // Trefferradius: grundsätzlich großzügig, bei ausgewählter (= ziehbarer) Ecke deutlich größer
         const trefferR = lbl*(isSelV?2.8:1.5);
         if(isSelV) out+=`<circle cx="${a.x}" cy="${a.y}" r="${trefferR}" fill="url(#ziehzone)" style="pointer-events:none"/>`;
-        out+=`<circle cx="${a.x}" cy="${a.y}" r="${lbl*(isSelV?0.55:0.35)}" fill="${isSelV?'#2f6fed':'#2b3345'}" stroke="#fff" stroke-width="${lbl*0.12}" data-roomid="${r.id}" data-vertex="${i}" style="cursor:move"/>`;
+        out+=`<circle cx="${a.x}" cy="${a.y}" r="${lbl*(isSelV?0.55:0.35)}" fill="${fr?eckF:(isSelV?'#2f6fed':'#2b3345')}" stroke="${isSelV?'#2f6fed':'#fff'}" stroke-width="${lbl*(isSelV?0.18:0.12)}" data-roomid="${r.id}" data-vertex="${i}" style="cursor:move"/>`;
         out+=`<circle cx="${a.x}" cy="${a.y}" r="${trefferR}" fill="transparent" data-roomid="${r.id}" data-vertex="${i}" style="cursor:move"/>`;
       });
       // Türen/Fenster anwählbar: Hitzone, Auswahl-Markierung und Breiten-Griffe
@@ -2043,6 +2106,8 @@ function renderCanvas(){
       });
     }
   });
+
+  if(durch<1) out+='</g>';   // ab hier wieder voll deckend: Griffe und Vorschauen beim Zeichnen
 
   if(mode==='draw' && draft.points.length){
     const d=draft.points.map((p,i)=>(i?'L':'M')+p.x+' '+p.y).join(' ');
@@ -2189,6 +2254,72 @@ function perpSnapCandidates(a1, b1, others, thresh){
 let magnetTreffer=[];
 const magnetMerken = (...c) => { magnetTreffer=c.filter(Boolean).map(x=>x.seg
   ? {typ:'wand', a:x.seg[0], b:x.seg[1]} : x); };
+/* Fremde ECKEN ziehen einen verschobenen Raum an — aber quer zu dem, was die Wände tun.
+   Die Wandkandidaten korrigieren längs der Wand**normalen** (die Wände legen sich parallel
+   aneinander); die Eckkandidaten korrigieren längs der Wand**richtung**, also „nach oben
+   und unten" an einer senkrechten Wand. Beides zusammen lässt den Raum an der Ecke des
+   Nachbarn einrasten, ohne dass eine Richtung die andere überschreibt.
+
+   Verschoben wird immer der ganze Umriss (magneticDelta liefert ein Delta für alle Punkte)
+   — an der **Raumgröße ändert sich dabei nichts**, anders als beim Ziehen einer Wand.
+
+   `quer` ist nur ein Nähefilter: Ecken, die seitlich weit weg liegen, sollen nicht ziehen,
+   sonst rastete der Raum an irgendeiner Ecke der Etage ein. Ein Nachbarraum steht nach dem
+   Wandmagneten eine Wandstärke entfernt, deshalb darf der Filter nicht zu eng sein. */
+/* Laufrichtung jeder Wand, die bereits an einer parallelen fremden Wand liegt. Genau dann
+   stehen zwei Räume nebeneinander, und es geht nur noch darum, sie LÄNGS dieser Wand auf
+   eine Linie zu schieben. Nur in diesen Richtungen darf der Eckmagnet ziehen — den Abstand
+   QUER dazu (eine Wandstärke) regelt weiter der Wandmagnet, und der Eckmagnet kann ihn
+   dadurch nicht zunichtemachen. Ohne angelegte Wand zieht keine Ecke. */
+function angelegteRichtungen(points, others, tol){
+  const raus=[], n=points.length;
+  for(let i=0;i<n;i++){
+    const A=points[i], B=points[(i+1)%n], L=dist(A,B); if(L<0.05) continue;
+    const ux=(B.x-A.x)/L, uy=(B.y-A.y)/L, nx=-uy, ny=ux;
+    let liegtAn=false;
+    for(const o of others){
+      const m=(o.points||[]).length;
+      for(let j=0;j<m;j++){
+        const a2=o.points[j], b2=o.points[(j+1)%m], L2=dist(a2,b2); if(L2<0.05) continue;
+        const vx=(b2.x-a2.x)/L2, vy=(b2.y-a2.y)/L2;
+        if(Math.abs(ux*vx+uy*vy)<0.985) continue;                  // nicht parallel (≈10°)
+        if(Math.abs((a2.x-A.x)*nx+(a2.y-A.y)*ny)>tol) continue;    // zu weit entfernt
+        /* Echte Überdeckung längs der Wand. Kurz probiert und wieder verworfen: erlaubt man
+           hier auch ein kleines Vorbeischieben (negative Überdeckung), zählen plötzlich auch
+           die QUER liegenden Wände als angelegt — dann zieht die Ecke in beide Richtungen
+           und frisst den Wandabstand auf, den der Wandmagnet gerade erst gesetzt hat. */
+        const t0=(a2.x-A.x)*ux+(a2.y-A.y)*uy, t1=(b2.x-A.x)*ux+(b2.y-A.y)*uy;
+        if(Math.min(Math.max(t0,t1), L)-Math.max(Math.min(t0,t1), 0) < 0.3) continue;
+        liegtAn=true; break;
+      }
+      if(liegtAn) break;
+    }
+    // Gegenrichtungen sind gleichwertig — jede Achse nur einmal
+    if(liegtAn && !raus.some(r=>Math.abs(r.x*ux+r.y*uy)>0.985)) raus.push({x:ux, y:uy});
+  }
+  /* Liegt der Raum an ZWEI zueinander senkrechten Wänden an (Ecksituation), gehören beide
+     Achsen bereits dem Wandmagneten: Eine Eckkorrektur längs der einen Achse liefe quer zur
+     anderen angelegten Wand und schöbe den Raum über deren Wandabstand hinweg. Dann zieht
+     gar keine Ecke — festgelegt ist der Raum in dieser Lage ohnehin schon. */
+  return raus.length===1 ? raus : [];
+}
+function eckSnapCandidates(points, others, thresh, quer){
+  if(!magnetAn()) return [];
+  const richt=angelegteRichtungen(points, others, 0.8);
+  if(!richt.length) return [];
+  const out=[];
+  for(const R of points) for(const o of others) for(const Q of (o.points||[])){
+    const dx=Q.x-R.x, dy=Q.y-R.y;
+    for(const u of richt){
+      const laengs=dx*u.x+dy*u.y;                  // längs der angelegten Wand → der Zug
+      const seit=-dx*u.y+dy*u.x;                   // quer dazu → nur Nähefilter
+      if(Math.abs(laengs)>thresh || Math.abs(laengs)<0.0005) continue;
+      if(Math.abs(seit)>quer) continue;
+      out.push({dx:u.x*laengs, dy:u.y*laengs, mag:Math.abs(laengs), typ:'ecke', p:{x:Q.x, y:Q.y}});
+    }
+  }
+  return out;
+}
 function magneticDelta(points, others, thresh){
   let cands=[];
   const n=points.length;
@@ -2196,6 +2327,7 @@ function magneticDelta(points, others, thresh){
     cands.push(...segSnapCandidates(points[i], points[(i+1)%n], others, thresh));
     cands.push(...perpSnapCandidates(points[i], points[(i+1)%n], others, thresh));
   }
+  cands.push(...eckSnapCandidates(points, others, thresh, 1.0));
   if(!cands.length){ magnetMerken(); return {dx:0, dy:0}; }
   cands.sort((a,b)=>a.mag-b.mag);
   const first=cands[0];
@@ -2320,7 +2452,10 @@ function deleteOpeningEverywhere(r,opId){
    Ein Raum eine Sekunde halten öffnet ihn zum Bearbeiten, OHNE hineinzuzoomen: rechts
    stehen Name, Höhe, LV, Farbe und die Raum-LV-Positionen. Ein Tipp auf einen anderen
    Raum wechselt die Auswahl, ein zweiter Tipp auf den gewählten geht hinein, ein Tipp
-   ins Leere beendet den Modus. */
+   ins Leere beendet den Modus.
+
+   Seit 2026-08-03 ist der Modus zugleich die **einzige** Möglichkeit, Räume zu
+   verschieben — ohne ihn schiebt derselbe Zug die Ansicht (siehe pointerdown). */
 let etagenWahl=null;                 // Raum-ID im Anwahlmodus (nur Etagenansicht)
 let haltenTimer=null;
 const HALTEN_MS=1000;                // kurz genug zum flüssigen Arbeiten, lang genug
@@ -2332,7 +2467,7 @@ function haltenStarten(id){
     if(drag && drag.moved) return;   // wer schiebt, will nicht auswählen
     cancelDrag(); drag=null;
     etagenWahl=id; renderAll();
-    melde('Anwahl — Raum antippen zum Wechseln, noch einmal für die Raumansicht, daneben zum Beenden.');
+    melde('Anwahl — jetzt lässt sich der Raum ziehen. Antippen wechselt, noch einmal öffnet die Raumansicht, daneben beendet.');
   }, HALTEN_MS);
 }
 function haltenAbbrechen(){ clearTimeout(haltenTimer); haltenTimer=null; }
@@ -2415,7 +2550,19 @@ svg.addEventListener('pointerdown', e=>{
     drag={kind:'pan', start:{x:e.clientX,y:e.clientY}, orig:{...vb}, moved:false, zeichnen:true};
     return;
   }
-  if(mode==='kalib'){ planKalibKlick(p); return; }
+  /* Maßstab setzen: gesetzte Punkte lassen sich anfassen, sonst wird geschoben —
+     der Punkt entsteht wie beim Zeichnen erst beim Loslassen ohne Bewegung. */
+  if(mode==='kalib'){
+    if(!planVon()){ cancelModes(); return; }   // Plan zwischendurch entfernt: Modus hat keinen Sinn mehr
+    const zt=e.target;
+    if(zt && zt.dataset && zt.dataset.kalibp!==undefined){
+      const i=+zt.dataset.kalibp;
+      drag={kind:'kalibp', idx:i, start:p, orig:{...kalibPunkte[i]}, moved:false};
+      return;
+    }
+    drag={kind:'pan', start:{x:e.clientX,y:e.clientY}, orig:{...vb}, moved:false, kalib:true};
+    return;
+  }
   if(mode==='place'){ commitPlace(p); return; }
   if(mode==='objrect'||mode==='objline'){
     drag={kind:mode==='objrect'?'newrect':'newline',
@@ -2550,12 +2697,18 @@ svg.addEventListener('pointerdown', e=>{
     renderAll(); return;
   }
   if(t.dataset && t.dataset.roomid && !focusRoomId){
-    // Etagenansicht: Ziehen verschiebt den Raum, Klick ohne Bewegung zoomt hinein
-    // bzw. wählt im Anwahlmodus aus. 2 s halten schaltet den Anwahlmodus ein.
     const r=roomById(t.dataset.roomid);
-    drag={kind:'room', start:p, orig:r.points.map(q=>({...q})),
-      origObjs:JSON.parse(JSON.stringify(r.objects||[])), room:r, moved:false};
-    if(!etagenWahl) haltenStarten(r.id);
+    /* Etagenansicht. **Verschieben geht nur im Anwahlmodus** (1 s auf dem Raum halten).
+       Ohne Anwahl schiebt derselbe Zug die Ansicht — sonst rutschten Räume beim bloßen
+       Navigieren aus ihrer eingemessenen Lage, und über einem Plan fällt das erst
+       hinterher auf. Der Tipp ohne Bewegung zoomt weiterhin hinein (`pendingRoom`). */
+    if(etagenWahl){
+      drag={kind:'room', start:p, orig:r.points.map(q=>({...q})),
+        origObjs:JSON.parse(JSON.stringify(r.objects||[])), room:r, moved:false};
+    } else {
+      drag={kind:'pan', start:{x:e.clientX,y:e.clientY}, orig:{...vb}, moved:false, pendingRoom:r.id};
+      haltenStarten(r.id);
+    }
     return;
   }
   // Raumansicht: Klick auf ausgegrauten Nachbarraum merken → wechselt bei Klick ohne Bewegung
@@ -2582,6 +2735,21 @@ svg.addEventListener('pointermove', e=>{
       renderCanvas(); return;
     }
     draft.cursor=snapDir(p); renderCanvas(); updateDrawHint(); return;
+  }
+  if(mode==='kalib'){
+    if(drag && drag.kind==='kalibp'){
+      if(dist(p, drag.orig)>0.005) drag.moved=true;
+      kalibPunkte[drag.idx]={x:p.x, y:p.y};
+      renderCanvas(); kalibMassAnzeigen();     // nur die Zahl auffrischen, nicht die ganze Leiste
+      return;
+    }
+    if(drag && drag.kind==='pan'){
+      const scale=vb.w/svg.getBoundingClientRect().width;
+      const dx=(e.clientX-drag.start.x)*scale, dy=(e.clientY-drag.start.y)*scale;
+      if(Math.abs(dx)+Math.abs(dy)>0.02) drag.moved=true;
+      if(drag.moved){ vb.x=drag.orig.x-dx; vb.y=drag.orig.y-dy; renderCanvas(); }
+    }
+    return;
   }
   if(mode==='place'){ if(placing){placing.at=p; renderCanvas();} return; }
   if(!drag) return;
@@ -2772,6 +2940,16 @@ svg.addEventListener('pointerup', e=>{
     if(zeiger.size<2){ pinch=null; drag=null; }
     return;
   }
+  if(drag && mode==='kalib'){
+    const d=drag; drag=null;
+    if(d.kind==='kalibp'){
+      if(!d.moved) kalibPunkte[d.idx]={...d.orig};      // reiner Tipp verschiebt nichts
+      renderCanvas(); renderSidebar(); updateDrawHint(); return;
+    }
+    if(d.kind==='pan' && !d.moved) kalibSetzen(svgPoint(e));
+    else renderCanvas();
+    return;
+  }
   if(drag && mode==='draw'){
     const d=drag; drag=null;
     if(d.kind==='drafth'){
@@ -2871,10 +3049,14 @@ svg.addEventListener('pointerup', e=>{
       drag=null; renderAll(); return;      // zurückgesetzt: nichts speichern, Plan neu zeichnen
     }
     if(drag && drag.moved && (drag.kind==='room'||drag.kind==='vertex'||drag.kind==='wall'||drag.kind==='open'||drag.kind==='openend'||drag.kind==='objmove'||drag.kind==='objh')){
-      syncSharedDoors(); save(); renderAll();
-      if(refocused) zoomFit();   // neuen Raum wie beim Raumwechsel zentriert einpassen
+      syncSharedDoors(); save();
+      drag=null; renderAll();    // erst loslassen, dann zeichnen — sonst bliebe der
+      if(refocused) zoomFit();   // Winkelbogen der gezogenen Ecke stehen
+      return;                    // neuen Raum wie beim Raumwechsel zentriert einpassen
     }
+    const warEcke = drag && drag.kind==='vertex';
     drag=null;
+    if(warEcke) renderCanvas();  // nur angefasst, nicht gezogen: Bogen wieder ausblenden
   }
 });
 svg.addEventListener('dblclick', e=>{
@@ -2954,9 +3136,11 @@ function updateDrawHint(){
     h.innerHTML=txt+' &nbsp;|&nbsp; Esc = abbrechen';
   } else if(mode==='kalib'){
     h.style.display='block';
-    h.innerHTML=(kalibA
-      ? '<b>Maßstab:</b> jetzt den <b>zweiten</b> Punkt anklicken'
-      : '<b>Maßstab:</b> zwei Punkte im Plan anklicken, deren echten Abstand du kennst')
+    const n=kalibPunkte.length;
+    h.innerHTML='<b>Maßstab:</b> '+(
+      n===0 ? 'ersten Punkt im Plan antippen — Zoomen und Schieben gehen weiter'
+    : n===1 ? 'jetzt den <b>zweiten</b> Punkt antippen'
+    : 'Punkte lassen sich verschieben — rechts das echte Maß eintragen (Laser oder tippen)')
       + ' &nbsp;|&nbsp; Esc = abbrechen';
   } else if(mode==='place'){
     h.style.display='block';
@@ -2977,7 +3161,7 @@ function updateDrawHint(){
 }
 function cancelModes(){
   mode='select'; draft={points:[],cursor:null,dir:null,typed:''}; placing=null; pendingSym=null; pendingOpenType=null;
-  kalibA=null;
+  kalibPunkte=[];
   updateDrawHint(); renderCanvas(); renderSidebar();
 }
 document.addEventListener('keydown', e=>{
@@ -3292,6 +3476,46 @@ function rueckkehrZurueck(){
    einer Etage werden ohnehin als eine Fläche gezeichnet.
    Der Sinn der Übung sind die Türen — `pushDoorToPartner` erkennt eine gemeinsame Wand
    nur innerhalb der Wandstärke. */
+/* Läuft diese Wand im Nachbarraum weiter?
+   Gesucht wird an BEIDEN Enden eine Wand, die auf derselben Linie liegt (≤ 10° Winkel,
+   höchstens 0,15 m seitlicher Versatz) und jenseits des Endes beginnt. Eine Lücke von bis
+   zu 1 m ist erlaubt — dazwischen steht ja oft eine quer laufende Wand. Weil sich die Wand
+   nicht überlappen darf, kommt die parallele Gegenseite einer gemeinsamen Wand hier nie
+   in Frage; gemeint ist wirklich die Fortsetzung derselben Flucht.
+
+   Die Seiten heißen nach ihrer Lage im Plan: bei überwiegend waagerechten Wänden links und
+   rechts, bei senkrechten oben und unten — „links" an einer senkrechten Wand wäre sinnlos.
+   Zurück kommen immer zwei Einträge (auch ohne Treffer), damit die Knöpfe ihren Platz
+   behalten und nur ausgegraut sind. */
+function wandFortsetzung(r, i){
+  const [A,B]=wallPoints(r,i), L=dist(A,B);
+  const ux=L>0.05?(B.x-A.x)/L:1, uy=L>0.05?(B.y-A.y)/L:0, nx=-uy, ny=ux;
+  const waagerecht=Math.abs(ux)>=Math.abs(uy);
+  const nameA = waagerecht ? (A.x<=B.x?'links':'rechts') : (A.y<=B.y?'oben':'unten');
+  const nameB = waagerecht ? (A.x<=B.x?'rechts':'links') : (A.y<=B.y?'unten':'oben');
+  const beste={};
+  if(L>=0.05) floorRooms().forEach(o=>{
+    if(o.id===r.id) return;
+    const n=o.points.length;
+    for(let j=0;j<n;j++){
+      const C=o.points[j], D=o.points[(j+1)%n], L2=dist(C,D); if(L2<0.05) continue;
+      const vx=(D.x-C.x)/L2, vy=(D.y-C.y)/L2;
+      if(Math.abs(ux*vx+uy*vy)<0.985) continue;                        // nicht parallel
+      if(Math.abs((C.x-A.x)*nx+(C.y-A.y)*ny)>0.15) continue;           // nicht dieselbe Flucht
+      if(Math.abs((D.x-A.x)*nx+(D.y-A.y)*ny)>0.15) continue;
+      const t1=(C.x-A.x)*ux+(C.y-A.y)*uy, t2=(D.x-A.x)*ux+(D.y-A.y)*uy;
+      const lo=Math.min(t1,t2), hi=Math.max(t1,t2);
+      const merken=(seite, luecke)=>{
+        if(luecke<-0.05 || luecke>1.0) return;
+        if(!beste[seite] || luecke<beste[seite].luecke)
+          beste[seite]={luecke, dicke:wandDicke(o,j), raum:o.name};
+      };
+      merken('B', lo-L);        // beginnt hinter dem Ende B
+      merken('A', -hi);         // endet vor dem Anfang A
+    }
+  });
+  return [{seite:nameA, treffer:beste.A||null}, {seite:nameB, treffer:beste.B||null}];
+}
 function nachbarWandSuchen(r, i){
   const [A,B]=wallPoints(r,i), L=dist(A,B);
   if(L<0.2) return null;
@@ -3513,9 +3737,17 @@ function renderSidebar(){
   const fr=focusRoomId?roomById(focusRoomId):null;
   let html='';
 
+  /* Maßstab setzen ist ein ausschließlicher Modus — wie beim Sanierungsbereich zeigt die
+     Leiste dann nur dieses eine Panel. Raus geht es über „Übernehmen", „Abbrechen" oder Esc. */
+  if(mode==='kalib' && planVon()){
+    $('#sidebar').innerHTML=kalibPanel();
+    wireSidebar(null);
+    return;
+  }
+
   if(!fr){
     /* ---------- Etagenansicht ---------- */
-    /* Anwahlmodus (Raum 2 s halten): der gewählte Raum lässt sich bearbeiten, ohne
+    /* Anwahlmodus (Raum 1 s halten): der gewählte Raum lässt sich bearbeiten, ohne
        hineinzuzoomen — deshalb ganz oben. Bewusst dieselben Felder wie in der
        Raumansicht, nur ohne Objekte/Fotos: die brauchen den großen Plan. */
     const wr=etagenWahl?roomById(etagenWahl):null;
@@ -3530,7 +3762,8 @@ function renderSidebar(){
         </div>
         ${farbReihen(wr, true)}
         ${lvListHtml(p.attrs.filter(a=>a.roomId===wr.id && !a.objId && a.wall==null))}
-        <p class="hint" style="margin-top:8px">Anderen Raum antippen wechselt die Anwahl,
+        <p class="hint" style="margin-top:8px"><b>Solange die Anwahl steht, lassen sich Räume ziehen.</b>
+          Anderen Raum antippen wechselt die Anwahl,
           <b>${esc(wr.name)}</b> noch einmal antippen öffnet die Raumansicht,
           ein Tipp neben die Räume beendet die Anwahl.</p>
       </div>`;
@@ -3555,7 +3788,8 @@ function renderSidebar(){
     const rooms=floorRooms();
     html+=`<div class="panel"><h3>Räume (${rooms.length})</h3>
       ${rooms.length? rooms.map(x=>{const s=roomStats(x);return `<div class="stat" style="cursor:pointer" data-selroom="${x.id}"><span>▸ ${esc(x.name)}</span><b>${fmt(s.area,2)} m²</b></div>`;}).join('') : '<p class="hint">Noch keine Räume auf dieser Etage. Oben „Frei zeichnen“ oder „Vorlage“ wählen.</p>'}
-      <p class="hint" style="margin-top:6px">Raum anklicken = hineinzoomen und bearbeiten. Raum ziehen = auf der Etage verschieben.</p>
+      <p class="hint" style="margin-top:6px">Raum anklicken = hineinzoomen und bearbeiten, Ziehen = Ansicht schieben.
+        Zum <b>Verschieben</b> den Raum erst <b>1 s halten</b> (Anwahl), dann ziehen.</p>
     </div>`;
 
   } else if(zoneEdit===fr.id){
@@ -3693,6 +3927,16 @@ function renderSidebar(){
             >${gesperrt?'🔒':'🔓'}</button></div>
         <div class="row"><label>Stärke (m)</label><input id="wdicke" type="text" inputmode="decimal" value="${fmt(wandDicke(r,sel.wall),3)}">
           <button class="btn small" id="wdickeall" title="Diese Stärke auf alle Wände des Raums übertragen">alle</button></div>
+        <div class="row"><label></label><input id="wdickereg" type="range" min="8" max="100" step="0.5"
+          value="${Math.max(8, Math.min(100, wandDicke(r,sel.wall)*100))}" style="flex:1${
+            dickeImBereich(wandDicke(r,sel.wall)) ? '' : '; accent-color:var(--danger)'}"
+          title="Stärke stufenlos von 0,08 bis 1,00 m — außerhalb wird der Regler rot"></div>
+        <div class="row">${wandFortsetzung(r, sel.wall).map((f,k)=>
+          `<button class="btn small" id="wdickevon${k}" style="flex:1" ${f.treffer?'':'disabled'}
+            title="${f.treffer
+              ? `Wand läuft in „${esc(f.treffer.raum)}“ weiter — dort ${fmt(f.treffer.dicke,3)} m stark`
+              : `Auf dieser Seite läuft die Wand in keinem Nachbarraum weiter`}"
+            >Stärke von ${f.seite}${f.treffer?` (${fmt(f.treffer.dicke,3)})`:''}</button>`).join('')}</div>
         <div class="row">
           <button class="btn small" id="wopdoor">🚪 ＋ Tür</button>
           <button class="btn small" id="wopwin">🪟 ＋ Fenster</button>
@@ -3832,7 +4076,7 @@ function wireSidebar(r){
     const f=etage(); if(!f.plan) return;
     if(!confirm('Planbild dieser Etage entfernen?')) return;
     if(f.plan.id) idbLoeschen([f.plan.id]).catch(()=>{});
-    delete f.plan; mode='select'; kalibA=null; save(); renderAll();
+    delete f.plan; mode='select'; kalibPunkte=[]; save(); renderAll();
     melde('Planbild entfernt.');
   });
   on('#planbreite','onchange',e=>{
@@ -3850,18 +4094,25 @@ function wireSidebar(r){
     renderCanvas();
   });
   on('#plandeck','onchange',()=>save());
+  on('#plandurch','oninput',e=>{
+    const pl=planVon(); if(!pl) return;
+    pl.durchsicht=Math.max(0.15, Math.min(1, (+e.target.value||60)/100));
+    renderCanvas();
+  });
+  on('#plandurch','onchange',()=>save());
+  /* Maßstab setzen */
+  on('#kalibMass','oninput',kalibVorschau);
+  on('#kalibMass','onchange',kalibVorschau);   // greift auch, wenn der Laser den Wert einträgt
+  on('#kalibMass','onkeydown',e=>{ if(e.key==='Enter') kalibUebernehmen(); });
+  on('#kalibOk','onclick',kalibUebernehmen);
+  on('#kalibAb','onclick',cancelModes);
   on('#planlock','onclick',()=>{
     const pl=planVon(); if(!pl) return;
     pl.gesperrt=!pl.gesperrt;
-    if(pl.gesperrt && mode==='kalib'){ mode='select'; kalibA=null; }
+    if(pl.gesperrt && mode==='kalib'){ mode='select'; kalibPunkte=[]; }
     save(); renderAll();
   });
-  on('#plankalib','onclick',()=>{
-    const pl=planVon(); if(!pl) return;
-    if(mode==='kalib'){ cancelModes(); return; }
-    mode='kalib'; kalibA=null; sel={roomId:null,wall:null,vertex:null};
-    renderAll(); updateDrawHint();
-  });
+  on('#plankalib','onclick',()=>{ if(mode==='kalib') cancelModes(); else kalibStart(); });
 
   on('#modedraw','onclick',()=>{
     if(mode==='draw'){ cancelModes(); return; }
@@ -3966,6 +4217,26 @@ function wireSidebar(r){
       const v=parseNum(e.target.value);
       if(isFinite(v) && v>0 && v<2){ r.wallDicke=r.wallDicke||{}; r.wallDicke[sel.wall]=mm(v); save(); }
       renderAll();
+    });
+    /* Schieberegler: läuft live mit, gespeichert wird erst beim Loslassen — sonst
+       stünde nach einem Zug ein Dutzend Schritte im Rückgängig-Verlauf. renderAll()
+       verbietet sich hier, es baute die Leiste (und damit den Regler) mitten im Zug neu. */
+    const dickeSetzen=v=>{
+      r.wallDicke=r.wallDicke||{}; r.wallDicke[sel.wall]=mm(v);
+      const feld=$('#wdicke'); if(feld) feld.value=fmt(mm(v),3);
+      const reg=$('#wdickereg'); if(reg) reg.style.accentColor = dickeImBereich(mm(v)) ? '' : 'var(--danger)';
+      renderCanvas();
+    };
+    on('#wdickereg','oninput',e=>dickeSetzen((+e.target.value||24)/100));
+    on('#wdickereg','onchange',()=>{ save(); renderAll(); });
+    // Nur wenn wirklich eine Wand gewählt ist — sonst gibt es die Knöpfe gar nicht,
+    // und wandFortsetzung() bekäme einen Index ins Leere
+    if(sel.wall!=null) wandFortsetzung(r, sel.wall).forEach((f,k)=>{
+      if(!f.treffer) return;
+      on(`#wdickevon${k}`,'onclick',()=>{
+        dickeSetzen(f.treffer.dicke); save(); renderAll();
+        melde(`Stärke von „${f.treffer.raum}" übernommen: ${fmt(f.treffer.dicke,3)} m.`);
+      });
     });
     on('#magnettoggle','onclick',magnetUmschalten);
     on('#wandverbinden','onclick',()=>wandVerbinden(r, sel.wall));
@@ -5886,23 +6157,54 @@ function p360Uebernehmen(){
 const PLAN_MAXKANTE=4500, PLAN_Q=0.72;
 const etage = () => proj().floors.find(f=>f.id===activeFloorId) || proj().floors[0];
 const planVon = () => { const f=etage(); return f && f.plan && f.plan.src ? f.plan : null; };
+/* Zweiter Regler neben der Deckkraft des Plans: wie deckend die ZEICHNUNG darüber liegt.
+   Ohne Plan bleibt alles voll deckend; mit Plan sind 60 % die Vorgabe, damit man den Plan
+   sofort durchscheinen sieht. Gilt nur für den Bildschirm — der Druck baut sein eigenes SVG. */
+function planDurchsicht(){
+  const pl=planVon(); if(!pl) return 1;
+  const v=pl.durchsicht;
+  return Number.isFinite(v) && v>0 ? Math.min(1, v) : 0.6;
+}
 
 function planBild(){
   const pl=planVon(); if(!pl) return '';
   // Drehung um die linke obere Ecke — dadurch bleibt das Skalieren beim Kalibrieren exakt
   const dreh=pl.drehung ? ` transform="rotate(${pl.drehung} ${pl.x} ${pl.y})"` : '';
   // Gesperrt liegt der Plan völlig durchlässig da — Klicks gehen an Räume und Ansicht
-  const fass=pl.gesperrt ? ' pointer-events="none"' : ' data-plan="1" style="cursor:move"';
+  const fass=(pl.gesperrt||mode==='kalib') ? ' pointer-events="none"' : ' data-plan="1" style="cursor:move"';
   const rand=pl.gesperrt ? '' :
     `<rect x="${pl.x}" y="${pl.y}" width="${pl.breite}" height="${pl.hoehe}" fill="none"
        stroke="#2f6fed" stroke-width="${Math.max(0.02, vb.w/900)}" stroke-dasharray="${vb.w/90} ${vb.w/140}"
        pointer-events="none"${dreh}/>`;
-  const marke=kalibA
-    ? `<circle cx="${kalibA.x}" cy="${kalibA.y}" r="${vb.w/120}" fill="none" stroke="#e0a300"
-         stroke-width="${vb.w/400}" pointer-events="none"/>`
-    : '';
+  const marke=mode==='kalib' ? kalibMarken() : '';
   return `<image href="${pl.src}" x="${pl.x}" y="${pl.y}" width="${pl.breite}" height="${pl.hoehe}"
     opacity="${pl.deckkraft}" preserveAspectRatio="none"${dreh}${fass}/>`+rand+marke;
+}
+
+/* Die beiden Maßstabspunkte samt Verbindung. Wird aus planBild() heraus gezeichnet, also
+   VOR der durchscheinenden Lage — die Griffe bleiben dadurch immer voll deckend. */
+function kalibMarken(){
+  if(!kalibPunkte.length) return '';
+  const r=vb.w/110, sw=vb.w/450;
+  let s='';
+  if(kalibPunkte.length===2){
+    const [a,b]=kalibPunkte;
+    s+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#e0a300" stroke-width="${sw}"
+          stroke-dasharray="${vb.w/70} ${vb.w/110}" pointer-events="none"/>`;
+    const ang=readAngle(a,b), rad=ang*Math.PI/180;
+    const tx=(a.x+b.x)/2+Math.sin(rad)*r*1.6, ty=(a.y+b.y)/2-Math.cos(rad)*r*1.6;
+    s+=`<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="middle"
+          font-size="${r*1.7}" fill="#b57f00" font-weight="700"
+          transform="rotate(${ang} ${tx} ${ty})" pointer-events="none">${fmt(kalibMass(),3)} m</text>`;
+  }
+  kalibPunkte.forEach((p,i)=>{
+    s+=`<circle cx="${p.x}" cy="${p.y}" r="${r*2.2}" fill="transparent" data-kalibp="${i}" style="cursor:move"/>`;
+    s+=`<circle cx="${p.x}" cy="${p.y}" r="${r}" fill="#e0a300" stroke="#fff" stroke-width="${sw}"
+          data-kalibp="${i}" style="cursor:move"/>`;
+    s+=`<line x1="${p.x-r*1.8}" y1="${p.y}" x2="${p.x+r*1.8}" y2="${p.y}" stroke="#b57f00" stroke-width="${sw*0.8}" pointer-events="none"/>`;
+    s+=`<line x1="${p.x}" y1="${p.y-r*1.8}" x2="${p.x}" y2="${p.y+r*1.8}" stroke="#b57f00" stroke-width="${sw*0.8}" pointer-events="none"/>`;
+  });
+  return s;
 }
 
 function planPanel(){
@@ -5920,9 +6222,10 @@ function planPanel(){
     <div class="stat"><span>${esc(pl.name||'Planbild')}</span><b>${fmt(pl.breite,2)} m breit</b></div>
     <div class="row"><label>Breite (m)</label><input id="planbreite" type="text" inputmode="decimal" value="${fmt(pl.breite,3)}"></div>
     <div class="row"><label>Drehung °</label><input id="plandreh" type="text" inputmode="decimal" value="${fmt(pl.drehung||0,1)}"></div>
-    <div class="row"><label>Deckkraft</label><input id="plandeck" type="range" min="10" max="100" value="${Math.round(pl.deckkraft*100)}" style="flex:1"></div>
+    <div class="row"><label>Deckkraft Plan</label><input id="plandeck" type="range" min="10" max="100" value="${Math.round(pl.deckkraft*100)}" style="flex:1"></div>
+    <div class="row"><label>Deckkraft Zeichnung</label><input id="plandurch" type="range" min="15" max="100" value="${Math.round(planDurchsicht()*100)}" style="flex:1"></div>
     <div class="row">
-      <button class="btn small ${mode==='kalib'?'active':''}" id="plankalib" style="flex:1">📏 Maßstab messen</button>
+      <button class="btn small" id="plankalib" style="flex:1">📏 Maßstab setzen</button>
       <button class="btn small" id="planlock" style="flex:1">${pl.gesperrt?'🔒 Gesperrt':'🔓 Beweglich'}</button>
     </div>
     <div class="row">
@@ -5931,10 +6234,32 @@ function planPanel(){
       <button class="btn small danger" id="plandel">Entfernen</button>
     </div>
     <div id="planListe"></div>
-    <p class="hint" style="margin-top:6px">${mode==='kalib'
-      ? '<b>Zwei Punkte im Plan anklicken</b>, deren Abstand du kennst — danach das Maß eintragen.'
-      : (pl.gesperrt ? 'Gesperrt: Ziehen verschiebt wieder die Ansicht.'
-                     : 'Beweglich: Ziehen auf dem Plan verschiebt ihn. Zum Zeichnen besser sperren.')}</p></div>`;
+    <p class="hint" style="margin-top:6px">${pl.gesperrt
+      ? 'Gesperrt: Ziehen verschiebt wieder die Ansicht.'
+      : 'Beweglich: Ziehen auf dem Plan verschiebt ihn. Zum Zeichnen besser sperren.'}
+      <br><b>Deckkraft Zeichnung</b> lässt Räume und Wände durchscheinen, damit der Plan darunter
+      sichtbar bleibt — nur am Bildschirm, der Ausdruck bleibt voll deckend.</p></div>`;
+}
+
+/* Seitenleiste im Maßstabs-Modus: nur dieses eine Panel, wie beim Sanierungsbereich.
+   Das Feld trägt class="laser", damit ein Messwert vom Bosch/Leica direkt hier landet. */
+function kalibPanel(){
+  const pl=planVon(), n=kalibPunkte.length;
+  return `<div class="panel"><h3>Maßstab setzen</h3>
+    <p class="hint" style="margin-bottom:6px">Zwei Punkte auf dem Plan antippen, deren Abstand du
+      kennst — am besten weit auseinander, das ist genauer. Die Punkte lassen sich danach
+      wieder anfassen und verschieben. <b>Zoomen und Schieben gehen weiter</b>, alles andere
+      ist so lange aus.</p>
+    <div class="stat"><span>${n===0?'Noch kein Punkt gesetzt':(n===1?'Erster Punkt steht':'Im Plan gemessen')}</span>
+      <b id="kalibIst">${n===2?fmt(kalibMass(),3)+' m':'—'}</b></div>
+    <div class="row"><label>Echtes Maß (m)</label>
+      <input class="laser" id="kalibMass" type="text" inputmode="decimal" placeholder="Laser oder tippen"></div>
+    <p class="hint" id="kalibZiel">Zwei Punkte setzen und das echte Maß eintragen.</p>
+    <div class="row">
+      <button class="btn small primary" id="kalibOk" style="flex:1">Übernehmen</button>
+      <button class="btn small" id="kalibAb" style="flex:1">Abbrechen</button>
+    </div>
+    <p class="hint" style="margin-top:6px">Plan gerade: <b>${fmt(pl.breite,3)} m</b> breit.</p></div>`;
 }
 
 /* Bild verkleinern — 4500 px lange Kante reichen für ~1 cm Genauigkeit auf A0 */
@@ -5977,7 +6302,8 @@ async function planUebernehmen(file, opt){
       id:'plan_'+uid(), src:bild.src, name:file.name,
       breite, hoehe: breite*bild.h/bild.w,
       x: alt ? alt.x : mm(vb.x+vb.w*0.1), y: alt ? alt.y : mm(vb.y+vb.h*0.1),
-      drehung: alt?alt.drehung||0:0, deckkraft: alt?alt.deckkraft:0.55, gesperrt:false
+      drehung: alt?alt.drehung||0:0, deckkraft: alt?alt.deckkraft:0.55,
+      durchsicht: alt&&Number.isFinite(alt.durchsicht) ? alt.durchsicht : 0.6, gesperrt:false
     };
     if(opt.quelle) f.plan.quelle=opt.quelle;      // liegt in Airtable → muss nicht mitgesichert werden
     if(alt && alt.id) idbLoeschen([alt.id]).catch(()=>{});
@@ -6041,23 +6367,50 @@ function planSkalieren(anker, faktor){
   pl.breite = mm(pl.breite*faktor);
   pl.hoehe  = mm(pl.hoehe*faktor);
 }
-let kalibA=null;
-function planKalibKlick(p){
+/* ---- Maßstab setzen: ausschließlicher Modus ----
+   Zwei Punkte auf dem Plan, deren echten Abstand man kennt. Sie bleiben liegen und lassen
+   sich beliebig oft wieder anfassen — Zoomen und Schieben gehen weiter, alles andere ist
+   so lange aus (Seitenleiste zeigt nur dieses Panel, Klicks gehen nicht an Räume/Plan).
+   Das Maß kommt zum Schluss per Laser oder von Hand; erst „Übernehmen" skaliert. */
+let kalibPunkte=[];
+const kalibMass = () => kalibPunkte.length===2 ? dist(kalibPunkte[0], kalibPunkte[1]) : 0;
+function kalibStart(){
   const pl=planVon(); if(!pl) return;
-  if(!kalibA){ kalibA={...p}; melde('Erster Punkt gesetzt — jetzt den zweiten anklicken.'); renderCanvas(); return; }
-  const gemessen=dist(kalibA, p);
-  if(gemessen<1e-6){ melde('Die beiden Punkte liegen aufeinander.', true); return; }
-  const eingabe=prompt(`Gemessen im Plan: ${fmt(gemessen,3)} m\n\nWelchen Abstand haben die beiden Punkte in Wirklichkeit? (m)`,
-    fmt(gemessen,3));
-  if(eingabe!==null){
-    const echt=parseNum(eingabe);
-    if(isFinite(echt) && echt>0){
-      planSkalieren(kalibA, echt/gemessen);
-      save();
-      melde(`Maßstab gesetzt — der Plan ist jetzt ${fmt(planVon().breite,2)} m breit.`);
-    } else melde('Keine gültige Länge.', true);
+  mode='kalib'; kalibPunkte=[]; sel={roomId:null, wall:null, vertex:null};
+  renderAll(); updateDrawHint();
+}
+// Tipp ins Leere: setzt Punkt 1 bzw. 2. Sind beide gesetzt, bewegt nur noch das Ziehen.
+function kalibSetzen(p){
+  if(kalibPunkte.length>=2){
+    melde('Beide Punkte stehen — zum Ändern einen Punkt anfassen und ziehen.');
+    return;
   }
-  kalibA=null; mode='select'; renderAll(); updateDrawHint();
+  kalibPunkte.push({x:p.x, y:p.y});
+  renderCanvas(); renderSidebar(); updateDrawHint();
+}
+/* Nur die Maßzahl auffrischen, während ein Punkt gezogen wird. renderSidebar() würde
+   das Eingabefeld neu bauen und dabei den Fokus (und eine halb getippte Zahl) verlieren. */
+function kalibMassAnzeigen(){
+  const el=$('#kalibIst'); if(el) el.textContent=kalibPunkte.length===2 ? fmt(kalibMass(),3)+' m' : '—';
+  kalibVorschau();
+}
+function kalibVorschau(){
+  const el=$('#kalibZiel'); if(!el) return;
+  const pl=planVon(), echt=parseNum(($('#kalibMass')||{}).value), gem=kalibMass();
+  el.textContent = (pl && gem>1e-6 && isFinite(echt) && echt>0)
+    ? `Der Plan wird damit ${fmt(pl.breite*echt/gem, 2)} m breit.`
+    : 'Zwei Punkte setzen und das echte Maß eintragen.';
+}
+function kalibUebernehmen(){
+  const pl=planVon(); if(!pl) return;
+  const gem=kalibMass();
+  if(gem<1e-6){ melde('Erst zwei Punkte im Plan setzen.', true); return; }
+  const echt=parseNum(($('#kalibMass')||{}).value);
+  if(!isFinite(echt) || echt<=0){ melde('Bitte das echte Maß eintragen (m).', true); return; }
+  planSkalieren(kalibPunkte[0], echt/gem);
+  save();
+  melde(`Maßstab gesetzt — der Plan ist jetzt ${fmt(planVon().breite,2)} m breit.`);
+  kalibPunkte=[]; mode='select'; renderAll(); updateDrawHint();
 }
 
 /* ================= LV-Import (Airtable) =================
@@ -6197,6 +6550,106 @@ function importLvRows(rows){
   return {neu, upd, gesamt:rows.length};
 }
 
+/* ================= GAEB-Leistungsverzeichnis einlesen =================
+   Gelesen wird GAEB DA XML (Endungen .X81 … .X86). Alle Austauschphasen benutzen denselben
+   Aufbau — BoQ → BoQBody → BoQCtgy … → Itemlist → Item —, es unterscheidet sich nur, ob
+   Preise mit drinstehen. Ein Parser deckt darum die X83 des Auftraggebers, die eigene X84
+   und den X81-Export aus dem AVA-Programm gleichermaßen ab. Preise werden nicht gelesen.
+
+   Die alten Satzformate D8x (GAEB 90) und P8x (GAEB 2000) sind kein XML, sondern Datensätze
+   fester Länge in DOS-Codepage. Die bleiben draußen: sie brauchten einen eigenen Decoder, und
+   sie liegen erfahrungsgemäß ohnehin neben einer X8x derselben Ausschreibung.
+
+   Zwei Fallstricke, die der Parser abfängt:
+   · Die Ordnungszahl steht nirgends als Text. Sie wird aus dem Attribut RNoPart jeder Ebene
+     zusammengesetzt — Titel „2" + Position „4" ergibt „2.4", also genau die Nummer, mit der
+     die Positionstexte selbst aufeinander verweisen („Zulage zu Pos 2.4").
+   · Die Bietertextergänzungen ComplBody/ComplTail stehen AUSSERHALB der <p>-Absätze. Wer nur
+     Absätze einsammelt, verliert sie — und damit oft genau das Maß, um das es geht
+     („Maximale Abmessung einer Dachplatte:" ohne die folgenden „300 x 600 x 5 mm"). */
+
+// Kind-Elemente unabhängig vom Namensraum: GAEB-Dateien tragen je nach Version
+// unterschiedliche xmlns, localName ist in allen gleich.
+const gaebKinder=(el, name)=>[...el.children].filter(k=>k.localName===name);
+const gaebErstes=(el, name)=>{
+  if(!el) return null;
+  for(const k of el.getElementsByTagName('*')) if(k.localName===name) return k;
+  return null;
+};
+/* Text eines Textknotens als reiner Fließtext. <p> und <br> werden zu Zeilenumbrüchen,
+   alles andere läuft einfach mit — so kommen auch ComplBody/ComplTail mit. */
+function gaebText(el){
+  if(!el) return '';
+  let out='';
+  (function gehe(n){
+    n.childNodes.forEach(k=>{
+      if(k.nodeType===3){ out+=k.nodeValue; return; }
+      if(k.nodeType!==1) return;
+      if(k.localName==='br'){ out+='\n'; return; }
+      gehe(k);
+      if(k.localName==='p') out+='\n';
+    });
+  })(el);
+  // \s deckt in JS auch das geschützte Leerzeichen ab — davon stehen in GAEB-Texten reichlich
+  return out.split('\n')
+    .map(z=>z.replace(/\s+/g,' ').trim()).join('\n')
+    .replace(/\n{3,}/g,'\n\n').trim();
+}
+/* Eine Position → dieselbe Zeilenform, die auch aus Airtable kommt */
+function gaebPosition(el, teile){
+  const qu=(gaebErstes(el,'QU')?.textContent||'').trim();
+  const menge=Number((gaebErstes(el,'Qty')?.textContent||'').trim());
+  const kurz=gaebText(gaebErstes(el,'OutlineText'));
+  const beschr=gaebKinder(el,'Description')[0];
+  return {
+    lv: teile.filter(Boolean).join('.'),
+    kurz,
+    einheit: mapEinheit(qu), roh: qu,
+    menge: Number.isFinite(menge) ? menge : NaN,
+    lang: gaebText(gaebErstes(beschr||el,'DetailTxt'))
+  };
+}
+/* Baum ablaufen und dabei die Ordnungszahl mitführen. Remark (Vorbemerkungen) hat weder
+   Nummer noch Menge und gehört nicht in den Positionskatalog — wird übersprungen. */
+function gaebGehe(el, teile, raus){
+  for(const kind of el.children){
+    const t=kind.localName;
+    if(t==='BoQCtgy') gaebGehe(kind, teile.concat(kind.getAttribute('RNoPart')||''), raus);
+    else if(t==='Item') raus.push(gaebPosition(kind, teile.concat(kind.getAttribute('RNoPart')||'')));
+    else if(t==='GAEB'||t==='Award'||t==='BoQ'||t==='BoQBody'||t==='Itemlist') gaebGehe(kind, teile, raus);
+  }
+}
+/* Zeichensatz aus der XML-Deklaration lesen. Die meisten Dateien sind UTF-8, ältere
+   Exporte kommen als ISO-8859-1 — dann würden Umlaute sonst zu Fragezeichen. */
+function gaebEntschluesseln(puffer){
+  const kopf=new TextDecoder('iso-8859-1').decode(new Uint8Array(puffer, 0, Math.min(200, puffer.byteLength)));
+  const m=kopf.match(/encoding\s*=\s*["']([\w-]+)["']/i);
+  const satz=(m?m[1]:'utf-8').toLowerCase();
+  try{ return new TextDecoder(satz).decode(puffer); }
+  catch(e){ return new TextDecoder('utf-8').decode(puffer); }
+}
+function gaebLesen(text){
+  if(!/^\s*(﻿)?</.test(text))
+    throw new Error('Das ist kein GAEB-XML. Die älteren Satzformate D8x/P8x kann die App nicht '+
+      'lesen — bitte im AVA-Programm als X83 (oder X81/X84) exportieren.');
+  const doc=new DOMParser().parseFromString(text, 'application/xml');
+  const fehler=doc.getElementsByTagName('parsererror')[0];
+  if(fehler) throw new Error('Die Datei ist beschädigt oder unvollständig (XML nicht lesbar).');
+  const wurzel=doc.documentElement;
+  if(!wurzel || wurzel.localName!=='GAEB')
+    throw new Error('Keine GAEB-Datei — erwartet wird ein <GAEB>-Dokument.');
+  const raus=[];
+  gaebGehe(wurzel, [], raus);
+  const posten=raus.filter(r=>r.lv && (r.kurz || r.lang));
+  if(!posten.length) throw new Error('In der Datei stehen keine Positionen.');
+  return {
+    posten,
+    phase:(gaebErstes(wurzel,'DP')?.textContent||'').trim(),
+    projekt:(gaebErstes(wurzel,'LblPrj')?.textContent||'').trim(),
+    lv:(gaebErstes(wurzel,'LblBoQ')?.textContent||'').trim()
+  };
+}
+
 /* ================= Einstellungen =================
    Alles Geräteweite an einer Stelle: Airtable-Zugang, Laser, Abschlagszähler.
    Der Laser saß früher in der Seitenleiste der Etagenansicht — verbinden ist aber
@@ -6254,6 +6707,7 @@ $('#settingsbtn').onclick=()=>{
   $('#setRemember').checked=!!localStorage.getItem(AT_TOKEN_KEY);
   $('#setBase').value=atBase();
   $('#setPaste').value=''; $('#setPasteStatus').textContent='';
+  $('#setGaebStatus').textContent='';
   $('#setGebaeude').value=p.gebaeude||'';
   $('#setBereich').value=p.bereich||'';
   $('#setArt').value=p.artBauvorhaben||'';
@@ -6305,6 +6759,34 @@ $('#setForget').onclick=()=>{
   localStorage.removeItem(AT_TOKEN_KEY); atTokenSession='';
   $('#setToken').value=''; $('#setRemember').checked=false;
   setStatus('Token von diesem Gerät gelöscht.');
+};
+$('#setGaeb').onclick=()=>$('#gaebfile').click();
+$('#gaebfile').onchange=e=>{
+  const f=e.target.files[0]; e.target.value='';
+  if(!f) return;
+  const el=$('#setGaebStatus');
+  const sag=(t,err)=>{ el.textContent=t; el.style.color=err?'var(--danger)':'var(--muted)'; };
+  sag(`Lese „${f.name}" …`);
+  const rd=new FileReader();
+  rd.onerror=()=>sag('Datei nicht lesbar.', true);
+  rd.onload=()=>{
+    let g;
+    try{ g=gaebLesen(gaebEntschluesseln(rd.result)); }
+    catch(err){ sag(err.message, true); return; }
+    const res=importLvRows(g.posten);
+    const ohneMenge=g.posten.filter(r=>!Number.isFinite(r.menge)).length;
+    const ohneEinheit=g.posten.filter(r=>r.roh && !r.einheit).length;
+    const teile=[];
+    if(res.neu) teile.push(`${res.neu} neu`);
+    if(res.upd) teile.push(`${res.upd} aktualisiert`);
+    const hinweis=[];
+    if(ohneMenge) hinweis.push(`${ohneMenge} ohne Menge`);
+    if(ohneEinheit) hinweis.push(`${ohneEinheit} mit unbekannter Einheit`);
+    sag(`${g.lv||g.projekt||f.name}: ${res.gesamt} Position(en) gelesen — `+
+      `${teile.length?teile.join(', '):'nichts geändert'}. Zuordnungen unverändert.`+
+      (hinweis.length?` (${hinweis.join(', ')})`:''));
+  };
+  rd.readAsArrayBuffer(f);
 };
 $('#setPasteOk').onclick=()=>{
   const rows=$('#setPaste').value.split(/\r?\n/).map(l=>{
