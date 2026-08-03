@@ -89,6 +89,13 @@
   #lvview th{background:#f0f2f5; position:sticky; top:0; font-size:12px;}
   #lvview td.num{text-align:right; font-variant-numeric:tabular-nums;}
   #lvview tr:hover td{background:#f6f9ff;}
+  /* Direkt in der Zeile bearbeiten: unauffällig, bis man hineingeht */
+  #lvview .lvz{width:66px; padding:2px 4px; border:1px solid transparent; border-radius:4px;
+    background:transparent; text-align:right; font-variant-numeric:tabular-nums;}
+  #lvview .lvz:hover{border-color:var(--line); background:#fff;}
+  #lvview .lvz:focus{border-color:var(--accent); background:#fff; outline:none;}
+  #lvview select.lvz{width:auto; text-align:left;}
+  #lvview .lvz.abs{width:52px;}
 
   dialog{border:none; border-radius:12px; padding:0; max-width:min(560px,94vw); width:520px; box-shadow:0 10px 40px rgba(0,0,0,.25);}
   dialog::backdrop{background:rgba(20,25,35,.45);}
@@ -512,8 +519,8 @@
       <button class="btn small" id="setGaeb">📂 GAEB-Datei einlesen</button>
       <p class="hint" id="setGaebStatus"></p>
       <p class="hint" style="margin-top:10px">Notausgang, wenn der Browser die Anfrage blockiert (CORS) oder kein Netz da ist.
-        Je Zeile: <code>LV-Nummer;Kurztext;Einheit;Menge;Langtext</code> (Semikolon oder Tab,
-        Menge und Langtext optional). Wie beim Import: neue Nummern kommen dazu, bestehende werden
+        Je Zeile: <code>LV-Nummer;Kurztext;Einheit;Menge;Langtext;Einheitspreis</code>
+        (Semikolon oder Tab, alles ab der Menge optional). Wie beim Import: neue Nummern kommen dazu, bestehende werden
         aufgefrischt — <b>Zuordnungen bleiben unberührt</b>.</p>
       <textarea id="setPaste" rows="5" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:6px" placeholder="01.02.0030;Wände spachteln;m²"></textarea>
       <button class="btn small" id="setPasteOk" style="margin-top:6px">Einfügen übernehmen</button>
@@ -597,6 +604,7 @@
     <ol style="padding-left:18px; margin-bottom:10px">
       <li>Bluetooth am Messgerät einschalten (Leica DISTO: BT-Symbol; Bosch GLM: Bluetooth-Taste).</li>
       <li>In <b>⚙ Einstellungen → Laser</b> (oder mit einem Klick auf die Laser-Anzeige oben rechts) <b>„Leica verbinden“</b> bzw. <b>„Bosch verbinden“</b> wählen und das Gerät auswählen. Einmal je Sitzung genügt.</li>
+      <li><b>Schaltet sich der Laser zwischendurch ab</b> (der Bosch GLM tut das zum Stromsparen), verbindet die App von selbst wieder, sobald er wieder an ist — die Anzeige oben rechts zeigt so lange „sucht …“. Nach 10 Minuten ohne Erfolg gibt sie auf. <b>„Trennen“</b> beendet auch das automatische Wiederverbinden.</li>
       <li>Ein Eingabefeld mit grünem Rand anklicken (Wandlänge, Raumhöhe, LV-Maße …) und die Messung am Gerät auslösen — der Wert springt direkt ins Feld.</li>
       <li>Beim <b>Raum zeichnen</b>: Richtung mit Maus/Finger vorgeben und am Laser messen — die Wand wird mit exakter Länge gesetzt.</li>
     </ol>
@@ -851,6 +859,12 @@ function parseNum(s){
 // das globale isFinite(null) wäre true und null.toFixed() würde crashen
 function fmt(n, d=2){ return Number.isFinite(n) ? n.toFixed(d).replace('.', ',') : ''; }
 const fmt3 = n => fmt(n,3);
+// Geldbeträge mit Tausenderpunkt: 12.345,67 — ohne Währungszeichen, das steht im Spaltenkopf
+function fmtGeld(n){
+  if(!Number.isFinite(n)) return '';
+  const [ganz, rest]=n.toFixed(2).split('.');
+  return ganz.replace(/\B(?=(\d{3})+(?!\d))/g, '.')+','+rest;
+}
 const dist = (a,b) => Math.hypot(b.x-a.x, b.y-a.y);
 // Kein Raster-Einrasten mehr: nur auf Millimeter runden (verhindert Fließkomma-Reste)
 const mm = v => Math.round(v*1000)/1000;
@@ -1187,6 +1201,8 @@ const lvColor=(p,lv)=> (lv && p.lvColors && p.lvColors[lv]!=null) ? LVCOLORS[p.l
 // erwartet sie genau so. Angezeigt wird deutsch korrekt.
 const EINH_LABEL={Flache:'Fläche', Lange:'Länge', Stuck:'Stück', Volumen:'Volumen'};
 const einhTxt = e => EINH_LABEL[e] || e || '';
+// Reihenfolge wie im LV-Dialog — für die Auswahl direkt in der Zeile
+const EINH_WAHL=[['Flache','Fläche'],['Lange','Länge'],['Stuck','Stück'],['Volumen','Volumen']];
 /* Einheiten-Erkennung: alle gebräuchlichen Schreibweisen auf die vier internen Einheiten abbilden.
    Verglichen wird normalisiert (klein, ohne Leer-/Satzzeichen, ² → 2, Umlaute ausgeschrieben). */
 const EINH_ALIAS={
@@ -1227,6 +1243,11 @@ function lvSollWert(lv){
   const v=(p.lvSoll||{})[lv];
   if(Number.isFinite(v)) return v;
   return mengeAusKurz((p.lvTexts||{})[lv]);
+}
+// Einheitspreis laut LV (Airtable-Feld „Einheitspreis" bzw. GAEB `UP`)
+function lvPreisWert(lv){
+  const v=(proj().lvPreis||{})[lv];
+  return Number.isFinite(v) ? v : NaN;
 }
 // LV-Nummern natürlich sortieren: 1 < 2 < 10, auch bei 01.02.0030 < 01.10.0010
 const lvCmp=(a,b)=>String(a||'').localeCompare(String(b||''), 'de', {numeric:true, sensitivity:'base'});
@@ -4562,6 +4583,9 @@ function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
   if(!a && presetVals){
     if(presetVals.laenge!=null) $('#lvL').value=fmt3(presetVals.laenge);
     if(presetVals.hoehe!=null) $('#lvH').value=fmt3(presetVals.hoehe);
+    // Aus der Detailansicht einer Position heraus: Nummer steht schon fest,
+    // Kurztext und Einheit kommen wie bei der Auswahl aus dem Katalog
+    if(presetVals.lv){ $('#lvPos').value=presetVals.lv; lvApplyKnown(presetVals.lv); }
   }
   ['Vorn','Oben','Links','Rechts','Hinten','Unten'].forEach(k=>{ $('#lv'+k).checked=a?!!a[k.toLowerCase()]:false; });
   $('#lvNutzGrund').checked=a?!!a.nutzGrund:false;
@@ -5750,33 +5774,91 @@ function lvGroups(){
     const fehlend=[...new Set(res.flatMap(x=>x.fehlt))];
     const soll=lvSollWert(lv);                                  // vorgesehene Menge laut LV
     const ueber=Number.isFinite(soll) && summe>soll+0.0005;     // Aufmaß über LV-Menge
-    return {lv, list, alleNein, einheiten, summe, fehlend, soll, ueber,
+    /* Einheitspreis aus dem Katalog (Airtable-Feld „Einheitspreis", GAEB `UP`).
+       Der Betrag rechnet mit der AUFGEMESSENEN Summe, nicht mit der LV-Menge — es geht
+       um das, was abgerechnet wird. Bei gemischten Einheiten gibt es keine Summe und
+       darum auch keinen Betrag. */
+    const preis=lvPreisWert(lv);
+    const betrag=(Number.isFinite(preis) && einheiten.length<2) ? summe*preis : NaN;
+    return {lv, list, alleNein, einheiten, summe, fehlend, soll, ueber, preis, betrag,
       sym:einheiten.length===1?(EINH_SYM[einheiten[0]]||''):'',
       kurz:(p.lvTexts||{})[lv] || (list.find(a=>a.kurz)||{}).kurz || ''};
   });
 }
 let lvDrill=null;   // gesetzt = Detailansicht einer LV-Position
+/* Abschlags-Auswahl im LV-Tab. null = alles. Umgesetzt über denselben `druckFilter`,
+   den der Druck benutzt — so rechnet der Bildschirm garantiert wie der Ausdruck, statt
+   die Filterlogik ein zweites Mal nachzubauen. Gesetzt wird er nur um `lvGroups()`
+   herum und im finally wieder zurückgenommen, damit er nirgends sonst hineinwirkt. */
+let lvAbschlagWahl=null;
+function lvGroupsGefiltert(){
+  const alt=druckFilter;
+  if(lvAbschlagWahl!=null) druckFilter={art:'teil', nr:lvAbschlagWahl};
+  try{ return lvGroups(); } finally{ druckFilter=alt; }
+}
+// Welche Abschlagsnummern kommen im Aufmaß überhaupt vor?
+const lvAbschlaege = () => [...new Set((proj().attrs||[]).filter(a=>a.lv).map(abschlagVon))]
+  .sort((a,b)=>a-b);
+/* Das GANZE Leistungsverzeichnis für den LV-Tab: alle Positionen aus dem Katalog, auch
+   die ohne jede Zuordnung — die stehen mit 0 da. So sieht man auf einen Blick, was noch
+   offen ist, statt nur das schon Aufgemessene.
+
+   Bewusst NUR für den LV-Tab: `lvGroups()` selbst bleibt bei den Positionen mit
+   Zuordnung, sonst stünde im Ausdruck plötzlich das komplette LV statt der Abrechnung. */
+function lvGroupsVoll(){
+  const p=proj();
+  const mit=lvGroupsGefiltert();
+  const da=new Set(mit.map(g=>g.lv));
+  const leer=Object.keys(p.lvTexts||{}).filter(lv=>lv && !da.has(lv)).map(lv=>{
+    const einheit=(p.lvUnits||{})[lv] || einheitAusKurz((p.lvTexts||{})[lv]);
+    const einheiten=einheit?[einheit]:[];
+    const preis=lvPreisWert(lv);
+    return {lv, list:[], alleNein:false, einheiten, summe:0, fehlend:[],
+      soll:lvSollWert(lv), ueber:false, preis,
+      betrag:Number.isFinite(preis) ? 0 : NaN, ohneAufmass:true,
+      sym:einheiten.length===1?(EINH_SYM[einheiten[0]]||''):'',
+      kurz:(p.lvTexts||{})[lv]||''};
+  });
+  return [...mit, ...leer].sort((a,b)=>lvCmp(a.lv, b.lv));
+}
 
 function renderLv(){
   if(lvDrill!=null) renderLvDetail(); else renderLvUebersicht();
 }
 /* ---------- Ebene 1: Übersicht — eine Zeile je LV-Position ---------- */
 function renderLvUebersicht(){
-  const p=proj(), groups=lvGroups();
+  const p=proj(), teile=lvAbschlaege();
+  // Nach einem Projektwechsel kann der gewählte Abschlag verschwunden sein
+  if(lvAbschlagWahl!=null && !teile.includes(lvAbschlagWahl)) lvAbschlagWahl=null;
+  const groups=lvGroupsVoll();
+  const mitAufmass=groups.filter(g=>g.list.length).length;
+  // Gesamtbetrag über alle Positionen, die einen Preis UND eine eindeutige Einheit haben
+  const mitPreis=groups.filter(g=>Number.isFinite(g.betrag));
+  const gesamt=mitPreis.reduce((s,g)=>s+g.betrag, 0);
+  const ohnePreis=groups.length-mitPreis.length;
   $('#lvview').innerHTML=`
-    <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px">
-      <h2 style="font-size:17px">LV-Positionen (${groups.length})</h2>
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap">
+      <h2 style="font-size:17px">LV-Positionen (${groups.length}<span class="hint" style="font-weight:400">, davon ${mitAufmass} mit Aufmaß</span>)</h2>
+      <label class="hint" style="display:flex; align-items:center; gap:5px">Abschlag
+        <select id="lvabschlag">
+          <option value="">alle</option>
+          ${teile.map(n=>`<option value="${n}" ${lvAbschlagWahl===n?'selected':''}>Abschlag ${n}</option>`).join('')}
+        </select></label>
+      <span style="flex:1"></span>
       <button class="btn primary" id="lvnew">＋ Neue LV-Position</button>
       <button class="btn" id="lvedit" title="Auswahllisten pflegen: Positionen ausblenden, Kurztexte ändern">LV editieren</button>
     </div>
     <table><thead><tr>
       <th>LV Position</th><th>Kurztext</th><th>Zuordnungen</th><th>Einheit</th>
       <th style="text-align:right">Menge lt. LV</th><th style="text-align:right">Summe</th>
+      <th style="text-align:right">EP €</th><th style="text-align:right">Betrag €</th>
     </tr></thead><tbody>
     ${groups.map(g=>{
       const c=lvColor(p,g.lv);
       const mix=g.einheiten.length>1;
-      return `<tr style="cursor:pointer" data-lvdrill="${esc(g.lv)}" title="Zuordnungen anzeigen">
+      // Positionen ohne Aufmaß stehen blass mit 0 da — sie gehören zum LV, sind aber offen
+      return `<tr style="cursor:pointer${g.ohneAufmass?'; color:var(--muted)':''}" data-lvdrill="${esc(g.lv)}"
+        title="${g.ohneAufmass?'Noch keine Zuordnung im Aufmaß':'Zuordnungen anzeigen'}">
         <td>${c?`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${c};margin-right:6px;vertical-align:-1px"></span>`:''}<b>${esc(g.lv||'– ohne Nummer –')}</b></td>
         <td>${esc(g.kurz)}</td>
         <td class="num">${g.list.length}</td>
@@ -5784,22 +5866,79 @@ function renderLvUebersicht(){
         <td class="num">${Number.isFinite(g.soll)?fmt3(g.soll)+' '+g.sym:'–'}</td>
         <td class="num"${g.ueber&&!mix?' title="Aufmaß liegt über der LV-Menge"':''}>
           <b${g.ueber&&!mix?' style="color:var(--danger)"':''}>${mix?'—':fmt3(g.summe)+' '+g.sym}</b>${g.fehlend.length?` <span style="color:var(--danger)" title="Maß fehlt: ${esc(g.fehlend.join(', '))}">⚠</span>`:''}</td>
+        <td class="num">${Number.isFinite(g.preis)?fmtGeld(g.preis):'–'}</td>
+        <td class="num"><b>${Number.isFinite(g.betrag)?fmtGeld(g.betrag):'–'}</b></td>
       </tr>`;
-    }).join('') || '<tr><td colspan="6" style="color:var(--muted)">Noch keine LV-Positionen. Über „＋ Neue LV-Position“, im Raum-Panel oder am ausgewählten Objekt anlegen.</td></tr>'}
-    </tbody></table>
+    }).join('') || '<tr><td colspan="8" style="color:var(--muted)">Noch keine LV-Positionen. Über „＋ Neue LV-Position“, im Raum-Panel oder am ausgewählten Objekt anlegen.</td></tr>'}
+    </tbody>
+    ${groups.length?`<tfoot><tr>
+      <td colspan="7" style="text-align:right"><b>Summe${lvAbschlagWahl!=null?` Abschlag ${lvAbschlagWahl}`:''}</b>${
+        ohnePreis?` <span class="hint">(${ohnePreis} Position(en) ohne Preis)</span>`:''}</td>
+      <td class="num"><b>${mitPreis.length?fmtGeld(gesamt):'–'}</b></td>
+    </tr></tfoot>`:''}
+    </table>
     <p class="hint" style="margin-top:8px">Zeile anklicken zeigt die einzelnen Zuordnungen. Gerechnet wird wie in
-      magicplan; bei gemischten Einheiten innerhalb einer Position gibt es keine Summe („Zu überprüfen“).</p>`;
+      magicplan; bei gemischten Einheiten innerhalb einer Position gibt es keine Summe („Zu überprüfen“).
+      Der <b>Betrag</b> ist die aufgemessene Summe × Einheitspreis — der Preis kommt aus Airtable
+      („Einheitspreis") bzw. aus dem GAEB-Import.</p>`;
   // Aus dem LV-Tab heraus gibt es kein Bauteil — die Position gehört dem Projekt
   $('#lvnew').onclick=()=>openLvDialog(null, sel.roomId||((proj().rooms[0]||{}).id), null, {projekt:true});
   $('#lvedit').onclick=openLvEdit;
+  $('#lvabschlag').onchange=e=>{
+    lvAbschlagWahl = e.target.value==='' ? null : +e.target.value;
+    renderLv();
+  };
   document.querySelectorAll('[data-lvdrill]').forEach(tr=>{
     tr.onclick=()=>{ lvDrill=tr.dataset.lvdrill; renderLv(); };
   });
 }
+// Summe (und Betrag) im Kopf der Detailansicht — wird beim Bearbeiten neu geschrieben
+const lvKopfSumme = g =>
+  `<b${g.ueber&&g.einheiten.length<2?' style="color:var(--danger)" title="Aufmaß liegt über der LV-Menge"':''}
+    >Summe: ${g.einheiten.length>1?'—':fmt3(g.summe)+' '+g.sym}</b>`+
+  (Number.isFinite(g.betrag)?` <b>= ${fmtGeld(g.betrag)} €</b>`:'');
+
+/* Eine Zelle der Detailansicht übernehmen.
+   Die Tabelle wird dabei **nicht** neu gebaut: Beim Abschlag feuert `change` schon bei
+   jedem Druck auf die Pfeiltaste — ein Neuaufbau nähme dem Feld den Fokus, und die
+   nächste Pfeiltaste liefe ins Leere. Aufgefrischt werden nur die abgeleiteten Stellen
+   (Ergebnis je Zeile, Summe in Fuß und Kopf).
+   Ausnahme: Wandert eine Zuordnung durch die Änderung aus dem gewählten Abschlagsfilter
+   heraus, muss die Zeile verschwinden — dann wird doch neu gezeichnet. */
+function lvZelleAendern(id, feld, wert){
+  const a=(proj().attrs||[]).find(x=>x.id===id); if(!a) return;
+  if(feld==='einheit') a.einheit=wert;
+  else if(feld==='abschlag') a.abschlag=Math.max(1, Math.round(parseNum(wert)||1));
+  else if(feld==='menge') a.menge=parseNum(wert)||1;      // wie im Dialog: leer/0 → 1
+  else {                                                  // laenge, breite, hoehe, umfang, durchm
+    const v=parseNum(wert);
+    if(isFinite(v)) a[feld]=v; else delete a[feld];
+  }
+  save();
+  renderCanvas();          // Farben und Beschriftungen im Plan hängen an den LV-Werten
+  if(feld==='abschlag' && lvAbschlagWahl!=null && a.abschlag!==lvAbschlagWahl){ renderLv(); return; }
+  lvDetailAuffrischen();
+}
+function lvDetailAuffrischen(){
+  const g=lvGroupsVoll().find(x=>x.lv===lvDrill); if(!g) return;
+  g.list.forEach(a=>{
+    const td=document.querySelector(`#lvview [data-lvres="${CSS.escape(a.id)}"]`);
+    if(!td) return;
+    const res=lvCalc(a, g.alleNein);
+    td.title=res.formel+(res.fehlt.length?' — fehlt: '+res.fehlt.join(', '):'');
+    td.innerHTML=`<b${res.fehlt.length?' style="color:var(--danger)"':''}>${fmt3(res.wert)}</b> ${res.sym}`+
+      (res.fehlt.length?` <span style="color:var(--danger)" title="${esc(res.fehlt.join(', '))} fehlt">⚠</span>`:'');
+  });
+  const fuss=document.querySelector('#lvview [data-lvsum]');
+  if(fuss) fuss.innerHTML=`<b>${g.einheiten.length>1?'—':fmt3(g.summe)+' '+g.sym}</b>`;
+  const kopf=document.querySelector('#lvview [data-lvkopfsum]');
+  if(kopf) kopf.innerHTML=lvKopfSumme(g);
+}
+
 /* ---------- Ebene 2: die Zuordnungen einer LV-Position ---------- */
 function renderLvDetail(){
   const p=proj();
-  const g=lvGroups().find(x=>x.lv===lvDrill);
+  const g=lvGroupsVoll().find(x=>x.lv===lvDrill);
   if(!g){ lvDrill=null; renderLvUebersicht(); return; }
   const rows=[...g.list].sort((a,b)=>(roomById(a.roomId)?.name||'').localeCompare(roomById(b.roomId)?.name||''));
   const dirTxt=a=>ansichtTxt(a)||'–';
@@ -5808,10 +5947,12 @@ function renderLvDetail(){
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap">
       <button class="btn" id="lvback">← Zurück</button>
       <h2 style="font-size:17px">${c?`<span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:${c};margin-right:7px"></span>`:''}${esc(g.lv||'– ohne Nummer –')}</h2>
+      <button class="btn primary" id="lvneuhier" title="Neue Zuordnung für genau diese Position">＋ Neue Zuordnung</button>
       <span class="hint">${esc(g.kurz)}</span>
       <span style="flex:1"></span>
       ${Number.isFinite(g.soll)?`<span class="hint">lt. LV: ${fmt3(g.soll)} ${g.sym}</span>`:''}
-      <b${g.ueber&&g.einheiten.length<2?' style="color:var(--danger)" title="Aufmaß liegt über der LV-Menge"':''}>Summe: ${g.einheiten.length>1?'—':fmt3(g.summe)+' '+g.sym}</b>
+      ${Number.isFinite(g.preis)?`<span class="hint">EP: ${fmtGeld(g.preis)} €</span>`:''}
+      <span data-lvkopfsum="1">${lvKopfSumme(g)}</span>
     </div>
     <table><thead><tr>
       <th>Etage</th><th>Raum</th><th>Objekt</th><th>Menge</th><th>Einheit</th>
@@ -5822,18 +5963,25 @@ function renderLvDetail(){
       const r=roomById(a.roomId);
       const flags=[a.nutzGrund?'Grundfl.':null,a.nutzAnsicht?'Ansicht':null,a.nutzUmfang?'Umfang→L':null].filter(Boolean).join(', ')||'–';
       const res=lvCalc(a, g.alleNein);
-      return `<tr>
+      // Maße und Abschlag direkt in der Zeile: unauffälliges Feld, das erst beim Anfassen auffällt
+      const zahl=(feld, wert, leerErlaubt=true) =>
+        `<input class="lvz" inputmode="decimal" data-lvid="${a.id}" data-lvfeld="${feld}"
+          value="${isFinite(wert)?fmt3(wert):(leerErlaubt?'':'')}">`;
+      return `<tr data-lvrow="${a.id}">
         <td>${esc(r?floorName(r.floorId):'?')}</td><td>${esc(r?r.name:'– gelöscht –')}</td>
         <td>${esc(lvZielText(a))}</td>
-        <td class="num">${fmt3(a.menge)}</td><td>${esc(einhTxt(a.einheit))}</td>
-        <td class="num">${isFinite(a.laenge)?fmt3(a.laenge):''}</td>
-        <td class="num">${isFinite(a.breite)?fmt3(a.breite):''}</td>
-        <td class="num">${isFinite(a.hoehe)?fmt3(a.hoehe):''}</td>
-        <td class="num">${isFinite(a.umfang)?fmt3(a.umfang):''}</td>
-        <td class="num">${isFinite(a.durchm)?fmt3(a.durchm):''}</td>
+        <td class="num">${zahl('menge', a.menge, false)}</td>
+        <td><select class="lvz" data-lvid="${a.id}" data-lvfeld="einheit">${
+          EINH_WAHL.map(([v,t])=>`<option value="${v}" ${a.einheit===v?'selected':''}>${t}</option>`).join('')}</select></td>
+        <td class="num">${zahl('laenge', a.laenge)}</td>
+        <td class="num">${zahl('breite', a.breite)}</td>
+        <td class="num">${zahl('hoehe', a.hoehe)}</td>
+        <td class="num">${zahl('umfang', a.umfang)}</td>
+        <td class="num">${zahl('durchm', a.durchm)}</td>
         <td>${dirTxt(a)}</td><td>${flags}</td>
-        <td class="num"${abschlagVon(a)<proj().abschlag?' title="bereits abgerechnet" style="color:var(--muted)"':''}>${abschlagVon(a)}</td>
-        <td class="num" title="${esc(res.formel)}${res.fehlt.length?' — fehlt: '+esc(res.fehlt.join(', ')):''}">
+        <td class="num"><input class="lvz abs" type="number" min="1" step="1" data-lvid="${a.id}" data-lvfeld="abschlag"
+          value="${abschlagVon(a)}"${abschlagVon(a)<proj().abschlag?' title="bereits abgerechnet" style="color:var(--muted)"':''}></td>
+        <td class="num" data-lvres="${a.id}" title="${esc(res.formel)}${res.fehlt.length?' — fehlt: '+esc(res.fehlt.join(', ')):''}">
           <b${res.fehlt.length?' style="color:var(--danger)"':''}>${fmt3(res.wert)}</b> ${res.sym}
           ${res.fehlt.length?`<span style="color:var(--danger)" title="${esc(res.fehlt.join(', '))} fehlt">⚠</span>`:''}</td>
         <td style="white-space:nowrap">
@@ -5841,14 +5989,21 @@ function renderLvDetail(){
           <button class="btn small" data-lvcopy="${a.id}">⧉</button>
           <button class="btn small danger" data-lvdel="${a.id}">🗑</button>
         </td></tr>`;
-    }).join('')}
+    }).join('') || `<tr><td colspan="15" style="color:var(--muted)">Zu dieser Position gibt es
+      ${lvAbschlagWahl!=null?`im Abschlag ${lvAbschlagWahl} `:''}noch keine Zuordnung im Aufmaß.</td></tr>`}
     </tbody>
     <tfoot><tr><td colspan="13" style="text-align:right"><b>Summe</b></td>
-      <td class="num"><b>${g.einheiten.length>1?'—':fmt3(g.summe)+' '+g.sym}</b></td><td></td></tr></tfoot>
+      <td class="num" data-lvsum="1"><b>${g.einheiten.length>1?'—':fmt3(g.summe)+' '+g.sym}</b></td><td></td></tr></tfoot>
     </table>
-    <p class="hint" style="margin-top:8px">Ergebnis je Zeile wie in magicplan gerechnet — Formel als Tooltip.
+    <p class="hint" style="margin-top:8px">Menge, Einheit, Maße und Abschlag lassen sich <b>direkt in der Zeile</b>
+      ändern — beim Abschlag auch mit den Pfeiltasten. Ergebnis je Zeile wie in magicplan gerechnet — Formel als Tooltip.
       ${g.alleNein&&g.einheiten[0]==='Flache'?'Ohne gesetzte Richtungen gilt für diese Position L×H + L×B.':''}</p>`;
   $('#lvback').onclick=()=>{ lvDrill=null; renderLv(); };
+  $('#lvneuhier').onclick=()=>openLvDialog(null, sel.roomId||((proj().rooms[0]||{}).id), null,
+    {projekt:true, lv:g.lv});
+  document.querySelectorAll('#lvview [data-lvfeld]').forEach(el=>{
+    el.onchange=()=>lvZelleAendern(el.dataset.lvid, el.dataset.lvfeld, el.value);
+  });
   document.querySelectorAll('[data-lvedit]').forEach(b=>b.onclick=()=>openLvDialog(b.dataset.lvedit));
   document.querySelectorAll('[data-lvcopy]').forEach(b=>b.onclick=()=>{
     const a=proj().attrs.find(x=>x.id===b.dataset.lvcopy);
@@ -6496,7 +6651,7 @@ async function atAll(base, table, token, fields, onProgress){
    Mobilfunk). Gefiltert wird über das Verknüpfungsfeld „Baustelle" im Datensatz. */
 async function atLvZeilen(siteId, melde){
   const recs=await atAll(atBase(), AT_T_LV, atToken(),
-    ['LV-Nummer','Kurzbeschreibung','Einheit','Menge','Langtext','Baustelle'],
+    ['LV-Nummer','Kurzbeschreibung','Einheit','Menge','Langtext','Baustelle','Einheitspreis'],
     n=>melde && melde(`Lade LV-Positionen … ${n}`));
   const out=[];
   recs.forEach(r=>{
@@ -6504,7 +6659,8 @@ async function atLvZeilen(siteId, melde){
     if(!(f['Baustelle']||[]).includes(siteId)) return;
     const row={lv:String(f['LV-Nummer']||'').trim(), kurz:String(f['Kurzbeschreibung']||'').trim(),
       einheit:mapEinheit(f['Einheit']), roh:String(f['Einheit']||'').trim(),
-      menge:Number(f['Menge']), lang:String(f['Langtext']||'').trim()};
+      menge:Number(f['Menge']), lang:String(f['Langtext']||'').trim(),
+      preis:Number(f['Einheitspreis'])};
     if(row.lv || row.kurz) out.push(row);
   });
   return out;
@@ -6529,6 +6685,7 @@ function lvKurzMitMenge(r){
 function importLvRows(rows){
   const p=proj();
   p.lvTexts=p.lvTexts||{}; p.lvUnits=p.lvUnits||{}; p.lvLong=p.lvLong||{}; p.lvSoll=p.lvSoll||{};
+  p.lvPreis=p.lvPreis||{};                    // Einheitspreis je LV-Nummer
   const bekannt=new Set(Object.keys(p.lvTexts));
   (p.attrs||[]).forEach(a=>{ if(a.lv) bekannt.add(a.lv); });   // auch von Hand angelegte
   let neu=0, upd=0;
@@ -6544,6 +6701,7 @@ function importLvRows(rows){
     if(r.einheit) p.lvUnits[r.lv]=r.einheit;
     if(r.lang) p.lvLong[r.lv]=r.lang;
     if(Number.isFinite(r.menge)) p.lvSoll[r.lv]=r.menge;
+    if(Number.isFinite(r.preis)) p.lvPreis[r.lv]=r.preis;
   });
   assignLvColors(p);
   save(); renderAll();
@@ -6599,6 +6757,9 @@ function gaebText(el){
 function gaebPosition(el, teile){
   const qu=(gaebErstes(el,'QU')?.textContent||'').trim();
   const menge=Number((gaebErstes(el,'Qty')?.textContent||'').trim());
+  // UP = Einheitspreis. Steht nur in bepreisten Dateien (X81 aus dem AVA-Programm,
+  // eigene X84); in der X83 des Auftraggebers fehlt er und bleibt dann einfach leer.
+  const up=Number((gaebErstes(el,'UP')?.textContent||'').trim());
   const kurz=gaebText(gaebErstes(el,'OutlineText'));
   const beschr=gaebKinder(el,'Description')[0];
   return {
@@ -6606,6 +6767,7 @@ function gaebPosition(el, teile){
     kurz,
     einheit: mapEinheit(qu), roh: qu,
     menge: Number.isFinite(menge) ? menge : NaN,
+    preis: Number.isFinite(up) ? up : NaN,
     lang: gaebText(gaebErstes(beschr||el,'DetailTxt'))
   };
 }
@@ -6792,7 +6954,8 @@ $('#setPasteOk').onclick=()=>{
   const rows=$('#setPaste').value.split(/\r?\n/).map(l=>{
     const c=l.split(/[;\t]/);
     return {lv:(c[0]||'').trim(), kurz:(c[1]||'').trim(), einheit:mapEinheit(c[2]),
-      roh:(c[2]||'').trim(), menge:parseNum(c[3]), lang:(c[4]||'').trim()};
+      roh:(c[2]||'').trim(), menge:parseNum(c[3]), lang:(c[4]||'').trim(),
+      preis:parseNum(c[5])};
   }).filter(r=>r.lv);
   const el=$('#setPasteStatus');
   if(!rows.length){ el.textContent='Keine verwertbaren Zeilen gefunden.'; el.style.color='var(--danger)'; return; }
@@ -7165,6 +7328,33 @@ function cloudNeuesAufmass(){
 }
 
 /* Speichern: alten Stand am Datensatz entfernen, dann Plan und Fotos einzeln hochladen */
+// Byte-Größe eines Bildes aus seiner Data-URL — dieselbe Zahl, die Airtable als `size` führt
+function datenGroesse(src){
+  const t=String(src||'');
+  const roh=t.slice(t.indexOf(',')+1);
+  const pad=roh.endsWith('==') ? 2 : (roh.endsWith('=') ? 1 : 0);
+  return Math.max(0, Math.floor(roh.length*3/4)-pad);
+}
+/* Welche Fotos liegen bei Airtable schon genau so, wie sie hier vorliegen?
+   Zugeordnet wird über die ID im Dateinamen (`foto_<id>.jpg`), verglichen über die
+   **Byte-Größe**. Das ist der entscheidende Punkt: Ein bearbeitetes Foto (Einkreisen,
+   Pixeln, Freihand) behält seine ID, wird aber neu als JPEG kodiert und hat danach
+   praktisch nie dieselbe Größe. Nur über die ID zu gehen würde die Änderung verschlucken
+   und in Airtable bliebe für immer die alte Fassung liegen.
+   Alles, was nicht sicher gleich ist, wandert in `neu` und wird hochgeladen. */
+function fotoAbgleich(vorhanden, lokal){
+  const nachId=new Map();
+  lokal.forEach(f=>nachId.set(f.id, f));
+  const behalten=[], schon=new Set();
+  (vorhanden||[]).forEach(a=>{
+    const m=/^foto[_-](.+?)\.[a-z0-9]+$/i.exec(a.filename||'');
+    const f=m ? nachId.get(m[1]) : null;
+    if(!f || schon.has(f.id)) return;                            // gelöscht, fremd oder doppelt
+    if(!Number.isFinite(a.size) || a.size!==datenGroesse(f.src)) return;   // Inhalt geändert
+    behalten.push({id:a.id}); schon.add(f.id);
+  });
+  return {behalten, neu:lokal.filter(f=>!schon.has(f.id))};
+}
 async function cloudSpeichern(s, ohneRueckfrage){
   if(clBusy) return false;
   const token=atToken(), base=atBase(), p=proj();
@@ -7181,27 +7371,37 @@ async function cloudSpeichern(s, ohneRueckfrage){
     const b64=b64VonText(JSON.stringify({app:'grundriss-aufmass', version:1,
       gespeichert:new Date().toISOString(), baustelle:s.name, fotos:fotos.length, projekt:klon}));
     if(b64.length*0.75>AT_MAXBYTES) throw new Error('Die Projektdatei ist größer als 5 MB — Airtable nimmt sie nicht an.');
-    // Der PATCH läuft immer — er räumt den alten Stand weg und beweist nebenbei,
-    // dass der Token schreiben darf. Scheitert danach der Upload, liegt es am Feld.
-    clStatus(s.json||s.fotos.length ? 'Alten Stand entfernen …' : 'Schreibzugriff prüfen …');
-    await atPatch(base, AT_T_SITES, s.id, token, {[AT_F_JSON]:[], [AT_F_FOTOS]:[]});
+    /* Erst den frischen Stand der Baustelle holen: Die Liste kann Minuten alt sein, und
+       die IDs der behaltenen Anhänge müssen stimmen. Geht die Abfrage nicht durch, gilt
+       der bekannte Stand — schlimmstenfalls wird ein Foto einmal zu viel hochgeladen. */
+    let stand=s;
+    try{ stand=await clSiteHolen(s.id) || s; }catch(e){ /* dann eben mit dem bekannten Stand */ }
+    const {behalten, neu}=fotoAbgleich(stand.fotos, fotos);
+    /* Der PATCH läuft immer — er tauscht die Projektdatei aus, räumt überzählige Fotos
+       weg (gelöschte und geänderte) und beweist nebenbei, dass der Token schreiben darf.
+       Die unveränderten Anhänge bleiben als `{id}` einfach stehen und werden dadurch
+       **nicht** neu übertragen. Scheitert danach der Upload, liegt es am Feld. */
+    clStatus(stand.json||behalten.length!==(stand.fotos||[]).length ? 'Alten Stand aufräumen …' : 'Schreibzugriff prüfen …');
+    await atPatch(base, AT_T_SITES, s.id, token, {[AT_F_JSON]:[], [AT_F_FOTOS]:behalten});
     darfSchreiben=true;
     clStatus('Projektdatei hochladen …');
     await atUploadFeld(base, s.id, token, AT_FID_JSON, AT_F_JSON,
       {name:`aufmass-${new Date().toISOString().slice(0,10)}.json`, typ:'application/json', b64});
-    for(let i=0;i<fotos.length;i++){
-      clStatus(`Foto ${i+1} von ${fotos.length} hochladen …`);
-      const src=fotos[i].src, komma=src.indexOf(',');
+    for(let i=0;i<neu.length;i++){
+      clStatus(`Foto ${i+1} von ${neu.length} hochladen …${behalten.length?` (${behalten.length} liegen schon dort)`:''}`);
+      const src=neu[i].src, komma=src.indexOf(',');
       const typ=(/^data:([^;,]+)/.exec(src)||[,'image/jpeg'])[1];
       const ext=typ.split('/')[1].replace('jpeg','jpg').replace(/[^a-z0-9]/g,'')||'jpg';
       const roh=src.slice(komma+1);
       if(roh.length*0.75>AT_MAXBYTES){ clStatus(`Foto ${i+1} ist zu groß und wird übersprungen …`); continue; }
-      await atUploadFeld(base, s.id, token, AT_FID_FOTOS, AT_F_FOTOS, {name:`foto_${fotos[i].id}.${ext}`, typ, b64:roh});
+      await atUploadFeld(base, s.id, token, AT_FID_FOTOS, AT_F_FOTOS, {name:`foto_${neu[i].id}.${ext}`, typ, b64:roh});
     }
     // Ab jetzt hängt das Aufmaß an dieser Baustelle — Sichern geht künftig direkt dorthin
     ohneUndo(()=>{ baustelleUebernehmen(p, s); save(); });
     standAlsGesichert();
-    const fertig=`Bei „${s.name}" gesichert — Plan + ${fotos.length} Foto(s).`;
+    const fertig=`Bei „${s.name}" gesichert — Plan + ${fotos.length} Foto(s)`+
+      (behalten.length ? `, davon ${neu.length} neu übertragen (${behalten.length===1
+        ? '1 lag' : behalten.length+' lagen'} schon dort).` : '.');
     clStatus(fertig);
     clBusy=false;
     await clLadeBaustellen();                            // Liste zeigt danach den neuen Stand
@@ -7318,7 +7518,13 @@ const LEICA_SVC='3ab10100-f831-4395-b29d-570977d5bf94';
 const LEICA_DIST='3ab10101-f831-4395-b29d-570977d5bf94';
 const BOSCH_SVC='02a6c0d0-0451-4000-b000-fb3210111989';
 const BOSCH_CHR='02a6c0d1-0451-4000-b000-fb3210111989';
-const bt={device:null, type:null, lastAt:0};
+const bt={device:null, type:null, lastAt:0,
+  gewollt:false,        // Nutzer will verbunden sein → nach Abbruch selbst neu versuchen
+  ch:null, horcher:null, timer:null, verbindet:false, versuche:0, versuchAb:0};
+/* Wartezeiten zwischen den Versuchen; nach der Liste alle 10 s weiter. Der Bosch GLM
+   schaltet sich zum Stromsparen ab — bis er wieder an ist, vergeht schon mal eine Minute. */
+const BT_WARTEN=[2000,3000,5000,8000,10000];
+const BT_AUFGEBEN=10*60*1000;      // danach ist Schluss, sonst funkt das Gerät ewig ins Leere
 const btlogs=[];
 function btLog(s){
   btlogs.push(new Date().toLocaleTimeString('de-DE')+' '+s);
@@ -7338,6 +7544,88 @@ function requireBt(){
   }
   return true;
 }
+/* ---------- Verbinden in zwei Schritten ----------
+   `connectX()` fragt EINMAL über den Bluetooth-Dialog nach dem Gerät (das verlangt eine
+   Nutzergeste). Das eigentliche Anbinden steckt in `xAnbinden(dev)` — und genau das
+   darf danach beliebig oft ohne Geste laufen, solange das Geräteobjekt lebt. Darauf
+   baut die automatische Wiederverbindung auf. */
+async function leicaAnbinden(dev){
+  const server=await dev.gatt.connect();
+  const svc=await server.getPrimaryService(LEICA_SVC);
+  const ch=await svc.getCharacteristic(LEICA_DIST);
+  await ch.startNotifications();
+  btHorcher(ch, e=>{
+    const v=e.target.value;
+    if(v.byteLength>=4){
+      const m=v.getFloat32(0,true);
+      if(isFinite(m)&&m>0) handleMeasurement(m,'Leica');
+    }
+  });
+  setBtStatus(true, dev.name||'Leica DISTO');
+  btLog('Leica verbunden: '+(dev.name||''));
+}
+async function boschAnbinden(dev){
+  const server=await dev.gatt.connect();
+  const svc=await server.getPrimaryService(BOSCH_SVC);
+  const ch=await svc.getCharacteristic(BOSCH_CHR);
+  await ch.startNotifications();
+  btHorcher(ch, e=>boschFrame(e.target.value));
+  try{
+    // MT-Protokoll: automatische Messwert-Übertragung aktivieren — nach JEDEM
+    // Verbinden nötig, das Gerät vergisst die Einstellung beim Abschalten
+    await ch.writeValue(new Uint8Array([0xC0,0x55,0x02,0x01,0x00,0x1A]));
+    btLog('Bosch Autosync-Kommando gesendet.');
+  }catch(e){ btLog('Bosch Autosync fehlgeschlagen: '+e.message); }
+  setBtStatus(true, dev.name||'Bosch GLM');
+  btLog('Bosch verbunden: '+(dev.name||''));
+}
+const btAnbinden = dev => bt.type==='leica' ? leicaAnbinden(dev) : boschAnbinden(dev);
+/* Beim Wiederverbinden kommt eine frische Characteristic — den alten Horcher vorher
+   abhängen, sonst käme jeder Messwert nach ein paar Abbrüchen mehrfach an. */
+function btHorcher(ch, fn){
+  if(bt.ch && bt.horcher) try{ bt.ch.removeEventListener('characteristicvaluechanged', bt.horcher); }catch(e){}
+  bt.ch=ch; bt.horcher=fn;
+  ch.addEventListener('characteristicvaluechanged', fn);
+}
+// Den Abbruch-Horcher nur einmal je Gerät setzen
+function btWachen(dev){
+  if(dev.__ueberwacht) return;
+  dev.__ueberwacht=true;
+  dev.addEventListener('gattserverdisconnected', btGetrennt);
+}
+function btGetrennt(){
+  bt.ch=null; bt.horcher=null;
+  if(!bt.gewollt){ setBtStatus(false,'getrennt'); btLog('Verbindung getrennt.'); return; }
+  btLog('Verbindung getrennt — versuche automatisch neu.');
+  bt.versuche=0; bt.versuchAb=Date.now();
+  btWiederVerbinden();
+}
+function btNaechsterVersuch(){
+  if(!bt.gewollt || !bt.device) return;
+  if(Date.now()-bt.versuchAb > BT_AUFGEBEN){
+    bt.gewollt=false; setBtStatus(false,'getrennt');
+    btLog('Automatisches Verbinden aufgegeben — das Gerät blieb aus.');
+    return;
+  }
+  const ms=BT_WARTEN[Math.min(bt.versuche, BT_WARTEN.length-1)];
+  bt.versuche++;
+  clearTimeout(bt.timer);
+  bt.timer=setTimeout(btWiederVerbinden, ms);
+  setBtStatus(false, `sucht … (${Math.round(ms/1000)} s)`);
+}
+async function btWiederVerbinden(){
+  if(!bt.gewollt || !bt.device || bt.verbindet) return;
+  if(bt.device.gatt && bt.device.gatt.connected) return;
+  bt.verbindet=true;
+  setBtStatus(false,'verbinde …');
+  try{
+    await btAnbinden(bt.device);
+    bt.versuche=0;
+  }catch(err){
+    btLog('Verbindungsversuch: '+err.message);
+    btNaechsterVersuch();
+  }finally{ bt.verbindet=false; }
+}
 async function connectLeica(){
   if(!requireBt()) return;
   try{
@@ -7346,21 +7634,9 @@ async function connectLeica(){
       filters:[{namePrefix:'DISTO'},{services:[LEICA_SVC]}],
       optionalServices:[LEICA_SVC]
     });
-    bt.device=dev; bt.type='leica';
-    dev.addEventListener('gattserverdisconnected',()=>{ setBtStatus(false,'getrennt'); btLog('Verbindung getrennt.'); });
-    const server=await dev.gatt.connect();
-    const svc=await server.getPrimaryService(LEICA_SVC);
-    const ch=await svc.getCharacteristic(LEICA_DIST);
-    await ch.startNotifications();
-    ch.addEventListener('characteristicvaluechanged', e=>{
-      const v=e.target.value;
-      if(v.byteLength>=4){
-        const m=v.getFloat32(0,true);
-        if(isFinite(m)&&m>0) handleMeasurement(m,'Leica');
-      }
-    });
-    setBtStatus(true, dev.name||'Leica DISTO');
-    btLog('Leica verbunden: '+(dev.name||''));
+    bt.device=dev; bt.type='leica'; bt.gewollt=true; bt.versuche=0; bt.versuchAb=Date.now();
+    btWachen(dev);
+    await leicaAnbinden(dev);
   }catch(err){ btLog('Leica: '+err.message); }
 }
 async function connectBosch(){
@@ -7371,21 +7647,32 @@ async function connectBosch(){
       filters:[{namePrefix:'Bosch'},{namePrefix:'GLM'},{services:[BOSCH_SVC]}],
       optionalServices:[BOSCH_SVC]
     });
-    bt.device=dev; bt.type='bosch';
-    dev.addEventListener('gattserverdisconnected',()=>{ setBtStatus(false,'getrennt'); btLog('Verbindung getrennt.'); });
-    const server=await dev.gatt.connect();
-    const svc=await server.getPrimaryService(BOSCH_SVC);
-    const ch=await svc.getCharacteristic(BOSCH_CHR);
-    await ch.startNotifications();
-    ch.addEventListener('characteristicvaluechanged', e=>boschFrame(e.target.value));
-    try{
-      // MT-Protokoll: automatische Messwert-Übertragung aktivieren
-      await ch.writeValue(new Uint8Array([0xC0,0x55,0x02,0x01,0x00,0x1A]));
-      btLog('Bosch Autosync-Kommando gesendet.');
-    }catch(e){ btLog('Bosch Autosync fehlgeschlagen: '+e.message); }
-    setBtStatus(true, dev.name||'Bosch GLM');
-    btLog('Bosch verbunden: '+(dev.name||''));
+    bt.device=dev; bt.type='bosch'; bt.gewollt=true; bt.versuche=0; bt.versuchAb=Date.now();
+    btWachen(dev);
+    await boschAnbinden(dev);
   }catch(err){ btLog('Bosch: '+err.message); }
+}
+/* Beim Start ohne Dialog verbinden, wenn der Browser das Gerät noch kennt.
+   `getDevices()` gibt es in Chrome/Edge; Bluefy kennt es nicht — dann passiert einfach
+   nichts. **Bewusst nur EIN Versuch:** Ist der Laser gerade aus, soll die App nicht bei
+   jedem Start zehn Minuten lang funken. Die Wiederhol-Schleife gilt nur für Verbindungen,
+   die einmal standen und abgerissen sind — genau der Fall, um den es geht. */
+async function btStartVerbinden(){
+  try{
+    if(!navigator.bluetooth || !navigator.bluetooth.getDevices) return;
+    const devs=await navigator.bluetooth.getDevices();
+    const dev=devs.find(d=>/bosch|glm/i.test(d.name||'')) || devs.find(d=>/disto/i.test(d.name||''));
+    if(!dev) return;
+    bt.device=dev; bt.type=/disto/i.test(dev.name||'') ? 'leica' : 'bosch';
+    btWachen(dev);
+    btLog('Bekanntes Gerät: '+(dev.name||'')+' — verbinde …');
+    setBtStatus(false,'verbinde …');
+    await btAnbinden(dev);
+    bt.gewollt=true; bt.versuche=0; bt.versuchAb=Date.now();
+  }catch(err){
+    setBtStatus(false,'getrennt');
+    btLog('Kein automatisches Verbinden: '+err.message);
+  }
 }
 /* Paketaufbau des Bosch GLM (aus dem Protokoll eines GLM abgelesen):
      c0 55 10 <art> <status> <zähler-lo> <zähler-hi> <float32 Entfernung> … <prüfsumme>
@@ -7412,8 +7699,11 @@ function boschFrame(v){
   if(m!=null) handleMeasurement(m,'Bosch');
 }
 function btDisconnect(){
+  // „Trennen" heißt: auch nicht mehr automatisch wiederkommen
+  bt.gewollt=false; clearTimeout(bt.timer); bt.timer=null;
   try{ if(bt.device&&bt.device.gatt.connected) bt.device.gatt.disconnect(); }catch(e){}
   setBtStatus(false,'getrennt');
+  btLog('Getrennt — automatisches Verbinden aus.');
 }
 function handleMeasurement(m, src){
   m=Math.round(m*1000)/1000;
@@ -8305,6 +8595,7 @@ bilderNachladen()
   .then(n=>{ if(n) renderAll(); return bilderAufraeumen(); })   // Bilddaten stehen nicht im
                                                                // Schnappschuss — Undo bleibt gültig
   .catch(err=>melde('Bildspeicher nicht verfügbar: '+err.message+' — Fotos fehlen in dieser Sitzung.', true));
+btStartVerbinden();          // Laser ohne Dialog wieder anbinden, wenn der Browser ihn kennt
 </script>
 </body>
 </html>
