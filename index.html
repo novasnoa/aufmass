@@ -55,6 +55,17 @@
   input.laser{border:1px solid var(--line); border-radius:6px; padding:5px 7px; width:84px; text-align:right;}
   input.laser:focus,
   input.laser.laserziel{outline:2px solid var(--accent2); border-color:var(--accent2); background:#f0fbf7;}
+  /* Leiste über der Bildschirmtastatur (Tickets #4/#5 vom 3.8.2026).
+     `bottom` setzt das Skript auf die Höhe der Tastatur. */
+  #tastleiste{position:fixed; left:0; right:0; bottom:0; z-index:120; display:none;
+    align-items:center; gap:8px; padding:7px 10px; background:#1c2330; color:#fff;
+    box-shadow:0 -3px 14px rgba(0,0,0,.28);}
+  #tastleiste.an{display:flex;}
+  #tastleiste .feld{flex:1; font-size:12px; color:#aab4c8; min-width:0;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  #tastleiste button{border:none; border-radius:8px; padding:9px 16px; font:inherit; font-weight:600;}
+  #tastleiste .ab{background:#2a3345; color:#c9d2e2;}
+  #tastleiste .ok{background:var(--accent2); color:#fff;}
   .hint{font-size:11px; color:var(--muted);}
   .btn{border:1px solid var(--line); background:#f6f7f9; border-radius:7px; padding:6px 10px;}
   .btn:hover{background:#eceef2;}
@@ -334,6 +345,7 @@
   <button class="tb" id="cloudbtn" title="Aufmaß mit einer Baustelle verbinden: sichern, laden und LV-Positionen holen">🏗 Baustelle</button>
   <button class="tb icon" id="settingsbtn" title="Einstellungen: Zugangsdaten für Airtable">⚙</button>
   <button class="tb" id="ausgabebtn" title="Bericht drucken, CSV exportieren, Backup-Datei sichern oder laden">📤 Ausgabe</button>
+  <button class="tb icon" id="ticketbtn" title="Fehler melden oder etwas wünschen — geht an die Entwicklung">🐞</button>
   <button class="tb" id="helpbtn">?</button>
 </div>
 
@@ -425,6 +437,12 @@
         <label><input type="checkbox" id="lvNutzGrund">Nutze Grundfläche als Fläche</label>
         <label><input type="checkbox" id="lvNutzAnsicht" title="Alle Wände + Decke + Boden: 2 × Grundfläche + Umfang × Raumhöhe">Nutze Ansichtsfläche als Fläche</label>
       </div>
+    </fieldset>
+    <fieldset><legend>Anmerkung</legend>
+      <textarea id="lvAnm" rows="2" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:6px"
+        placeholder="z. B. Besonderheit, Erschwernis, Absprache vor Ort"></textarea>
+      <p class="hint">Erscheint im Ausdruck <b>unter dem Raumplan</b> in einem eigenen Kasten — nicht
+        in der Positionstabelle.</p>
     </fieldset>
     <div class="row" style="margin-top:8px"><button class="btn small" id="lvFotoAdd">📷 ＋ Fotos</button>
       <span class="hint" id="lvFotoInfo"></span></div>
@@ -593,6 +611,30 @@
   <div class="dfoot">
     <button class="btn" data-close>Abbrechen</button>
     <button class="btn primary" id="p360ok">Übernehmen</button>
+  </div>
+</dialog>
+
+<!-- Fehler melden / etwas wünschen -->
+<dialog id="dlgTicket">
+  <div class="dhead">Fehler melden oder etwas wünschen <button data-close>✕</button></div>
+  <div class="dbody">
+    <div class="row" style="margin-bottom:6px">
+      <button class="btn small tkart active" data-tkart="Fehler" style="flex:1">🐞 Fehler</button>
+      <button class="btn small tkart" data-tkart="Wunsch" style="flex:1">💡 Wunsch</button>
+      <button class="btn small tkart" data-tkart="Frage" style="flex:1">❓ Frage</button>
+    </div>
+    <div class="row"><label>Kurz</label><input type="text" id="tkTitel" placeholder="Worum geht es in einem Satz?"></div>
+    <textarea id="tkText" rows="6" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:6px"
+      placeholder="Was hast du gemacht, was hast du erwartet, was ist stattdessen passiert? Je genauer, desto schneller ist es behoben."></textarea>
+    <p class="hint" style="margin-top:6px">Mitgeschickt wird automatisch, <b>wo</b> du gerade warst (Ansicht, Baustelle,
+      Etage/Raum), welcher Browser und welcher App-Stand — sonst muss man beim Nachstellen raten.
+      <b>Keine Aufmaßdaten und keine Fotos.</b></p>
+    <p class="hint" id="tkStatus" style="margin-top:6px"></p>
+    <div id="tkOffen"></div>
+  </div>
+  <div class="dfoot">
+    <button class="btn" data-close>Abbrechen</button>
+    <button class="btn primary" id="tkSenden">Absenden</button>
   </div>
 </dialog>
 
@@ -843,6 +885,14 @@
 <input type="file" id="gaebfile" style="display:none">
 <input type="file" id="planfile" accept="image/*" style="display:none">
 <input type="file" id="p360file" accept="image/*" style="display:none">
+
+<!-- Leiste über der Bildschirmtastatur: der Ziffernblock von iOS hat keine
+     Return-Taste, ein getippter Wert käme sonst nirgends an (Tickets #4/#5). -->
+<div id="tastleiste">
+  <span class="feld"></span>
+  <button type="button" class="ab" id="tastAb">Abbrechen</button>
+  <button type="button" class="ok" id="tastOk">✓ Anwenden</button>
+</div>
 
 <script>
 'use strict';
@@ -1286,6 +1336,9 @@ let messungLaeuft=false;
    Die gezeichnete Linie ist und bleibt die INNENKANTE: Grundfläche, Umfang und
    Wandfläche entsprechen damit dem lichten Maß, das du mit dem Laser misst.
    Die Stärke wächst nach außen und dient Darstellung, Volumen und Laibungen. */
+/* Datum des letzten Umbaus — geht bei jedem Ticket mit, damit beim Nachstellen klar ist,
+   welcher Stand auf dem Gerät lag. Bei größeren Änderungen mit hochziehen. */
+const APP_STAND='2026-08-03';
 const WAND_STD=0.24;
 // Spanne des Schiebereglers im Wand-Panel. Von Hand darf man auch daneben liegen —
 // der Regler wird dann rot, damit der Ausreißer nicht unbemerkt bleibt.
@@ -1344,6 +1397,22 @@ function roomStats(r){
   }
   return {area, per, winA, doorA, wallA, laibA, wandVol, vol:area*(r.height||0)};
 }
+/* ---------- Raumsperre (Ticket #3 vom 3.8.2026) ----------
+   Ein fertig aufgemessener Raum soll sich nicht mehr aus Versehen verziehen lassen.
+   Zwei Minuten nach der letzten Änderung an **Wänden, Ecken, Türen oder Fenstern**
+   schließt er sich von selbst: Diese Teile lassen sich dann nicht einmal mehr anwählen.
+
+   **Objekte, Fotos und LV-Zuordnungen bleiben frei** — genau darum geht es ja: weiter
+   aufmessen und zuordnen, ohne die Geometrie zu gefährden.
+
+   Der ganze Zustand steckt in EINER Zahl: `r.aufAt` = Zeitpunkt der letzten Berührung.
+   Gesperrt = fehlt sie oder liegt sie länger als zwei Minuten zurück. „Öffnen" setzt sie
+   auf jetzt, „Sperren" löscht sie. Damit ist nichts zu synchronisieren, und ein Raum aus
+   einem alten Projekt (ohne das Feld) ist von Haus aus gesperrt — er ist ja fertig. */
+const SPERRE_MS=2*60*1000;
+const raumOffen = r => !!r && Number.isFinite(r.aufAt) && (Date.now()-r.aufAt) < SPERRE_MS;
+const raumBeruehrt = r => { if(raumOffen(r)) r.aufAt=Date.now(); };
+const restSekunden = r => raumOffen(r) ? Math.ceil((SPERRE_MS-(Date.now()-r.aufAt))/1000) : 0;
 const floorRooms = () => proj().rooms.filter(r=>r.floorId===activeFloorId);
 const roomById = id => proj().rooms.find(r=>r.id===id);
 function floorName(fid){ const f=proj().floors.find(f=>f.id===fid); return f?f.name:''; }
@@ -2059,6 +2128,15 @@ function renderCanvas(){
     if(dim){ out+='</g>'; return; }
     // Im Farbzonen-Modus keine Wand-/Eckgriffe zeichnen — sie wären ohnehin gesperrt
     if(selR && !zoneEdit){
+      /* Gesperrter Raum: **anwählen ja, bewegen nein.** Wände und Öffnungen lassen sich
+         weiter antippen — man will ja LV-Positionen und Fotos daran hängen —, aber sie
+         zeigen keine blaue Linie (die verspricht „jetzt ziehbar") und der zweite Griff
+         startet keinen Zug. Weg sind nur die **großen Ziehflächen**: der Wandkörper und
+         die Ecken-Trefferkreise. Ecken selbst bleiben stumm, an ihnen hängt nichts.
+         Maße bleiben in jedem Fall vollständig stehen. */
+      const offen=raumOffen(r);
+      const tot = offen ? '' : ' pointer-events="none"';
+      const zeigWahl = i => offen && sel.wall===i;   // blaue Linie nur, wenn auch ziehbar
       r.points.forEach((a,i)=>{
         const b=r.points[(i+1)%r.points.length], L=dist(a,b);
         const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
@@ -2066,16 +2144,28 @@ function renderCanvas(){
         const c2=centroid(r.points);
         if((mx+nx*0.1-c2.x)**2+(my+ny*0.1-c2.y)**2 < (mx-nx*0.1-c2.x)**2+(my-ny*0.1-c2.y)**2){nx=-nx;ny=-ny;}
         const isSelW = sel.wall===i;
-        out+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${isSelW?'#2f6fed':'transparent'}" stroke-width="${isSelW?0.16:0.4}" data-roomid="${r.id}" data-wall="${i}" style="cursor:pointer" ${isSelW?'':'opacity="0.5"'}/>`;
+        /* Sichtbare Linie und Trefferband sind ZWEI Elemente (Ticket #6 vom 3.8.2026).
+           Vorher war es eines: unangewählt 0,40 m transparent, angewählt 0,16 m blau.
+           Der erste Tipp traf also über ein breites Band — und ausgerechnet für den
+           ZWEITEN Griff, der ziehen soll, schrumpfte es auf 40 %. Man griff daneben,
+           der Zug fiel unten in den Pan-Zweig und die ganze Ansicht wanderte statt der
+           Wand. Das Band wird jetzt nie schmaler, sondern zum Ziehen sogar breiter —
+           wie schon bei den Ecken (dort 1,5-fach bzw. 2,8-fach). */
+        if(zeigWahl(i)) out+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#2f6fed" stroke-width="0.16" style="pointer-events:none"/>`;
+        out+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="transparent" stroke-width="${zeigWahl(i)?0.55:0.4}" data-roomid="${r.id}" data-wall="${i}" style="cursor:${zeigWahl(i)?'move':'pointer'}"/>`;
         // Touchfläche zusätzlich über den ganzen Wandkörper: die Wandstärke nach außen.
         // Öffnungs-Zonen kommen später und liegen obenauf — die Tür bleibt auf der Tür wählbar.
         const anQ=aussenNormale(r,i), dQ=wandDicke(r,i);
+        /* Auch im gesperrten Raum: **die ganze Wandstärke** gehört zur Wand. Ohne diese
+           Fläche blieb nur die schmale Zone um die Wandachse, und weiter außen kam wieder
+           das Raum-Panel — von innen nach außen also Raum, Wand, Raum. Objektpunkte
+           verdeckt sie nicht mehr, die zieht `pointerdown` über `elementsFromPoint` vor. */
         if(dQ>0) out+=`<path d="M ${a.x} ${a.y} L ${b.x} ${b.y} L ${b.x+anQ.x*dQ} ${b.y+anQ.y*dQ}`+
           ` L ${a.x+anQ.x*dQ} ${a.y+anQ.y*dQ} Z" fill="transparent" data-roomid="${r.id}" data-wall="${i}" style="cursor:pointer"/>`;
         const dopts={color:isSelW?'#2f6fed':'#8a93a5', tcol:isSelW?'#2f6fed':'#4a5468', bold:isSelW, fs:lbl*0.9,
           wand:wandDicke(r,i),
           lock:!imDruck && wandGesperrt(r,i),   // Schloss vor der Maßzahl — nur Bildschirm
-          data:` data-roomid="${r.id}" data-wall="${i}" style="cursor:pointer"`};
+          data: offen ? ` data-roomid="${r.id}" data-wall="${i}" style="cursor:pointer"` : ''};
         const segs=wallChainCuts(r,i);
         if(segs.length>1){
           // Wand mit Türen/Fenstern: Maßkette (Abstand – Öffnung – Abstand) + Gesamtmaß in zweiter Reihe
@@ -2093,16 +2183,18 @@ function renderCanvas(){
         // Trefferradius: grundsätzlich großzügig, bei ausgewählter (= ziehbarer) Ecke deutlich größer
         const trefferR = lbl*(isSelV?2.8:1.5);
         if(isSelV) out+=`<circle cx="${a.x}" cy="${a.y}" r="${trefferR}" fill="url(#ziehzone)" style="pointer-events:none"/>`;
-        out+=`<circle cx="${a.x}" cy="${a.y}" r="${lbl*(isSelV?0.55:0.35)}" fill="${fr?eckF:(isSelV?'#2f6fed':'#2b3345')}" stroke="${isSelV?'#2f6fed':'#fff'}" stroke-width="${lbl*(isSelV?0.18:0.12)}" data-roomid="${r.id}" data-vertex="${i}" style="cursor:move"/>`;
-        out+=`<circle cx="${a.x}" cy="${a.y}" r="${trefferR}" fill="transparent" data-roomid="${r.id}" data-vertex="${i}" style="cursor:move"/>`;
+        out+=`<circle cx="${a.x}" cy="${a.y}" r="${lbl*(isSelV?0.55:0.35)}" fill="${fr?eckF:(isSelV?'#2f6fed':'#2b3345')}" stroke="${isSelV?'#2f6fed':'#fff'}" stroke-width="${lbl*(isSelV?0.18:0.12)}" data-roomid="${r.id}" data-vertex="${i}" style="cursor:move"${tot}/>`;
+        if(offen) out+=`<circle cx="${a.x}" cy="${a.y}" r="${trefferR}" fill="transparent" data-roomid="${r.id}" data-vertex="${i}" style="cursor:move"/>`;
       });
-      // Türen/Fenster anwählbar: Hitzone, Auswahl-Markierung und Breiten-Griffe
+      /* Türen/Fenster: Hitzone, Auswahl-Markierung und Breiten-Griffe. Auch im gesperrten
+         Raum anwählbar — an ihnen hängen LV-Positionen und Fotos. Die Ziehteile
+         (Auswahl-Linie, Breiten-Griffe) bleiben dann weg. */
       (r.openings||[]).forEach(o=>{
         const [a,b]=wallPoints(r,o.wall); const L=dist(a,b); if(L<0.01) return;
         const ux=(b.x-a.x)/L, uy=(b.y-a.y)/L;
         const t0=Math.max(0,Math.min(o.offset,L-o.width));
         const q0={x:a.x+ux*t0, y:a.y+uy*t0}, q1={x:a.x+ux*(t0+o.width), y:a.y+uy*(t0+o.width)};
-        const isSelO = sel.openId===o.id;
+        const isSelO = sel.openId===o.id && offen;
         // Touchfläche über die ganze Öffnung im Wandkörper (Wandstärke nach außen) —
         // liegt über den Wand-Zonen, die Breiten-Griffe kommen danach und bleiben obenauf
         const onQ=aussenNormale(r,o.wall), odQ=wandDicke(r,o.wall);
@@ -2625,7 +2717,17 @@ svg.addEventListener('pointerdown', e=>{
     renderAll(); updateDrawHint();
     return;
   }
-  const t=e.target;
+  let t=e.target;
+  /* Unter dem Finger liegen oft mehrere Flächen übereinander. Die Wand-Trefferflächen
+     werden NACH den Objekten gezeichnet und liegen deshalb darüber — ein Objektpunkt auf
+     oder dicht an einer Wand war dadurch kaum zu greifen. Deshalb: alle Elemente unter dem
+     Zeiger ansehen und einen **Objektgriff** vorziehen. Bewusst nur die Griffe (`objh`),
+     nicht ganze Objekte — sonst würde eine große Fläche die Wand darunter verdecken. */
+  if(t.dataset && (t.dataset.wall!==undefined || t.dataset.vertex!==undefined)){
+    const objGriff=document.elementsFromPoint(e.clientX, e.clientY)
+      .find(el=>el.dataset && el.dataset.objh!==undefined);
+    if(objGriff) t=objGriff;
+  }
   /* Farbzone bearbeiten ist ein AUSSCHLIESSLICHER Modus: nur die Eckgriffe reagieren,
      alles andere (Raum wählen, Wände, Ecken, Objekte, Türen) ist gesperrt, bis
      „Fertig" oder „Ganzer Raum" gedrückt wird. Schieben und Zoomen bleiben erlaubt —
@@ -2668,10 +2770,21 @@ svg.addEventListener('pointerdown', e=>{
       return;
     }
   }
+  /* Gesperrter Raum: **Ecken** bleiben stumm. An ihnen hängt nichts, was man ausfüllen
+     könnte — sie sind rein geometrisch. Wände und Öffnungen dagegen lassen sich weiter
+     anwählen (LV-Positionen, Fotos); dass sie sich nicht ziehen lassen, regeln die Zweige
+     selbst. `gesperrt` schluckt den Klick beim Loslassen, damit der Griff auf die eigene
+     Ecke nicht als „neben den Raum getippt" gilt. */
+  if(t.dataset && t.dataset.vertex!==undefined
+     && !raumOffen(roomById(t.dataset.roomid || focusRoomId))){
+    drag={kind:'pan', start:{x:e.clientX,y:e.clientY}, orig:{...vb}, moved:false, gesperrt:true};
+    return;
+  }
   if(t.dataset && t.dataset.open && focusRoomId){
     const r=roomById(focusRoomId);
     const o=(r.openings||[]).find(x=>x.id===t.dataset.open);
     if(o){
+      raumBeruehrt(r);
       const neueOeffnung = sel.openId!==o.id;
       if(neueOeffnung) sel={roomId:focusRoomId, wall:null, vertex:null, openId:o.id};
       const [a,b]=wallPoints(r,o.wall); const L=dist(a,b);
@@ -2686,7 +2799,9 @@ svg.addEventListener('pointerdown', e=>{
         renderAll(); return;
       }
       sel={...sel, openH:null};
-      drag={kind:'open', room:r, o, grab:tc-Math.max(0,Math.min(o.offset,L-o.width)), moved:false, orig:{...o}};
+      // Gesperrt: angewählt zum Ausfüllen, aber kein Verschieben entlang der Wand
+      if(raumOffen(r))
+        drag={kind:'open', room:r, o, grab:tc-Math.max(0,Math.min(o.offset,L-o.width)), moved:false, orig:{...o}};
       renderAll(); return;
     }
   }
@@ -2696,6 +2811,7 @@ svg.addEventListener('pointerdown', e=>{
     const schon = sel.roomId===t.dataset.roomid && sel.vertex===i;
     sel={roomId:t.dataset.roomid, wall:null, vertex:i};
     const r=roomById(sel.roomId);
+    raumBeruehrt(r);
     if(schon) drag={kind:'vertex', room:r, idx:i, start:p, orig:{...r.points[i]}, moved:false,
       lockSnap:lockAbbild(r)};
     renderAll(); return;
@@ -2706,7 +2822,9 @@ svg.addEventListener('pointerdown', e=>{
     const schon = sel.roomId===t.dataset.roomid && sel.wall===i;
     sel={roomId:t.dataset.roomid, wall:i, vertex:null};
     const r=roomById(sel.roomId);
-    if(schon){
+    raumBeruehrt(r);
+    // Gesperrt: die Wand ist angewählt und ausfüllbar, aber der zweite Griff zieht nicht
+    if(schon && raumOffen(r)){
       const vor=wandZiehenVorbereiten(r, i);
       if(vor){
         drag={kind:'wall', room:r, idx:vor.idx, start:p, moved:false,
@@ -3008,8 +3126,12 @@ svg.addEventListener('pointerup', e=>{
       if(!hitOther){
         if(focusRoomId){
           // Klick ins Leere: im Raum → abwählen (Raum bleibt fokussiert), neben dem Raum → zurück zur Etage
+          /* Maßgeblich ist die AUSSENkante, nicht das Raumpolygon: Ein Griff auf die
+             eigene Wand liegt außerhalb der Innenkante und hätte den Raum sonst verlassen.
+             Fällt seit der Raumsperre auf, weil dort die Wand-Trefferflächen fehlen und
+             der Klick bis zum Hintergrund durchgeht. */
           const fr2=roomById(focusRoomId), q=svgPoint(e);
-          if(fr2 && !pointInPoly(q, fr2.points)){ drag=null; exitRoom(); return; }
+          if(fr2 && !pointInPoly(q, aussenPolygon(fr2))){ drag=null; exitRoom(); return; }
           sel={roomId:focusRoomId, wall:null, vertex:null}; renderAll();
         }
         // Etagenansicht: Tipp neben die Räume beendet den Anwahlmodus
@@ -3140,7 +3262,8 @@ function addSegment(L){
 }
 function closeDraft(){
   if(draft.points.length<3){ cancelModes(); return; }
-  const r={id:uid(), floorId:activeFloorId, name:'Raum '+(proj().rooms.length+1), height:lastHeight, points:draft.points, openings:[]};
+  const r={id:uid(), floorId:activeFloorId, name:'Raum '+(proj().rooms.length+1), height:lastHeight,
+    points:draft.points, openings:[], aufAt:Date.now()};   // frisch gezeichnet = offen
   proj().rooms.push(r); save();
   cancelModes(); focusRoom(r.id);
 }
@@ -3237,7 +3360,8 @@ function commitPlace(p){
   if(!placing) return;
   const c=centroid(placing.points);
   const pts=placing.points.map(q=>({x:mm(q.x-c.x+p.x), y:mm(q.y-c.y+p.y)}));
-  const r={id:uid(), floorId:activeFloorId, name:placing.name||('Raum '+(proj().rooms.length+1)), height:placing.height||2.5, points:pts, openings:[]};
+  const r={id:uid(), floorId:activeFloorId, name:placing.name||('Raum '+(proj().rooms.length+1)),
+    height:placing.height||2.5, points:pts, openings:[], aufAt:Date.now()};
   proj().rooms.push(r); save();
   lastHeight=r.height;
   cancelModes(); focusRoom(r.id);
@@ -3698,6 +3822,20 @@ function deleteRoom(id){
 }
 
 /* ================= Sidebar ================= */
+/* Anmerkung am Raum — freier Text, der im Ausdruck unter dem Raumplan landet (nicht in
+   der Positionstabelle, so war es gewünscht). Dieselbe Eingabe in beiden Raum-Panels. */
+/* Schloss-Zeile im Raum-Panel. Sie ist die einzige Stelle, an der sich die Sperre von
+   Hand umschalten lässt — offen zeigt sie außerdem, wie lange es noch dauert. */
+const sperrZeile = r => raumOffen(r)
+  ? `<div class="row" style="margin-top:6px"><button class="btn small" id="rsperr" style="flex:1"
+      title="Wände, Ecken, Türen und Fenster sofort festsetzen">🔓 Offen — schließt in ${
+        Math.max(1, Math.ceil(restSekunden(r)/60))} min · jetzt sperren</button></div>`
+  : `<div class="row" style="margin-top:6px"><button class="btn small active" id="rsperr" style="flex:1"
+      title="Wände, Ecken, Türen und Fenster wieder freigeben">🔒 Gesperrt — zum Bearbeiten öffnen</button></div>`;
+const anmerkungFeld = r => `<div style="margin-top:6px">
+  <label class="hint" style="display:block; margin-bottom:2px">Anmerkung — erscheint im Druck unter dem Plan</label>
+  <textarea id="ranm" rows="2" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:6px"
+    placeholder="z. B. Zugang nur über Treppenhaus B, Estrich lose">${esc(r.anmerkung||'')}</textarea></div>`;
 /* Liste verknüpfter LV-Positionen (LV-Nummer + Kurztext, Klick = bearbeiten) */
 /* Verknüpfte LV-Positionen am Raum / Objekt / an der Wand.
    Rechts steht die Abschlagszahlung statt der Sollmenge aus dem Import — beim Arbeiten
@@ -3718,7 +3856,8 @@ function lvListHtml(list){
         title="LV-Position bearbeiten — Abschlag ${n}${an?' (laufend)':''}">
       <span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${
         c?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c};margin-right:5px"></span>`:''}${esc(a.lv)}
-        <span style="color:var(--muted)">${esc(ohneMenge(a.kurz||''))}</span></span>
+        <span style="color:var(--muted)">${esc(ohneMenge(a.kurz||''))}</span>${
+        a.anmerkung?` <span title="${esc(a.anmerkung)}">📝</span>`:''}</span>
       <b style="font-weight:600; color:var(--muted); white-space:nowrap; margin-left:8px">AZ ${n}</b></div>`;
   }).join('')}</div>`;
 }
@@ -3758,6 +3897,13 @@ function renderSidebar(){
   const fr=focusRoomId?roomById(focusRoomId):null;
   let html='';
 
+  /* Läuft die Sperre ab, während eine **Ecke** angewählt ist, fällt deren Auswahl weg —
+     an der Ecke gibt es nichts auszufüllen, ihr Panel böte nur „Ecke löschen".
+     Wand und Öffnung bleiben angewählt: Dort hängen LV-Positionen und Fotos, und genau
+     dafür soll die Auswahl im gesperrten Raum ja weiter gehen. Ihre Maßfelder sind im
+     Panel abgeschaltet. */
+  if(fr && !raumOffen(fr) && sel.vertex!=null) sel={roomId:fr.id, wall:null, vertex:null};
+
   /* Maßstab setzen ist ein ausschließlicher Modus — wie beim Sanierungsbereich zeigt die
      Leiste dann nur dieses eine Panel. Raus geht es über „Übernehmen", „Abbrechen" oder Esc. */
   if(mode==='kalib' && planVon()){
@@ -3781,6 +3927,8 @@ function renderSidebar(){
           <button class="btn small" id="rdup">Duplizieren</button>
           <button class="btn danger small" id="rdel">Löschen</button>
         </div>
+        ${sperrZeile(wr)}
+        ${anmerkungFeld(wr)}
         ${farbReihen(wr, true)}
         ${lvListHtml(p.attrs.filter(a=>a.roomId===wr.id && !a.objId && a.wall==null))}
         <p class="hint" style="margin-top:8px"><b>Solange die Anwahl steht, lassen sich Räume ziehen.</b>
@@ -3897,11 +4045,13 @@ function renderSidebar(){
     } else if(selOp){
       /* Tür/Fenster im Fokus (sind Objekte) */
       const nrTxt=selOp.nr?` #${selOp.nr}`:'';
+      // Raum gesperrt: Maße festgesetzt, LV-Position und Fotos bleiben bedienbar
+      const zu = raumOffen(r) ? '' : ' disabled';
       html+=`<div class="panel"><h3>${selOp.type==='door'?'🚪 '+esc(tuerTyp(selOp).label):'🪟 '+esc(fenTyp(selOp).label)}${nrTxt} — ausgewählt</h3>
-        <div class="row"><label>Breite (m)</label><input class="laser opfld" id="opwidth" data-op="${selOp.id}" data-f="width" value="${fmt(selOp.width,3)}"></div>
-        <div class="row"><label>Höhe (m)</label><input class="laser opfld" data-op="${selOp.id}" data-f="height" value="${fmt(selOp.height,3)}"></div>
-        <div class="row"><label>Abstand (m)</label><input class="laser opfld" data-op="${selOp.id}" data-f="offset" value="${fmt(selOp.offset,3)}"></div>
-        ${selOp.type==='window'?`<div class="row"><label>Brüstung (m)</label><input class="laser opfld" data-op="${selOp.id}" data-f="sill" value="${fmt(selOp.sill,3)}"></div>
+        <div class="row"><label>Breite (m)</label><input class="laser opfld"${zu} id="opwidth" data-op="${selOp.id}" data-f="width" value="${fmt(selOp.width,3)}"></div>
+        <div class="row"><label>Höhe (m)</label><input class="laser opfld"${zu} data-op="${selOp.id}" data-f="height" value="${fmt(selOp.height,3)}"></div>
+        <div class="row"><label>Abstand (m)</label><input class="laser opfld"${zu} data-op="${selOp.id}" data-f="offset" value="${fmt(selOp.offset,3)}"></div>
+        ${selOp.type==='window'?`<div class="row"><label>Brüstung (m)</label><input class="laser opfld"${zu} data-op="${selOp.id}" data-f="sill" value="${fmt(selOp.sill,3)}"></div>
         <div class="row tuerrow">${FEN_TYPEN.map(t=>
           `<button data-fentyp="${t.id}" class="${(selOp.fenTyp||'einfach')===t.id?'an':''}"
             title="${esc(t.label)}">${fenIcon(t)}</button>`).join('')}</div>`:''}
@@ -3917,8 +4067,8 @@ function renderSidebar(){
             title="${esc(t.label)}">${tuerIcon(t)}</button>`).join('')}<span style="flex:1 1 0"></span></div>`:''}
         <div class="row">
           <button class="btn green small" id="objlv">＋ LV-Position</button>
-          <button class="btn small" id="opdup">Duplizieren</button>
-          <button class="btn danger small opdel" data-op="${selOp.id}">Entfernen</button>
+          <button class="btn small" id="opdup"${zu}>Duplizieren</button>
+          <button class="btn danger small opdel" data-op="${selOp.id}"${zu}>Entfernen</button>
         </div>
         <p class="hint">Ziehen verschiebt entlang der Wand. Für die Breite einen <b>Endgriff anklicken</b> —
           er wird gefüllt und bekommt eine grüne Ziehzone, dann noch einmal anfassen und ziehen
@@ -3940,35 +4090,38 @@ function renderSidebar(){
       /* Wand im Fokus */
       const [a,b]=wallPoints(r,sel.wall);
       const gesperrt=wandGesperrt(r, sel.wall);
+      /* Raum gesperrt: **ausfüllen ja, umformen nein.** LV-Position, Fotos und die
+         Wandliste bleiben bedienbar — nur was die Geometrie ändert, ist abgeschaltet. */
+      const zu = raumOffen(r) ? '' : ' disabled';
       html+=`<div class="panel"><h3>Wand ${sel.wall+1}${gesperrt?' 🔒':''}</h3>
-        <div class="row"><label>Länge (m)</label><input class="laser" id="wlen" value="${fmt(dist(a,b),3)}">
+        <div class="row"><label>Länge (m)</label><input class="laser" id="wlen" value="${fmt(dist(a,b),3)}"${zu}>
           <button class="btn small ${gesperrt?'active':''}" id="wlock"
             title="${gesperrt?'Gesperrt — die Länge ändert sich nicht mehr nebenbei. Klicken zum Freigeben.'
                              :'Länge sperren: andere Wände können sie dann nicht mehr mitverschieben.'}"
             >${gesperrt?'🔒':'🔓'}</button></div>
-        <div class="row"><label>Stärke (m)</label><input id="wdicke" type="text" inputmode="decimal" value="${fmt(wandDicke(r,sel.wall),3)}">
-          <button class="btn small" id="wdickeall" title="Diese Stärke auf alle Wände des Raums übertragen">alle</button></div>
+        <div class="row"><label>Stärke (m)</label><input id="wdicke" type="text" inputmode="decimal" value="${fmt(wandDicke(r,sel.wall),3)}"${zu}>
+          <button class="btn small" id="wdickeall"${zu} title="Diese Stärke auf alle Wände des Raums übertragen">alle</button></div>
         <div class="row"><label></label><input id="wdickereg" type="range" min="8" max="100" step="0.5"
           value="${Math.max(8, Math.min(100, wandDicke(r,sel.wall)*100))}" style="flex:1${
             dickeImBereich(wandDicke(r,sel.wall)) ? '' : '; accent-color:var(--danger)'}"
-          title="Stärke stufenlos von 0,08 bis 1,00 m — außerhalb wird der Regler rot"></div>
+          title="Stärke stufenlos von 0,08 bis 1,00 m — außerhalb wird der Regler rot"${zu}></div>
         <div class="row">${wandFortsetzung(r, sel.wall).map((f,k)=>
-          `<button class="btn small" id="wdickevon${k}" style="flex:1" ${f.treffer?'':'disabled'}
+          `<button class="btn small" id="wdickevon${k}" style="flex:1" ${f.treffer&&!zu?'':'disabled'}
             title="${f.treffer
               ? `Wand läuft in „${esc(f.treffer.raum)}“ weiter — dort ${fmt(f.treffer.dicke,3)} m stark`
               : `Auf dieser Seite läuft die Wand in keinem Nachbarraum weiter`}"
             >Stärke von ${f.seite}${f.treffer?` (${fmt(f.treffer.dicke,3)})`:''}</button>`).join('')}</div>
         <div class="row">
-          <button class="btn small" id="wopdoor">🚪 ＋ Tür</button>
-          <button class="btn small" id="wopwin">🪟 ＋ Fenster</button>
+          <button class="btn small" id="wopdoor"${zu}>🚪 ＋ Tür</button>
+          <button class="btn small" id="wopwin"${zu}>🪟 ＋ Fenster</button>
         </div>
         <div class="row">
-          <button class="btn small" id="wallsplit" title="Teilt diese Wand in der Mitte — es entsteht eine neue Ecke">＋ Ecke einfügen</button>
+          <button class="btn small" id="wallsplit"${zu} title="Teilt diese Wand in der Mitte — es entsteht eine neue Ecke">＋ Ecke einfügen</button>
         </div>
         <div class="row">
           <button class="btn small ${magnetAn()?'active':''}" id="magnettoggle" style="flex:1"
             title="Wände und Ecken rasten beim Ziehen an Nachbarräumen ein">${magnetAn()?'🧲 Magnet an':'🧲 Magnet aus'}</button>
-          <button class="btn small" id="wandverbinden" style="flex:1"
+          <button class="btn small" id="wandverbinden" style="flex:1"${zu}
             title="Wandstärke so setzen, dass die Wand den Nachbarraum erreicht — der Raum selbst bleibt unverändert">🔗 Mit Nachbar verbinden</button>
         </div>
         ${rueckkehrPunkt?`<div class="row"><button class="btn small danger" id="rueckkehr" style="flex:1"
@@ -3977,6 +4130,9 @@ function renderSidebar(){
           <button class="btn green small" id="walllv">＋ LV-Position</button>
           <button class="btn small" id="walldesel" title="Schließt nur die Wand-Ansicht — Raum und Wand bleiben erhalten">Entfernen</button>
         </div>
+        ${zu?`<p class="hint" style="color:var(--danger)"><b>Raum gesperrt:</b> Maße und Form sind
+          festgesetzt. LV-Positionen und Fotos lassen sich weiter anhängen — zum Umformen den
+          Raum oben im Raum-Panel öffnen.</p>`:''}
         <p class="hint">Nochmal anfassen und ziehen verschiebt die Wand parallel — die Nachbarwände behalten ihre Richtung und werden nur länger oder kürzer. <b>„＋ Ecke einfügen“ und dann eine Hälfte ziehen ergibt einen rechtwinkligen Vor- oder Rücksprung.</b> Wandlänge ändern verschiebt die nachfolgenden Ecken mit. „Entfernen“ schließt nur diese Ansicht (Esc geht auch).</p></div>`;
       html+=fotoPanel((r.wallFotos||{})[sel.wall], 'wfoto',
         p.attrs.filter(a=>a.roomId===r.id && a.wall===sel.wall));
@@ -3992,6 +4148,8 @@ function renderSidebar(){
           <button class="btn small" id="rdup">Duplizieren</button>
           <button class="btn danger small" id="rdel">Löschen</button>
         </div>
+        ${sperrZeile(r)}
+        ${anmerkungFeld(r)}
         ${farbReihen(r)}
         <details id="rstats"${statsOpen?' open':''}><summary class="hint" style="cursor:pointer">Statistik anzeigen</summary>
           <div class="stat"><span>Bodenfläche</span><b>${fmt(st.area,3)} m²</b></div>
@@ -4149,7 +4307,20 @@ function wireSidebar(r){
 
   if(r){
     /* Raum-Panel */
+    on('#rsperr','onclick',()=>{
+      if(raumOffen(r)) delete r.aufAt; else r.aufAt=Date.now();
+      sel={roomId:r.id, wall:null, vertex:null};   // Auswahl passt zum neuen Zustand nicht mehr
+      save(); renderAll();
+      melde(raumOffen(r) ? `„${r.name}" ist offen — schließt nach 2 Minuten ohne Änderung von selbst.`
+                         : `„${r.name}" ist gesperrt: Wände, Ecken, Türen und Fenster sind festgesetzt.`);
+    });
     on('#rname','onchange',e=>{ r.name=e.target.value||r.name; save(); renderAll(); });
+    // Anmerkung: nur speichern, kein renderAll — der Text steht schon im Feld
+    on('#ranm','onchange',e=>{
+      const t=e.target.value.trim();
+      if(t) r.anmerkung=t; else delete r.anmerkung;
+      save();
+    });
     on('#rheight','onchange',e=>{ const v=parseNum(e.target.value); if(isFinite(v)&&v>0){r.height=v; lastHeight=v; save(); renderAll();} });
     on('#rlv','onclick',()=>openLvDialog(null, r.id));
     on('#rdel','onclick',()=>deleteRoom(r.id));
@@ -4197,9 +4368,11 @@ function wireSidebar(r){
       const sx=(bb.maxx-bb.minx)+0.5;
       nr.points=nr.points.map(p=>({x:p.x+sx, y:p.y}));
       if(nr.farbZone) nr.farbZone=nr.farbZone.map(p=>({x:p.x+sx, y:p.y}));   // Farbe wandert mit
+      // Fotos bleiben beim Original — wie bei „Etage duplizieren" (siehe ohneFotos)
+      delete nr.fotos; delete nr.wallFotos; delete nr.wallNr;
       // Kopie erbt keine Tür-Verknüpfungen und keine Objektnummern (LV-Bezug bleibt beim Original)
-      nr.openings.forEach(o=>{ o.id=uid(); delete o.link; delete o.nr; });
-      (nr.objects||[]).forEach(g=>{ g.id=uid(); delete g.nr;
+      nr.openings.forEach(o=>{ o.id=uid(); delete o.link; delete o.nr; delete o.fotos; });
+      (nr.objects||[]).forEach(g=>{ g.id=uid(); delete g.nr; delete g.fotos;
         if(g.points){ g.points.forEach(pt=>pt.x+=sx); } else { g.x+=sx; } });
       proj().rooms.push(nr); save();
       // Aus der Etagen-Anwahl heraus nicht hineinzoomen — die Kopie einfach anwählen
@@ -4217,6 +4390,10 @@ function wireSidebar(r){
     on('#wlen','onchange',e=>{
       const v=parseNum(e.target.value), i=sel.wall, vomLaser=messungLaeuft;
       if(!isFinite(v)||v<=0){ renderAll(); return; }
+      /* Der Laser schreibt über `dispatchEvent` direkt hierher und geht damit an einem
+         `disabled` vorbei — die Sperre muss deshalb AUCH hier stehen, nicht nur im HTML. */
+      if(!raumOffen(r)){ melde(`„${r.name}" ist gesperrt — Länge nicht geändert.`, true); renderAll(); return; }
+      raumBeruehrt(r);                      // Tippen zählt als Arbeit am Raum
       // Direkte Änderung einer gesperrten Wand geht — aber nur nach Rückfrage
       if(wandGesperrt(r,i) && Math.abs(v-dist(...wallPoints(r,i)))>0.0005
         && !confirm(`Wand ${i+1} ist gesperrt.\n\nLänge trotzdem auf ${fmt3(v)} m ändern?`)){
@@ -4243,6 +4420,7 @@ function wireSidebar(r){
        stünde nach einem Zug ein Dutzend Schritte im Rückgängig-Verlauf. renderAll()
        verbietet sich hier, es baute die Leiste (und damit den Regler) mitten im Zug neu. */
     const dickeSetzen=v=>{
+      raumBeruehrt(r);
       r.wallDicke=r.wallDicke||{}; r.wallDicke[sel.wall]=mm(v);
       const feld=$('#wdicke'); if(feld) feld.value=fmt(mm(v),3);
       const reg=$('#wdickereg'); if(reg) reg.style.accentColor = dickeImBereich(mm(v)) ? '' : 'var(--danger)';
@@ -4306,6 +4484,9 @@ function wireSidebar(r){
     document.querySelectorAll('.opfld').forEach(inp=>{
       inp.onchange=()=>{
         const o=r.openings.find(o=>o.id===inp.dataset.op); if(!o) return;
+        // wie bei der Wandlänge: der Laser umgeht `disabled`, die Sperre gehört hierher
+        if(!raumOffen(r)){ melde(`„${r.name}" ist gesperrt — Maß nicht geändert.`, true); renderAll(); return; }
+        raumBeruehrt(r);
         const v=parseNum(inp.value);
         if(isFinite(v)&&v>=0){ o[inp.dataset.f]=v; pushDoorToPartner(r,o); save(); renderAll(); }
       };
@@ -4365,14 +4546,14 @@ function wireSidebar(r){
       });
       on('#objlv','onclick',()=>openLvDialog(null, r.id, selObj.id));
       on('#objdup','onclick',()=>{
-        const c=JSON.parse(JSON.stringify(selObj)); c.id=uid(); delete c.nr;
+        const c=JSON.parse(JSON.stringify(selObj)); c.id=uid(); delete c.nr; delete c.fotos;
         if(c.points) c.points=c.points.map(pt=>({x:pt.x+0.3, y:pt.y+0.3}));
         else { c.x+=0.3; c.y+=0.3; }
         r.objects.push(c);
         // Verknüpfte LV-Positionen mitkopieren → Kopie bekommt eigene Nummer
         const p=proj(), linked=p.attrs.filter(a=>a.objId===selObj.id);
-        // Die Kopie ist neue Leistung → sie fällt in den laufenden Abschlag
-        linked.forEach(a=>p.attrs.push({...a, id:uid(), objId:c.id, abschlag:p.abschlag}));
+        // Die Kopie ist neue Leistung → sie fällt in den laufenden Abschlag, ohne Fotos
+        linked.forEach(a=>p.attrs.push({...ohneFotos(a), id:uid(), objId:c.id, abschlag:p.abschlag}));
         if(linked.length) c.nr=nextObjNr();
         sel.objId=c.id; save(); renderAll();
       });
@@ -4445,14 +4626,14 @@ function wireSidebar(r){
       });
       on('#objlv','onclick',()=>openLvDialog(null, r.id, selOp.id));
       on('#opdup','onclick',()=>{
-        const c={...selOp, id:uid()}; delete c.link; delete c.nr;
+        const c={...ohneFotos(selOp), id:uid()}; delete c.link; delete c.nr;
         const [a,b]=wallPoints(r,c.wall), L=dist(a,b);
         c.offset=Math.max(0, Math.min(selOp.offset+selOp.width+0.1, L-c.width));
         r.openings.push(c); pushDoorToPartner(r,c);
         // Verknüpfte LV-Positionen mitkopieren → Kopie bekommt eigene Nummer
         const p=proj(), linked=p.attrs.filter(a=>a.objId===selOp.id);
-        // Die Kopie ist neue Leistung → sie fällt in den laufenden Abschlag
-        linked.forEach(a=>p.attrs.push({...a, id:uid(), objId:c.id, abschlag:p.abschlag}));
+        // Die Kopie ist neue Leistung → sie fällt in den laufenden Abschlag, ohne Fotos
+        linked.forEach(a=>p.attrs.push({...ohneFotos(a), id:uid(), objId:c.id, abschlag:p.abschlag}));
         if(linked.length) c.nr=nextObjNr();
         sel={roomId:r.id, wall:null, vertex:null, openId:c.id};
         save(); renderAll();
@@ -4590,6 +4771,7 @@ function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
   ['Vorn','Oben','Links','Rechts','Hinten','Unten'].forEach(k=>{ $('#lv'+k).checked=a?!!a[k.toLowerCase()]:false; });
   $('#lvNutzGrund').checked=a?!!a.nutzGrund:false;
   $('#lvNutzAnsicht').checked=a?!!a.nutzAnsicht:false;
+  $('#lvAnm').value=a?(a.anmerkung||''):'';
   /* Altbestand „Nutze Umfang als Länge": das Häkchen gibt es nicht mehr. Beim Öffnen
      wird der Umfang einmalig als Zahl in die Länge geschrieben; beim Speichern fällt
      das Flag weg. Nicht angefasste Positionen rechnet `lvCalc` weiter wie bisher. */
@@ -5471,6 +5653,7 @@ function lvDialogDaten(){
     vorn:$('#lvVorn').checked, oben:$('#lvOben').checked, links:$('#lvLinks').checked,
     rechts:$('#lvRechts').checked, hinten:$('#lvHinten').checked, unten:$('#lvUnten').checked,
     nutzGrund:$('#lvNutzGrund').checked, nutzAnsicht:$('#lvNutzAnsicht').checked,
+    anmerkung:$('#lvAnm').value.trim(),  // erscheint im Druck unter dem Raumplan
     nutzUmfang:false,                    // gibt es nicht mehr — der Umfang steht als Zahl in der Länge
     abschlag:Math.max(1, Math.round(parseNum($('#lvAbschlag').value)||p.abschlag)),
     fotos:lvFotos.map(f=>({...f}))
@@ -5496,6 +5679,8 @@ function lvSpeichern(){
   let ziel;
   if(lvEditId){ ziel=p.attrs.find(x=>x.id===lvEditId); Object.assign(ziel, data); }
   else { ziel={id:uid(), ...data}; p.attrs.push(ziel); lvEditId=ziel.id; }
+  // Leere Anmerkung gar nicht erst mitschleppen — und beim Löschen wirklich verschwinden
+  if(!ziel.anmerkung) delete ziel.anmerkung;
   lvNummerVergeben(ziel);
   assignLvColors(p);
   // Paar LV-Nummer ↔ Kurztext projektweit merken (letzter Stand gewinnt)
@@ -5616,9 +5801,10 @@ $('#lkOk').onclick=()=>{
   p.rooms.forEach(r=>{
     const z=lkZustand(r);
     if(z==='neu'){
-      // Kopien hängen am Raum: kein Objekt, keine Wand, eigene Fotos-Kopien
-      const kopie={...daten, id:uid(), roomId:r.id, objId:null, projekt:false,
-        fotos:daten.fotos.map(f=>({...f, id:uid()}))};
+      /* Kopien hängen am Raum: kein Objekt, keine Wand — und **ohne Fotos**. Früher bekam
+         jede Kopie eigene Bildkopien; bei 20 Räumen lag dasselbe Foto danach 20-mal im
+         Projekt und im Airtable-Upload (Ticket #2). */
+      const kopie={...daten, id:uid(), roomId:r.id, objId:null, projekt:false, fotos:[]};
       delete kopie.wall;
       p.attrs.push(kopie); neu++;
     } else if(z==='weg'){
@@ -6007,7 +6193,7 @@ function renderLvDetail(){
   document.querySelectorAll('[data-lvedit]').forEach(b=>b.onclick=()=>openLvDialog(b.dataset.lvedit));
   document.querySelectorAll('[data-lvcopy]').forEach(b=>b.onclick=()=>{
     const a=proj().attrs.find(x=>x.id===b.dataset.lvcopy);
-    proj().attrs.push({...a, id:uid(), abschlag:proj().abschlag});   // Kopie = neue Leistung
+    proj().attrs.push({...ohneFotos(a), id:uid(), abschlag:proj().abschlag});   // Kopie = neue Leistung, ohne Fotos
     save(); renderLv();
   });
   document.querySelectorAll('[data-lvdel]').forEach(b=>b.onclick=()=>{
@@ -6995,6 +7181,11 @@ function fotoListen(p){
   return out;
 }
 const alleFotos = p => fotoListen(p).reduce((a,l)=>a.concat(l), []);
+/* Fotos gehören zu dem, was wirklich vor Ort aufgenommen wurde — eine Kopie hat nichts
+   fotografiert. Sie bleiben deshalb bei JEDER Kopieraktion zurück (Ticket #2 vom
+   3.8.2026): Sonst steht dasselbe Bild mehrfach im Bericht, und Sicherung wie
+   Airtable-Upload wachsen mit jedem Duplizieren mit. */
+const ohneFotos = o => { const k={...o}; delete k.fotos; return k; };
 
 function b64VonText(s){                              // UTF-8-sicher, auch bei großen Dateien
   const by=new TextEncoder().encode(s);
@@ -7739,6 +7930,124 @@ document.addEventListener('focusin', e=>{
   if(e.target.matches('input.laser')) lastLaserInput=e.target;
 });
 
+/* ================= Eingabefelder auf dem iPad (Tickets #4 und #5 vom 3.8.2026) ==========
+   Zwei Dinge, die in Bluefy gefehlt haben:
+
+   1. ZIFFERNBLOCK. Die Maßfelder sind `type="text"`, weil `type="number"` das deutsche
+      Komma nicht annimmt (siehe README „Konventionen"). iOS öffnet dafür aber die
+      Schreibtastatur — bei jedem Maß erst auf „123" umschalten. `inputmode="decimal"`
+      öffnet stattdessen den Ziffernblock; ob dort Komma oder Punkt steht, richtet sich
+      nach der Region des Geräts, bei uns also Komma.
+   2. ANWENDEN. Der Ziffernblock hat **keine Return-Taste**. Der getippte Wert steht im
+      Feld und kommt nirgends an, solange man nicht woanders hin tippt — und „woanders
+      hin" ist auf dem Plan schnell ein Klick, der etwas verstellt. Darum eine eigene
+      Leiste über der Tastatur. Sie gilt auch für Textfelder (Ticket #5), wo dieselbe
+      Frage aufkam.
+
+   Der Inhalt ist beim Antippen **ausgewählt**: Maße werden neu gemessen, nicht korrigiert
+   — also tippt man los und der alte Wert ist weg.
+
+   Die Leiste erscheint nur auf Geräten mit Fingerbedienung. Am Rechner hat die Tastatur
+   eine Eingabetaste und die Leiste wäre nur im Weg. */
+const ZAHLFELD='input.laser, input.lvz:not([type=number]), #wdicke, #planbreite, #plandreh, #kalibMass, #btmanual';
+const TASTFELD='input:not([type=checkbox]):not([type=radio]):not([type=range])'
+             + ':not([type=color]):not([type=file]):not([type=password]), textarea';
+const fingerGeraet = window.matchMedia && matchMedia('(pointer:coarse)').matches;
+
+function zahlenfelderHerrichten(wurzel){
+  if(!wurzel || wurzel.nodeType!==1) return;
+  if(wurzel.matches && wurzel.matches(ZAHLFELD) && !wurzel.getAttribute('inputmode'))
+    wurzel.setAttribute('inputmode','decimal');
+  if(wurzel.querySelectorAll) wurzel.querySelectorAll(ZAHLFELD).forEach(el=>{
+    if(!el.getAttribute('inputmode')) el.setAttribute('inputmode','decimal');
+  });
+}
+/* Die Seitenleiste und die Dialoge werden aus Zeichenketten neu aufgebaut — ein einzelnes
+   `inputmode` im Markup wäre an dreißig Stellen nachzutragen und beim nächsten neuen Feld
+   wieder vergessen. Darum zentral über einen Beobachter. SVG-Knoten werden übersprungen:
+   die Zeichenfläche baut sich während jedes Ziehens neu auf und enthält nie ein Feld. */
+new MutationObserver(mut=>{
+  for(const m of mut) for(const n of m.addedNodes)
+    if(n.nodeType===1 && !(n instanceof SVGElement)) zahlenfelderHerrichten(n);
+}).observe(document.body, {childList:true, subtree:true});
+zahlenfelderHerrichten(document.body);
+
+let tastFeld=null, tastAlt=null;
+function leisteSetzen(){
+  const bar=$('#tastleiste');
+  if(!bar || !bar.classList.contains('an')) return;
+  // Über der Tastatur: was das sichtbare Fenster unten abschneidet, ist die Tastatur.
+  const vv=window.visualViewport;
+  bar.style.bottom=(vv ? Math.max(0, Math.round(window.innerHeight-(vv.height+vv.offsetTop))) : 0)+'px';
+}
+function leisteZeigen(el){
+  const bar=$('#tastleiste'); if(!bar) return;
+  tastFeld=el; tastAlt=el.value;
+  // Beschriftung der Zeile, damit man beim halb verdeckten Bildschirm weiß, was man tippt
+  const zeile=el.closest('.row'), lab=zeile?zeile.querySelector('label'):null;
+  bar.querySelector('.feld').textContent=(lab?lab.textContent.trim():'') || el.placeholder || 'Eingabe';
+  // Ein offener Dialog liegt in einer eigenen Ebene — die Leiste muss mit hinein, sonst
+  // ist sie verdeckt und obendrein nicht anklickbar (wie schon bei `melde`).
+  const wirt=el.closest('dialog')||document.body;
+  if(bar.parentNode!==wirt) wirt.appendChild(bar);
+  bar.classList.add('an');
+  leisteSetzen();
+}
+function leisteWeg(){
+  const bar=$('#tastleiste'); if(bar) bar.classList.remove('an');
+  tastFeld=null; tastAlt=null;
+}
+function leisteAnwenden(){
+  const el=tastFeld; if(!el) return;
+  leisteWeg();
+  /* Erst Enter: „Manuell (m)" im Laser-Panel und „Maßstab setzen" hören ausschließlich
+     darauf — und ausgerechnet die zeigen auf iOS den Ziffernblock, der keine Enter-Taste
+     hat. Ohne das wären beide Felder auf dem iPad überhaupt nicht zu benutzen. */
+  el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', code:'Enter', keyCode:13, which:13, bubbles:true, cancelable:true}));
+  if(!document.body.contains(el)) return;    // Enter hat die Seitenleiste neu gebaut
+  /* Dann `blur()`: es löst von selbst ein `change` aus, wenn getippt wurde — darauf warten
+     die übrigen Handler. Kam keines (Wert unverändert oder vom Laser gesetzt), schicken wir
+     eines hinterher, damit „Anwenden" immer dasselbe bedeutet. */
+  let kam=false;
+  const merken=()=>{ kam=true; };
+  el.addEventListener('change', merken);
+  el.blur();
+  el.removeEventListener('change', merken);
+  if(!kam && document.body.contains(el)) el.dispatchEvent(new Event('change', {bubbles:true}));
+}
+function leisteAbbrechen(){
+  const el=tastFeld, alt=tastAlt; if(!el) return;
+  leisteWeg();
+  el.value=alt;      // vor dem Blur zurücksetzen: dann gilt nichts als geändert
+  el.blur();
+}
+document.addEventListener('focusin', e=>{
+  const el=e.target;
+  if(!el || !el.matches) return;
+  if(el.matches(ZAHLFELD) || el.type==='number'){
+    const alles=()=>{ try{ el.select(); }catch(_){} };
+    alles(); setTimeout(alles, 0);   // iOS hebt die Auswahl direkt nach dem Fokus wieder auf
+  }
+  if(fingerGeraet && el.matches(TASTFELD)) leisteZeigen(el);
+});
+document.addEventListener('focusout', e=>{
+  const weg=e.target;
+  // Wandert der Fokus ins nächste Feld, hat dessen `focusin` die Leiste schon übernommen
+  setTimeout(()=>{ if(tastFeld===weg) leisteWeg(); }, 0);
+});
+{
+  const bar=$('#tastleiste');
+  // Der Griff auf die Leiste darf das Feld NICHT verlassen — sonst wäre beim Klick
+  // schon alles vorbei und „Abbrechen" käme zu spät.
+  bar.addEventListener('pointerdown', e=>e.preventDefault());
+  $('#tastOk').addEventListener('click', leisteAnwenden);
+  $('#tastAb').addEventListener('click', leisteAbbrechen);
+  if(window.visualViewport){
+    visualViewport.addEventListener('resize', leisteSetzen);
+    visualViewport.addEventListener('scroll', leisteSetzen);
+  }
+}
+
 /* ================= CSV-Export (magicplan-Format) ================= */
 function csvField(v){
   v=String(v==null?'':v);
@@ -7957,6 +8266,126 @@ $('#importfile').onchange=e=>{
     melde(`„${p.name||'Aufmaß'}" geladen — ${(p.rooms||[]).length} Räume, ${alleFotos(p).length} Foto(s).`);
   };
   rd.readAsText(f);
+};
+
+/* ================= Tickets: Fehler melden und Wünsche äußern =================
+   Landen in der Airtable-Tabelle **`App-Tickets`** (`tbllycwoPhTN0TECo`) derselben Base
+   wie die Baustellen — dort kann die Entwicklung sie direkt lesen und beantworten, ohne
+   dass irgendwo Dateien hin- und hergeschoben werden.
+
+   **Ohne Netz oder ohne Token geht nichts verloren:** Das Ticket wird in `localStorage`
+   gemerkt und beim nächsten Öffnen des Dialogs sowie beim App-Start nachgereicht. Auf der
+   Baustelle ist selten Empfang, und genau dort fällt ein Fehler auf. */
+const AT_T_TICKETS='App-Tickets';
+const TK_KEY='grundriss-tickets-offen';
+let tkArt='Fehler';
+async function atCreate(base, tabelle, token, fields){
+  return atSend(`https://api.airtable.com/v0/${base}/${encodeURIComponent(tabelle)}`,
+    {method:'POST', headers:{Authorization:'Bearer '+token, 'Content-Type':'application/json'},
+     body:JSON.stringify({records:[{fields}], typecast:true})},
+    st=>`Airtable ${st}${st===404?` — gibt es die Tabelle „${tabelle}" in dieser Base?`:''}`);
+}
+const tkOffene = () => { try{ return JSON.parse(localStorage.getItem(TK_KEY)||'[]'); }catch(e){ return []; } };
+const tkOffeneSetzen = l => localStorage.setItem(TK_KEY, JSON.stringify(l));
+function tkStatus(txt, err){
+  const el=$('#tkStatus'); if(!el) return;
+  el.textContent=txt||'';
+  el.style.color=err?'var(--danger)':'var(--muted)';
+}
+/* Was beim Nachstellen hilft — und sonst nichts. Kein Aufmaß, keine Fotos, keine Maße. */
+function tkKontext(){
+  const p=proj(), fr=focusRoomId?roomById(focusRoomId):null;
+  return [
+    `App-Stand: ${APP_STAND}`,
+    `Ansicht: ${view==='lv' ? 'LV-Positionen' : (fr ? 'Raum' : 'Etage')}`,
+    `Baustelle: ${p.baustelle ? p.baustelle.name : '— nicht verbunden —'}`,
+    `Etage: ${floorName(activeFloorId)||'—'}${fr?` · Raum: ${fr.name}`:''}`,
+    `Umfang: ${(p.rooms||[]).length} Räume, ${alleFotos(p).length} Fotos, `+
+      `${Object.keys(p.lvTexts||{}).length} LV-Positionen`,
+    `Laser: ${bt.device ? ((bt.device.name||'Gerät')+(bt.device.gatt&&bt.device.gatt.connected?' (verbunden)':' (getrennt)')) : 'nie verbunden'}`,
+    `Fenster: ${innerWidth}×${innerHeight}`,
+    `Browser: ${navigator.userAgent}`
+  ].join('\n');
+}
+const tkSendeEines = t => atCreate(atBase(), AT_T_TICKETS, atToken(), {
+  'Titel':t.titel, 'Art':t.art, 'Status':'Neu',
+  'Beschreibung':t.text, 'Kontext':t.kontext, 'Gemeldet am':t.zeit});
+/* Wartende Tickets der Reihe nach abschicken. Jedes wird EINZELN aus der Warteschlange
+   genommen, sobald es durch ist — bricht die Verbindung mittendrin ab, ist nichts doppelt
+   und nichts verloren. */
+async function tkOffeneSenden(){
+  const offen=tkOffene();
+  if(!offen.length) return {gesendet:0, rest:0};
+  if(!atToken()) return {gesendet:0, rest:offen.length, grund:'kein Zugriffstoken'};
+  let n=0;
+  while(offen.length){
+    try{
+      await tkSendeEines(offen[0]);
+      offen.shift(); n++; tkOffeneSetzen(offen);
+    }catch(err){ return {gesendet:n, rest:offen.length, grund:err.message}; }
+  }
+  return {gesendet:n, rest:0};
+}
+function renderTkOffen(){
+  const el=$('#tkOffen'); if(!el) return;
+  const offen=tkOffene();
+  if(!offen.length){ el.innerHTML=''; return; }
+  el.innerHTML=`<div class="panel" style="margin-top:8px">
+    <h3>Noch nicht übertragen (${offen.length})</h3>
+    ${offen.map(t=>`<div class="stat"><span>${esc(t.art)}: ${esc(t.titel||'(ohne Titel)')}</span>
+      <b class="hint">${new Date(t.zeit).toLocaleString('de-DE')}</b></div>`).join('')}
+    <div class="row" style="margin-top:6px">
+      <button class="btn small primary" id="tkNachreichen" style="flex:1">Jetzt übertragen</button>
+      <button class="btn small danger" id="tkVerwerfen">Verwerfen</button>
+    </div>
+    <p class="hint">Ohne Netz oder ohne Airtable-Token bleiben Tickets hier liegen, bis es geht.</p></div>`;
+  $('#tkNachreichen').onclick=async()=>{
+    tkStatus('Übertrage …');
+    const r=await tkOffeneSenden();
+    tkStatus(r.rest ? `${r.gesendet} übertragen, ${r.rest} warten noch (${r.grund}).`
+                    : `${r.gesendet} Ticket(s) übertragen.`, !!r.rest);
+    renderTkOffen();
+  };
+  $('#tkVerwerfen').onclick=()=>{
+    if(!confirm(`${offen.length} noch nicht übertragene Ticket(s) endgültig verwerfen?`)) return;
+    tkOffeneSetzen([]); renderTkOffen(); tkStatus('Verworfen.');
+  };
+}
+function tkArtSetzen(a){
+  tkArt=a;
+  document.querySelectorAll('.tkart').forEach(b=>b.classList.toggle('active', b.dataset.tkart===a));
+}
+$('#ticketbtn').onclick=async()=>{
+  $('#tkTitel').value=''; $('#tkText').value='';
+  tkArtSetzen('Fehler'); tkStatus(''); renderTkOffen();
+  $('#dlgTicket').showModal();
+  if(tkOffene().length && atToken()){        // beim Öffnen still nachreichen
+    const r=await tkOffeneSenden();
+    if(r.gesendet) tkStatus(`${r.gesendet} wartende(s) Ticket(s) nachträglich übertragen.`);
+    renderTkOffen();
+  }
+};
+document.querySelectorAll('.tkart').forEach(b=>b.onclick=()=>tkArtSetzen(b.dataset.tkart));
+$('#tkSenden').onclick=async()=>{
+  const titel=$('#tkTitel').value.trim(), text=$('#tkText').value.trim();
+  if(!titel && !text){ tkStatus('Bitte wenigstens eine Zeile schreiben.', true); return; }
+  const t={art:tkArt, titel:titel||text.slice(0,60), text, kontext:tkKontext(),
+    zeit:new Date().toISOString()};
+  if(!atToken()){
+    tkOffeneSetzen(tkOffene().concat([t]));
+    tkStatus('Kein Airtable-Token auf diesem Gerät — Ticket ist gemerkt und geht später raus.', true);
+    renderTkOffen(); return;
+  }
+  tkStatus('Sende …');
+  try{
+    await tkSendeEines(t);
+    $('#dlgTicket').close();
+    melde(`Danke — ${t.art} „${t.titel}" ist angekommen.`);
+  }catch(err){
+    tkOffeneSetzen(tkOffene().concat([t]));
+    tkStatus('Ging nicht raus ('+err.message.split('\n')[0]+') — Ticket ist gemerkt und wird später übertragen.', true);
+    renderTkOffen();
+  }
 };
 
 /* ================= Druck / PDF =================
@@ -8343,6 +8772,24 @@ function buildPrint(filter){
   try{ return buildPrintIntern(); }
   finally{ druckFilter=null; }                 // Bildschirm zeigt immer alles
 }
+/* Anmerkungen zum Raum, gesammelt unter dem Raumplan (Ticket vom 3.8.2026).
+   Bewusst ein eigener Kasten und **nicht** eine weitere Spalte in der Positionstabelle:
+   Die ist ohnehin breit, und eine Anmerkung ist meist ein ganzer Satz. Die Anmerkung des
+   Raums steht oben, darunter je Zeile die einer LV-Zuordnung mit ihrer Nummer davor.
+   Ohne Anmerkung gibt es den Kasten gar nicht — sonst stünde auf jeder Seite ein Rahmen. */
+function anmerkungKasten(r, lvs){
+  const zeilen=[];
+  if(r.anmerkung) zeilen.push({wo:'Raum', txt:r.anmerkung});
+  (lvs||[]).forEach(a=>{ if(a.anmerkung) zeilen.push({wo:a.lv||'—', txt:a.anmerkung}); });
+  if(!zeilen.length) return '';
+  return `<div style="margin-top:3mm; border:0.4mm solid #b9b9b9; border-radius:1mm; padding:2mm 2.5mm">
+    <div style="font-weight:700; font-size:11px; margin-bottom:1mm">Anmerkungen</div>
+    <table style="font-size:9pt"><tbody>
+      ${zeilen.map((z,i)=>`<tr class="${i%2?'zebra':''}">
+        <td style="width:16mm; vertical-align:top; white-space:nowrap"><b>${esc(z.wo)}</b></td>
+        <td style="white-space:pre-wrap">${esc(z.txt)}</td></tr>`).join('')}
+    </tbody></table></div>`;
+}
 function buildPrintIntern(){
   const p=proj();
   const bv=[p.bauvorhaben || p.name || '', abschlagText(druckFilter)].filter(Boolean).join(' · ');
@@ -8385,6 +8832,7 @@ function buildPrintIntern(){
           </div>
           <div style="flex:1">${planGross}</div>
         </div>
+        ${anmerkungKasten(r, lvs)}
         <div style="margin-top:4mm">
           <div style="font-weight:700; font-size:12px; margin-bottom:1.5mm">LV-Positionen in diesem Raum</div>
           ${lvs.length?(()=>{
@@ -8581,6 +9029,16 @@ function renderCrumb(){
   const bb=$('#crumbback'); if(bb) bb.onclick=exitRoom;
 }
 window.addEventListener('resize', ()=>{ if(view==='plan') renderCanvas(); });
+/* Die Raumsperre läuft nach Zeit ab — ohne Nachsehen fiele der Wechsel erst beim nächsten
+   Klick auf. Alle 15 s prüfen und nur bei echtem Wechsel neu zeichnen; während eines
+   Ziehvorgangs bleibt alles, wie es ist. */
+let sperrStand=null;
+setInterval(()=>{
+  if(drag || document.querySelector('dialog[open]')) return;
+  const r=focusRoomId?roomById(focusRoomId):(etagenWahl?roomById(etagenWahl):null);
+  const jetzt=r?raumOffen(r):null;
+  if(jetzt!==sperrStand){ sperrStand=jetzt; if(r) renderAll(); }
+}, 15000);
 $('#undobtn').onclick=undoSchritt;
 $('#redobtn').onclick=redoSchritt;
 syncSharedDoors(); save();   // Altbestand: Türpaare in geteilten Wänden lagerichtig angleichen
@@ -8596,6 +9054,8 @@ bilderNachladen()
                                                                // Schnappschuss — Undo bleibt gültig
   .catch(err=>melde('Bildspeicher nicht verfügbar: '+err.message+' — Fotos fehlen in dieser Sitzung.', true));
 btStartVerbinden();          // Laser ohne Dialog wieder anbinden, wenn der Browser ihn kennt
+// Auf der Baustelle geschriebene Tickets nachreichen, sobald wieder Netz da ist
+tkOffeneSenden().then(r=>{ if(r.gesendet) melde(`${r.gesendet} wartende(s) Ticket(s) übertragen.`); });
 </script>
 </body>
 </html>
