@@ -107,6 +107,10 @@
   #lvview .lvz:focus{border-color:var(--accent); background:#fff; outline:none;}
   #lvview select.lvz{width:auto; text-align:left;}
   #lvview .lvz.abs{width:52px;}
+  /* An die Wand gekoppeltes Maß: grün unterlegt und unterstrichen, wie die Laserfelder —
+     die Zahl ändert sich sonst scheinbar von selbst. Ein Rand RECHTS sah aus wie ein
+     Schreibcursor, darum die Unterstreichung. */
+  #lvview .lvz.gekoppelt{background:#f0fbf7; border-bottom-color:var(--accent2);}
 
   dialog{border:none; border-radius:12px; padding:0; max-width:min(560px,94vw); width:520px; box-shadow:0 10px 40px rgba(0,0,0,.25);}
   dialog::backdrop{background:rgba(20,25,35,.45);}
@@ -436,6 +440,8 @@
       <div class="checks" style="grid-template-columns:1fr">
         <label><input type="checkbox" id="lvNutzGrund">Nutze Grundfläche als Fläche</label>
         <label><input type="checkbox" id="lvNutzAnsicht" title="Alle Wände + Decke + Boden: 2 × Grundfläche + Umfang × Raumhöhe">Nutze Ansichtsfläche als Fläche</label>
+        <label id="lvAutoLZeile" title="Wird die Wand gezogen oder ihre Länge getippt, zieht dieses Maß mit"><input type="checkbox" id="lvAutoL">Länge folgt der Wandlänge</label>
+        <label id="lvAutoHZeile" title="Wird die Raumhöhe geändert, zieht dieses Maß mit"><input type="checkbox" id="lvAutoH">Höhe folgt der Raumhöhe</label>
       </div>
     </fieldset>
     <fieldset><legend>Anmerkung</legend>
@@ -1166,6 +1172,7 @@ async function bilderAufraeumen(){
 function save(){
   db.rev=Date.now();                       // Marke für „seit der letzten Sicherung geändert"
   wandNummernPflegen();                    // Wände mit Fotos bekommen eine Nummer
+  lvMasseNachziehen();                     // gekoppelte Wandmaße folgen der Zeichnung
   const text=standErfassen();              // ohne Bilddaten — die liegen in IndexedDB
   if(!ohneUndoAktiv){
     if(letzterStand!=null && letzterStand!==text){
@@ -1204,6 +1211,38 @@ function wandNummernPflegen(){
       r.wallNr=r.wallNr||{};
       if(!r.wallNr[i]) r.wallNr[i]=nextObjNr();
     });
+  });
+}
+/* ---------- Gekoppelte Wandmaße (seit 2026-08-03) ----------
+   Eine LV-Zuordnung an einer Wand bekommt Länge und Höhe beim Anlegen vorbelegt
+   (Wandlänge und Raumhöhe). Bisher war das eine EINMALIGE Kopie: wurde die Wand
+   nachher gezogen oder die Raumhöhe geändert, blieb die Menge auf dem alten Stand.
+
+   Jetzt tragen die beiden Maße einen Merker (`a.autoL` / `a.autoH`) und werden hier
+   nachgezogen. Sobald von Hand etwas eingetragen wird — im Dialog oder direkt in der
+   LV-Detailtabelle —, fällt der Merker weg und die Zahl steht wieder fest. Im Dialog
+   lässt er sich über zwei Häkchen auch wieder anschalten.
+
+   **Warum in `save()` und nicht in `lvCalc()`:** So steht in `a.laenge` immer die
+   gültige Zahl. Alle Leser — Tabellen, Druck, CSV, magicplan-Export, Airtable —
+   bleiben unverändert, und wenn die Wand später verschwindet, ist der zuletzt gültige
+   Wert automatisch der Rückfall. Ein Auflösen erst beim Rechnen hätte jede dieser
+   Stellen einzeln anfassen müssen.
+
+   Grundfläche und Ansichtsfläche brauchen das nicht: die speichern gar keine Zahl,
+   sondern rechnen in `lvCalc` ohnehin bei jedem Zeichnen frisch aus dem Raum. */
+function lvMasseNachziehen(){
+  (proj().attrs||[]).forEach(a=>{
+    if(!a.autoL && !a.autoH) return;
+    const r=roomById(a.roomId);
+    if(!r){ delete a.autoL; delete a.autoH; return; }        // Raum gelöscht → Kopplung endet
+    if(a.autoH) a.hoehe=r.height;
+    if(a.autoL){
+      // Wand weg (Ecke gelöscht, Raum neu gezeichnet): letzter Wert bleibt stehen
+      if(a.wall==null || !(a.wall>=0 && a.wall<r.points.length)){ delete a.autoL; return; }
+      const [p1,p2]=wallPoints(r, a.wall);
+      a.laenge=mm(dist(p1,p2));
+    }
   });
 }
 /* Was eine LV-Position bezeichnet: Objekt, nummerierte Wand oder der Raum selbst */
@@ -4771,6 +4810,14 @@ function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
   ['Vorn','Oben','Links','Rechts','Hinten','Unten'].forEach(k=>{ $('#lv'+k).checked=a?!!a[k.toLowerCase()]:false; });
   $('#lvNutzGrund').checked=a?!!a.nutzGrund:false;
   $('#lvNutzAnsicht').checked=a?!!a.nutzAnsicht:false;
+  /* Kopplung an die Wand — nur sichtbar, wenn die Zuordnung überhaupt an einer Wand hängt.
+     Neu angelegt ist sie an; bei bestehenden Zuordnungen zählt, was gespeichert steht
+     (Altbestand hat den Merker nicht und bleibt darum bei festen Zahlen). */
+  const anWand = lvPresetWall!=null;
+  $('#lvAutoLZeile').style.display = anWand?'':'none';
+  $('#lvAutoHZeile').style.display = anWand?'':'none';
+  $('#lvAutoL').checked = anWand && (a ? !!a.autoL : true);
+  $('#lvAutoH').checked = anWand && (a ? !!a.autoH : true);
   $('#lvAnm').value=a?(a.anmerkung||''):'';
   /* Altbestand „Nutze Umfang als Länge": das Häkchen gibt es nicht mehr. Beim Öffnen
      wird der Umfang einmalig als Zahl in die Länge geschrieben; beim Speichern fällt
@@ -4797,6 +4844,27 @@ $('#lvEinheit').addEventListener('change', lvGrundAuto);
 // Grundfläche und Ansichtsfläche schließen sich aus — beides zugleich ergibt keinen Sinn
 $('#lvNutzGrund').onchange=e=>{ if(e.target.checked) $('#lvNutzAnsicht').checked=false; };
 $('#lvNutzAnsicht').onchange=e=>{ if(e.target.checked) $('#lvNutzGrund').checked=false; };
+/* Kopplung an die Wand: Wer selbst etwas einträgt, meint es auch so — dann fällt das
+   Häkchen. Das gilt für die Tastatur (`input`) UND für den Laser, der den Wert über
+   `change` einträgt: auf ein Feld zu zielen ist eine bewusste Entscheidung. Umgekehrt
+   trägt das Anhaken den aktuellen Wert sofort ein, damit man sieht, was man bekommt. */
+const lvWandMass = () => {
+  const r=roomById(lvRoomId);
+  if(!r || lvPresetWall==null || !(lvPresetWall>=0 && lvPresetWall<r.points.length)) return null;
+  const [p1,p2]=wallPoints(r, lvPresetWall);
+  return {laenge:mm(dist(p1,p2)), hoehe:r.height};
+};
+[['#lvL','#lvAutoL','laenge'], ['#lvH','#lvAutoH','hoehe']].forEach(([feld, haken, k])=>{
+  const loesen=()=>{ $(haken).checked=false; };
+  $(feld).addEventListener('input', loesen);
+  $(feld).addEventListener('change', loesen);
+  $(haken).addEventListener('change', e=>{
+    if(!e.target.checked) return;
+    const m=lvWandMass();
+    if(m) $(feld).value=fmt3(m[k]);
+    else { e.target.checked=false; melde('Diese Wand gibt es nicht mehr — das Maß bleibt, wie es ist.'); }
+  });
+});
 // LV-Nummer ↔ Kurztext: bekannte Paare ergänzen sich gegenseitig (beide Richtungen)
 // Bei bekannter LV-Nummer Kurztext und Einheit der Position übernehmen
 function lvApplyKnown(lv){
@@ -5629,14 +5697,20 @@ makeSuggest($('#lvKurz'), $('#lvKurzSug'),
   });
 // Kein Zeilenumbruch im Kurztext — auch wenn gerade keine Vorschlagsliste offen ist
 $('#lvKurz').addEventListener('keydown', e=>{ if(e.key==='Enter') e.preventDefault(); });
+/* Beide Knöpfe tragen einen Wert von Hand ein und lösen darum die Wand-Kopplung —
+   sonst zöge `lvMasseNachziehen` ihn beim nächsten Speichern gleich wieder zurück und
+   der Knopf sähe aus, als täte er nichts. („Höhe aus Raum" schreibt zwar genau den
+   gekoppelten Wert, aber der Umfang eben nicht.) */
 $('#lvHoeheRaum').onclick=()=>{
   const r=roomById(lvRoomId); if(!r) return;
   $('#lvH').value=fmt3(r.height);
+  $('#lvAutoH').checked=false;
 };
 // Der Umfang gehört in die LÄNGE — dort rechnet er (Menge × Länge), nicht im Umfang-Feld
 $('#lvUmfangRaum').onclick=()=>{
   const r=roomById(lvRoomId); if(!r) return;
   $('#lvL').value=fmt3(roomStats(r).per);
+  $('#lvAutoL').checked=false;
 };
 // Alle Felder des Dialogs als Datensatz — von „Speichern" wie vom Kopieren genutzt
 function lvDialogDaten(){
@@ -5660,6 +5734,10 @@ function lvDialogDaten(){
   };
   if(lvProjektEbene) data.projekt=true;
   if(lvPresetWall!=null) data.wall=lvPresetWall;
+  // Kopplung nur mitschreiben, wenn sie besteht — sonst stünde bei jeder Zuordnung
+  // ein `false` im Aufmaß, das niemand braucht (und `delete` beim Bearbeiten greift).
+  if(lvPresetWall!=null && $('#lvAutoL').checked) data.autoL=true;
+  if(lvPresetWall!=null && $('#lvAutoH').checked) data.autoH=true;
   return data;
 }
 // Objekt-/Wandnummer wird erst vergeben, wenn wirklich eine LV-Position daran hängt
@@ -5681,6 +5759,10 @@ function lvSpeichern(){
   else { ziel={id:uid(), ...data}; p.attrs.push(ziel); lvEditId=ziel.id; }
   // Leere Anmerkung gar nicht erst mitschleppen — und beim Löschen wirklich verschwinden
   if(!ziel.anmerkung) delete ziel.anmerkung;
+  // Dasselbe für die Wand-Kopplung: `Object.assign` oben schreibt ein fehlendes Feld
+  // NICHT weg — ein abgehaktes Häkchen bliebe sonst wirkungslos.
+  if(!data.autoL) delete ziel.autoL;
+  if(!data.autoH) delete ziel.autoH;
   lvNummerVergeben(ziel);
   assignLvColors(p);
   // Paar LV-Nummer ↔ Kurztext projektweit merken (letzter Stand gewinnt)
@@ -6099,6 +6181,10 @@ function lvZelleAendern(id, feld, wert){
   else {                                                  // laenge, breite, hoehe, umfang, durchm
     const v=parseNum(wert);
     if(isFinite(v)) a[feld]=v; else delete a[feld];
+    // Von Hand eingetragen = die Kopplung an die Wand endet, wie im Dialog auch.
+    // Muss VOR `save()` stehen, sonst zieht `lvMasseNachziehen` den Wert gleich wieder zurück.
+    if(feld==='laenge') delete a.autoL;
+    if(feld==='hoehe') delete a.autoH;
   }
   save();
   renderCanvas();          // Farben und Beschriftungen im Plan hängen an den LV-Werten
@@ -6147,12 +6233,18 @@ function renderLvDetail(){
     </tr></thead><tbody>
     ${rows.map(a=>{
       const r=roomById(a.roomId);
-      const flags=[a.nutzGrund?'Grundfl.':null,a.nutzAnsicht?'Ansicht':null,a.nutzUmfang?'Umfang→L':null].filter(Boolean).join(', ')||'–';
+      const flags=[a.nutzGrund?'Grundfl.':null,a.nutzAnsicht?'Ansicht':null,a.nutzUmfang?'Umfang→L':null,
+        a.autoL?'L↔Wand':null, a.autoH?'H↔Raum':null].filter(Boolean).join(', ')||'–';
       const res=lvCalc(a, g.alleNein);
       // Maße und Abschlag direkt in der Zeile: unauffälliges Feld, das erst beim Anfassen auffällt
-      const zahl=(feld, wert, leerErlaubt=true) =>
-        `<input class="lvz" inputmode="decimal" data-lvid="${a.id}" data-lvfeld="${feld}"
+      const zahl=(feld, wert, leerErlaubt=true) => {
+        // Gekoppelte Maße grün gerandet — sonst wäre nicht zu sehen, warum sich eine Zahl
+        // von selbst ändert (und dass ein eigener Eintrag die Kopplung beendet)
+        const auto=(feld==='laenge'&&a.autoL)||(feld==='hoehe'&&a.autoH);
+        return `<input class="lvz${auto?' gekoppelt':''}" inputmode="decimal" data-lvid="${a.id}" data-lvfeld="${feld}"
+          ${auto?`title="Folgt ${feld==='laenge'?'der Wandlänge':'der Raumhöhe'} — ein eigener Wert löst die Kopplung"`:''}
           value="${isFinite(wert)?fmt3(wert):(leerErlaubt?'':'')}">`;
+      };
       return `<tr data-lvrow="${a.id}">
         <td>${esc(r?floorName(r.floorId):'?')}</td><td>${esc(r?r.name:'– gelöscht –')}</td>
         <td>${esc(lvZielText(a))}</td>
