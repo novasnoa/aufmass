@@ -47,7 +47,7 @@
   #layout{display:flex; height:calc(100% - 52px);}
   #blatt{display:flex; flex-direction:column; width:308px; min-width:308px;
     background:var(--panel); border-right:1px solid var(--line);}
-  #blattgriff{display:none;}
+  #blattgriff, #kurzmenu{display:none;}
   #tbmehr{display:flex; align-items:center; gap:8px;}
   #tbmehrbtn{display:none;}
   #sidebar{flex:1; min-height:0; overflow-y:auto; padding:10px;}
@@ -186,16 +186,35 @@
     #blatt{position:fixed; left:0; right:0; bottom:0; width:auto; min-width:0; z-index:30;
       border:none; border-top:1px solid var(--line); border-radius:14px 14px 0 0;
       box-shadow:0 -6px 22px rgba(0,0,0,.22); transition:height .18s ease;}
-    #blatt.zu{height:38px;}
+    /* Zugeklappt bleibt genau die Leiste stehen — Hoehe kommt vom Inhalt.
+       Beim Ziehen blendet sich das Panel wieder ein, sonst zoege man ins Leere. */
+    #blatt.zu{height:auto;}
+    #blatt.zu #sidebar{display:none;}
+    #blatt.zieht #sidebar{display:block;}
     #blatt.halb{height:46vh; height:46dvh;}
     #blatt.voll{height:calc(100vh - 46px); height:calc(100dvh - 46px);}
     #blatt.zieht{transition:none;}
-    #blattgriff{display:flex; align-items:center; gap:8px; padding:6px 12px 4px;
-      cursor:grab; touch-action:none; user-select:none; flex:0 0 auto;}
-    #blattgriff .strich{width:36px; height:4px; border-radius:2px; background:#c2c8d2; flex:none;}
+    #blattgriff{display:block; padding:4px 0 6px; touch-action:none; user-select:none; flex:0 0 auto;}
+    #blattgriff .zieh{display:flex; align-items:center; gap:8px; padding:2px 12px 4px; cursor:grab;}
+    #blattgriff .strich{width:32px; height:4px; border-radius:2px; background:#c2c8d2; flex:none;}
     #blatttitel{font-size:12px; color:var(--muted); overflow:hidden; text-overflow:ellipsis;
       white-space:nowrap; flex:1;}
     #blattgriff .pfeil{color:var(--muted); font-size:14px; transition:transform .18s;}
+    /* Kurzbefehle: eine Zeile, notfalls seitlich schiebbar */
+    #blattkurz{display:flex; gap:6px; padding:0 10px; overflow-x:auto; scrollbar-width:none;}
+    #blattkurz::-webkit-scrollbar{display:none;}
+    #blattkurz button{flex:0 0 auto; display:flex; flex-direction:column; align-items:center;
+      gap:1px; min-width:62px; padding:5px 8px; border:1px solid var(--line); border-radius:9px;
+      background:#fff; font-size:10px; color:var(--text); line-height:1.15;}
+    #blattkurz button b{font-size:16px; font-weight:400; line-height:1;}
+    #blattkurz button.gefahr{color:var(--danger); border-color:#f0c9c9;}
+    #blattkurz button.an{background:#e8f0fe; border-color:#2f6fed;}
+    #kurzmenu{display:none; position:fixed; z-index:40; background:#fff; border:1px solid var(--line);
+      border-radius:10px; padding:6px; box-shadow:0 6px 22px rgba(0,0,0,.22); min-width:180px;}
+    #kurzmenu.auf{display:block;}
+    #kurzmenu button{display:block; width:100%; text-align:left; padding:9px 10px; border:none;
+      background:none; font-size:14px; border-radius:7px;}
+    #kurzmenu button:active{background:#eef1f6;}
     #blatt.zu #blattgriff .pfeil{transform:rotate(0deg);}
     #blatt.voll #blattgriff .pfeil{transform:rotate(180deg);}
     #sidebar{padding:8px 10px 14px;}
@@ -416,8 +435,12 @@
 <div id="layout">
   <!-- Am Rechner eine Spalte, am Handy ein Blatt, das von unten hochfaehrt.
        `#sidebar` behaelt seine Kennung, damit alles Bestehende weiterschreibt. -->
-  <div id="blatt" class="halb">
-    <div id="blattgriff"><span class="strich"></span><span id="blatttitel">Werkzeuge</span><span class="pfeil">⌃</span></div>
+  <div id="blatt" class="zu">
+    <div id="blattgriff">
+      <div class="zieh"><span class="strich"></span><span id="blatttitel">Werkzeuge</span><span class="pfeil">⌃</span></div>
+      <div id="blattkurz"></div>
+    </div>
+    <div id="kurzmenu"></div>
     <aside id="sidebar"></aside>
   </div>
   <div id="main">
@@ -4977,7 +5000,7 @@ function renderSidebar(){
   }
 
   $('#sidebar').innerHTML=html;
-  if(typeof blattTitel==='function') blattTitel();
+  if(typeof blattTitel==='function'){ blattTitel(); blattKurz(); }
   // In der Etagen-Anwahl gelten dieselben Raum-Handler wie in der Raumansicht
   wireSidebar(fr || (etagenWahl?roomById(etagenWahl):null));
 }
@@ -10987,6 +11010,7 @@ const blattJetzt = () => BLATT.findIndex(k=>$('#blatt').classList.contains(k));
   const gr=$('#blattgriff'), b=$('#blatt');
   let zug=null;
   gr.addEventListener('pointerdown', e=>{
+    if(e.target.closest('#blattkurz')) return;      // Kurzbefehl, kein Ziehen
     zug={y:e.clientY, h:b.getBoundingClientRect().height, weit:false};
     b.classList.add('zieht'); try{ gr.setPointerCapture(e.pointerId); }catch(_){}
   });
@@ -10994,7 +11018,7 @@ const blattJetzt = () => BLATT.findIndex(k=>$('#blatt').classList.contains(k));
     if(!zug) return;
     const d=zug.y-e.clientY;
     if(Math.abs(d)>6) zug.weit=true;
-    if(zug.weit) b.style.height=Math.max(38, Math.min(innerHeight-46, zug.h+d))+'px';
+    if(zug.weit) b.style.height=Math.max($('#blattgriff').offsetHeight, Math.min(innerHeight-46, zug.h+d))+'px';
   });
   const los=e=>{
     if(!zug) return;
@@ -11003,12 +11027,82 @@ const blattJetzt = () => BLATT.findIndex(k=>$('#blatt').classList.contains(k));
     try{ gr.releasePointerCapture(e.pointerId); }catch(_){}
     if(!zug.weit){ blattStufe((blattJetzt()+1)%3); zug=null; return; }
     // auf die naechstgelegene Stufe einrasten
-    const ziele=[38, innerHeight*0.46, innerHeight-46];
+    const ziele=[$('#blattgriff').offsetHeight, innerHeight*0.46, innerHeight-46];
     let best=0; ziele.forEach((z,i)=>{ if(Math.abs(h-z)<Math.abs(h-ziele[best])) best=i; });
     blattStufe(best); zug=null;
   };
   gr.addEventListener('pointerup', los); gr.addEventListener('pointercancel', los);
 }
+/* ---------- Kurzbefehle ----------
+   Die Leiste bleibt immer sichtbar, auch wenn das Blatt zu ist: die Maße kommen beim
+   Aufmessen meist vom Laser, gebraucht werden vor allem „was anlegen" und „was weg".
+   Jeder Kurzbefehl drueckt den vorhandenen Knopf in der Seitenleiste — dadurch gibt es
+   keine zweite Stelle, an der dieselbe Sache anders passiert, und was es im Panel nicht
+   gibt, erscheint auch nicht in der Leiste. */
+const KURZ={
+  objekt:  [['🏷','LV','#objlv'], ['📷','Foto','#objfoto'], ['⧉','Kopie','#objdup'], ['🗑','Löschen','#objdel','gefahr']],
+  oeffnung:[['🏷','LV','#objlv'], ['📷','Foto','#opfoto'], ['⧉','Kopie','#opdup'], ['🗑','Entfernen','.opdel','gefahr']],
+  wand:    [['🏷','LV','#walllv'], ['📷','Foto','#wfoto'], ['🚪','Tür','#wopdoor'], ['🪟','Fenster','#wopwin'],
+            ['✕','Schließen','#walldesel']],
+  raum:    [['＋','Einfügen','menu'], ['🔒','Sperren','#rsperr'], ['⧉','Kopie','#rdup'], ['🗑','Löschen','#rdel','gefahr']],
+  etage:   [['＋','Einfügen','menu'], ['📷','Foto','#rfoto']]
+};
+// Was hinter „＋ Einfügen" steckt, haengt am Ort
+const KURZMENU={
+  etage: [['Raum zeichnen','#modedraw'], ['Raum aus Vorlage','#modetpl'], ['LV-Zuordnung','#rlv'], ['Foto','#rfoto']],
+  raum:  [['Objekt','objekte'], ['Tür','#opdoorbtn'], ['Fenster','#opwinbtn'], ['LV-Zuordnung','#rlv'], ['Foto','#rfoto']]
+};
+function kurzOrt(){
+  const r=focusRoomId?roomById(focusRoomId):null;
+  if(r){
+    if(sel.objId && (r.objects||[]).some(g=>g.id===sel.objId)) return 'objekt';
+    if(sel.openId) return 'oeffnung';
+    if(sel.wall!=null) return 'wand';
+    return 'raum';
+  }
+  return 'etage';
+}
+function blattKurz(){
+  const kasten=$('#blattkurz'); if(!kasten) return;
+  const ort=kurzOrt();
+  kasten.innerHTML=(KURZ[ort]||[]).map(([sym,txt,ziel,art])=>{
+    if(ziel!=='menu' && !$(ziel)) return '';          // gibt es hier nicht
+    if(ziel!=='menu' && $(ziel).disabled) return '';
+    return `<button data-kurz="${esc(ziel)}" class="${art||''}"><b>${sym}</b>${esc(txt)}</button>`;
+  }).join('');
+  kasten.querySelectorAll('[data-kurz]').forEach(b=>b.onclick=e=>{
+    e.stopPropagation();
+    const z=b.dataset.kurz;
+    if(z==='menu'){ kurzMenuAuf(b, KURZMENU[ort]||[]); return; }
+    const el=$(z); if(el) el.click();
+  });
+}
+function kurzMenuAuf(knopf, punkte){
+  const m=$('#kurzmenu');
+  const da=punkte.filter(([t,z])=>z==='objekte' || $(z));
+  if(!da.length) return;
+  m.innerHTML=da.map(([t,z])=>`<button data-km="${esc(z)}">${esc(t)}</button>`).join('');
+  m.classList.add('auf');
+  const r=knopf.getBoundingClientRect(), mr=m.getBoundingClientRect();
+  m.style.left=Math.max(8, Math.min(r.left, innerWidth-mr.width-8))+'px';
+  m.style.top=Math.max(8, r.top-mr.height-8)+'px';
+  m.querySelectorAll('[data-km]').forEach(b=>b.onclick=()=>{
+    m.classList.remove('auf');
+    const z=b.dataset.km;
+    if(z==='objekte'){                       // Objektart waehlt man im Panel
+      blattStufe(2);
+      const p=[...document.querySelectorAll('#sidebar .panel h3')].find(h=>/^Objekte/.test(h.textContent));
+      if(p) p.scrollIntoView({block:'start', behavior:'smooth'});
+      return;
+    }
+    const el=$(z); if(el) el.click();
+  });
+}
+document.addEventListener('pointerdown', e=>{
+  const m=$('#kurzmenu');
+  if(m.classList.contains('auf') && !m.contains(e.target) && !e.target.closest('#blattkurz'))
+    m.classList.remove('auf');
+}, true);
 // Der Griff sagt auch zugeklappt, worum es gerade geht
 function blattTitel(){
   const h=$('#sidebar .panel h3');
