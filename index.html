@@ -9885,7 +9885,9 @@ document.addEventListener('focusin', e=>{
     const alles=()=>{ try{ el.select(); }catch(_){} };
     alles(); setTimeout(alles, 0);   // iOS hebt die Auswahl direkt nach dem Fokus wieder auf
   }
-  if(fingerGeraet && el.matches(TASTFELD)) leisteZeigen(el);
+  // Auf der Eingabeseite nicht: die hat ihr eigenes „✓ Anwenden" gleich unter dem Feld,
+  // die Leiste stuende nur ein zweites Mal darunter.
+  if(fingerGeraet && el.matches(TASTFELD) && !el.closest('#dlgFeld')) leisteZeigen(el);
 });
 document.addEventListener('focusout', e=>{
   const weg=e.target;
@@ -11234,8 +11236,10 @@ const HANDY={
   raum:    {panels:[/^Raum/, /^Fotos/],
             behalte:['#rname','#rheight','#ranm','.farbrow','#rfoto','.fotos']},
   wand:    {panels:[/^Wand/, /^Fotos/],
-            behalte:['#wdicke','#wdickeall','#wdickereg','#magnettoggle','#wfoto','.fotos'],
-            zuerst:['#wdickereg']},
+            // Die Wandlaenge gehoert dazu — sie ist das Mass, das man am haeufigsten
+            // eintraegt; sie steht gleich hinter dem Staerke-Regler.
+            behalte:['#wlen','#wlock','#wdicke','#wdickeall','#wdickereg','#magnettoggle','#wfoto','.fotos'],
+            zuerst:['#wdickereg','#wlen']},
   objekt:  {panels:[/ausgew.hlt/, /^Fotos/],
             behalte:['#objname','.objdim','#objrot','#ptadd','#ptdel','#objfoto','.fotos']},
   oeffnung:{panels:[/ausgew.hlt/, /^Fotos/],
