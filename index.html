@@ -45,7 +45,12 @@
   #btchip.on{color:#c9f3df;}
 
   #layout{display:flex; height:calc(100% - 52px);}
-  #sidebar{width:308px; min-width:308px; background:var(--panel); border-right:1px solid var(--line); overflow-y:auto; padding:10px;}
+  #blatt{display:flex; flex-direction:column; width:308px; min-width:308px;
+    background:var(--panel); border-right:1px solid var(--line);}
+  #blattgriff{display:none;}
+  #tbmehr{display:flex; align-items:center; gap:8px;}
+  #tbmehrbtn{display:none;}
+  #sidebar{flex:1; min-height:0; overflow-y:auto; padding:10px;}
   .panel{border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:10px; background:#fff;}
   .panel h3{font-size:12px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin-bottom:8px;}
   .row{display:flex; gap:6px; align-items:center; margin-bottom:6px; flex-wrap:wrap;}
@@ -155,6 +160,49 @@
   #lvtip b{display:block; margin-bottom:4px; color:#8fe3bd; font-variant-numeric:tabular-nums;}
   #lvtip i{display:block; margin-top:6px; color:#9aa6bb; font-size:11px; font-style:normal;}
   /* Auf Touch-Geräten ist die Liste schmaler — dort darf der Kasten fast voll breit werden */
+  /* ---------- Handy: der Plan bekommt den Bildschirm, die Werkzeuge fahren von unten
+     hoch. Nebeneinander blieben von 375 px nur 67 px fuer den Plan uebrig. Quer
+     (ab 641 px) bleibt es bei der Spalte — da ist genug Platz. ---------- */
+  @media (max-width:640px){
+    #topbar{height:44px; padding:6px 8px; gap:6px;}
+    #topbar .logo{display:none;}
+    #topbar .tb{padding:6px 8px; font-size:12px;}
+    #projname{max-width:34vw;}
+    #btchiptext{display:none;}
+    #btchip{padding:4px 7px;}
+    .tabs{margin-left:2px;}
+    .tabs button{padding:5px 9px; font-size:12px;}
+    /* Selteneres klappt unter der Kopfleiste auf, statt sie zu sprengen */
+    #tbmehrbtn{display:inline-block;}
+    #tbmehr{display:none; position:fixed; right:6px; top:46px; z-index:60;
+      flex-direction:column; align-items:stretch; gap:4px; padding:8px;
+      background:#1c2330; border-radius:10px; box-shadow:0 6px 22px rgba(0,0,0,.35);}
+    #tbmehr.auf{display:flex;}
+    #tbmehr .tb{text-align:left; font-size:13px;}
+
+    #layout{display:block; height:calc(100% - 44px); position:relative;}
+    #main{position:absolute; inset:0;}
+    #lvview{position:absolute; inset:0; padding:10px;}
+    #blatt{position:fixed; left:0; right:0; bottom:0; width:auto; min-width:0; z-index:30;
+      border:none; border-top:1px solid var(--line); border-radius:14px 14px 0 0;
+      box-shadow:0 -6px 22px rgba(0,0,0,.22); transition:height .18s ease;}
+    #blatt.zu{height:38px;}
+    #blatt.halb{height:46vh; height:46dvh;}
+    #blatt.voll{height:calc(100vh - 46px); height:calc(100dvh - 46px);}
+    #blatt.zieht{transition:none;}
+    #blattgriff{display:flex; align-items:center; gap:8px; padding:6px 12px 4px;
+      cursor:grab; touch-action:none; user-select:none; flex:0 0 auto;}
+    #blattgriff .strich{width:36px; height:4px; border-radius:2px; background:#c2c8d2; flex:none;}
+    #blatttitel{font-size:12px; color:var(--muted); overflow:hidden; text-overflow:ellipsis;
+      white-space:nowrap; flex:1;}
+    #blattgriff .pfeil{color:var(--muted); font-size:14px; transition:transform .18s;}
+    #blatt.zu #blattgriff .pfeil{transform:rotate(0deg);}
+    #blatt.voll #blattgriff .pfeil{transform:rotate(180deg);}
+    #sidebar{padding:8px 10px 14px;}
+    /* Der Zoomknopf sass unter dem Blatt — er wandert nach oben rechts */
+    #zoombar{right:8px; bottom:auto; top:8px;}
+    #crumb{left:8px; top:8px; right:60px; font-size:12px; padding:5px 9px;}
+  }
   @media (hover:none){ #lvtip{max-width:min(430px,88vw);} }
   /* Türtypen: Symbolknöpfe statt Auswahlmenü — man sieht, was man bekommt */
   .tuerrow{gap:5px; flex-wrap:nowrap; margin-top:5px;}
@@ -355,15 +403,23 @@
   </div>
   <div class="spacer"></div>
   <div id="btchip"><span class="dot"></span><span id="btchiptext">Laser: getrennt</span></div>
-  <button class="tb" id="cloudbtn" title="Aufmaß mit einer Baustelle verbinden: sichern, laden und LV-Positionen holen">🏗 Baustelle</button>
-  <button class="tb icon" id="settingsbtn" title="Einstellungen: Zugangsdaten für Airtable">⚙</button>
-  <button class="tb" id="ausgabebtn" title="Bericht drucken, CSV exportieren, Backup-Datei sichern oder laden">📤 Ausgabe</button>
-  <button class="tb icon" id="ticketbtn" title="Fehler melden oder etwas wünschen — geht an die Entwicklung">🐞</button>
-  <button class="tb" id="helpbtn">?</button>
+  <button class="tb icon" id="tbmehrbtn" title="Weitere Funktionen">⋯</button>
+  <span id="tbmehr">
+    <button class="tb" id="cloudbtn" title="Aufmaß mit einer Baustelle verbinden: sichern, laden und LV-Positionen holen">🏗 Baustelle</button>
+    <button class="tb icon" id="settingsbtn" title="Einstellungen: Zugangsdaten für Airtable">⚙</button>
+    <button class="tb" id="ausgabebtn" title="Bericht drucken, CSV exportieren, Backup-Datei sichern oder laden">📤 Ausgabe</button>
+    <button class="tb icon" id="ticketbtn" title="Fehler melden oder etwas wünschen — geht an die Entwicklung">🐞</button>
+    <button class="tb" id="helpbtn">?</button>
+  </span>
 </div>
 
 <div id="layout">
-  <aside id="sidebar"></aside>
+  <!-- Am Rechner eine Spalte, am Handy ein Blatt, das von unten hochfaehrt.
+       `#sidebar` behaelt seine Kennung, damit alles Bestehende weiterschreibt. -->
+  <div id="blatt" class="halb">
+    <div id="blattgriff"><span class="strich"></span><span id="blatttitel">Werkzeuge</span><span class="pfeil">⌃</span></div>
+    <aside id="sidebar"></aside>
+  </div>
   <div id="main">
     <svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg>
     <div id="crumb"></div>
@@ -869,20 +925,56 @@
       <button class="btn small" id="fmUndo" title="Letzte Markierung entfernen">↶ Zurück</button>
       <button class="btn small" id="fmFertig" style="display:none">✓ Linie abschließen</button>
       <button class="btn small" id="fmKalib" title="Bekannte Strecke einmessen — danach schlägt das Maßfenster etwas vor">⇄ Maßstab</button>
+      <button class="btn small" id="fmText" title="Anmerkung mit Pfeil aufs Bild setzen">T Anmerkung</button>
       <button class="btn small danger" id="fmMarkWeg" style="display:none" title="Ausgewählte Markierung löschen">🗑 Markierung</button>
       <button class="btn small danger" id="fmFotoWeg" title="Dieses Foto mitsamt seinen Messungen löschen">🗑 Foto</button>
       <label style="flex:0 0 auto; font-size:12px; color:var(--muted)" title="Deckkraft aller Markierungen">◐
         <input type="range" id="fmAlpha" min="15" max="100" step="5" style="width:90px; vertical-align:middle"></label>
+      <span style="flex:0 0 auto; white-space:nowrap">
+        <button class="btn small" id="fmZout" title="Verkleinern">−</button>
+        <button class="btn small" id="fmZin" title="Vergrößern">＋</button>
+        <button class="btn small" id="fmZfit" title="Ganzes Bild">⌂</button>
+        <button class="btn small" id="fmHand" title="Schieben statt Zeichnen">✋</button>
+      </span>
       <span class="hint" id="fmHinweis" style="flex:1"></span>
+    </div>
+    <!-- Maßstab: erst beide Punkte setzen und nachbessern, dann anwenden -->
+    <div class="row" id="fmKalibLeiste" style="display:none">
+      <label style="flex:0 0 auto">Strecke (m)</label>
+      <input class="laser" id="fmKalibM" style="flex:0 0 90px" placeholder="1,00">
+      <button class="btn small primary" id="fmKalibOk">✓ Anwenden</button>
+      <button class="btn small" id="fmKalibAb">Abbrechen</button>
+      <span class="hint" style="flex:1">Beide Endpunkte lassen sich noch ziehen.</span>
     </div>
     <div id="fmBuehne" style="position:relative; flex:1; min-height:0; background:#11151c;
          border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center">
-      <img id="fmBild" style="max-width:100%; max-height:100%; display:block; user-select:none; -webkit-user-drag:none">
-      <svg id="fmSvg" style="position:absolute; inset:0; width:100%; height:100%; touch-action:none"></svg>
+      <!-- Bild und Zeichnung stecken zusammen im Zoom-Rahmen: eine CSS-Transformation
+           bewegt beide gleichzeitig, dadurch bleiben die Bildkoordinaten unberührt. -->
+      <div id="fmZoom" style="position:relative; transform-origin:0 0; will-change:transform; max-width:100%; max-height:100%">
+        <img id="fmBild" style="max-width:100%; max-height:100%; display:block; user-select:none; -webkit-user-drag:none">
+        <svg id="fmSvg" style="position:absolute; inset:0; width:100%; height:100%; touch-action:none"></svg>
+      </div>
     </div>
     <div class="row" id="fmSummen" style="flex-wrap:wrap"></div>
   </div>
   <div class="dfoot"><button class="btn primary" data-close>Fertig</button></div>
+</dialog>
+
+<!-- Anmerkung auf dem Foto -->
+<dialog id="dlgFmText" style="width:min(420px,94vw)">
+  <div class="dhead">Anmerkung <button data-close>✕</button></div>
+  <div class="dbody">
+    <textarea id="fmTextTxt" rows="3" style="width:100%; font-family:Arial, Helvetica, sans-serif"
+      placeholder="Was ist hier zu sehen?"></textarea>
+    <div class="row" style="margin-top:6px"><label>Farbe</label>
+      <span id="fmTextFarben" style="display:flex; gap:6px; flex-wrap:wrap"></span></div>
+    <p class="hint">Die Farbe gehört zur LV-Position. Der Pfeil lässt sich danach am
+      weißen Griff frei auf die gemeinte Stelle ziehen.</p>
+  </div>
+  <div class="dfoot">
+    <button class="btn danger" id="fmTextWeg">Löschen</button>
+    <button class="btn primary" id="fmTextOk">Übernehmen</button>
+  </div>
 </dialog>
 
 <!-- Maß zu einer Markierung -->
@@ -2951,10 +3043,9 @@ const fmAnzahl = (g,si) => (g.fotos||[]).reduce((n,f)=>
 function fmSchildKand(m, X, Y, u){
   const K=[];
   if(m.art==='flaeche'){
-    const x1=X(Math.min(m.x, m.x+m.w)), x2=X(Math.max(m.x, m.x+m.w));
-    const y1=Y(Math.min(m.y, m.y+m.h)), y2=Y(Math.max(m.y, m.y+m.h));
-    const cx=(x1+x2)/2, cy=(y1+y2)/2;
-    const ecken=[[x1,y1],[x2,y1],[x2,y2],[x1,y2]];
+    const ec=fmEcken(m).map(q=>[X(q.x), Y(q.y)]);
+    const cx=ec.reduce((a,e)=>a+e[0],0)/4, cy=ec.reduce((a,e)=>a+e[1],0)/4;
+    const ecken=ec;
     K.push({x:cx, y:cy});
     [0.3, 0.5, 0.7, 0.88].forEach(t=>ecken.forEach(([ex,ey])=>
       K.push({x:cx+(ex-cx)*t, y:cy+(ey-cy)*t})));
@@ -2998,8 +3089,63 @@ function fmFreierOrt(K, belegt, b, h){
 const fmSchildBreite = txt => Math.max(/^\d+$/.test(txt)?22:30, txt.length*7.2);
 function fmMarken(g){
   const out=[];
-  (g.fotos||[]).forEach((f,fi)=>(f.marken||[]).forEach(m=>out.push({m, f, fi, nr:out.length+1})));
+  (g.fotos||[]).forEach((f,fi)=>(f.marken||[]).forEach(m=>{
+    if(istText(m)) return;                 // Anmerkungen tragen ihren Text, keine Nummer
+    out.push({m, f, fi, nr:out.length+1});
+  }));
   return out;
+}
+/* Anmerkung: ein farbiges Feld mit Text und einem Pfeil auf die gemeinte Stelle.
+   Sie ist KEINE Messung — sie bekommt keine Nummer, keine Zuordnung und geht in
+   keine Summe ein (`fmPasst` schlaegt fuer 'text' nie an, `fmMarken` laesst sie aus). */
+const istText = m => m && m.art==='text';
+/* Eine Flaeche ist beim Aufziehen ein Rechteck, laesst sich danach aber an den Ecken
+   frei verziehen — Rohre und Wandflaechen stehen auf einem Foto nun mal perspektivisch
+   schraeg. Gerechnet wird trotzdem mit der getippten Laenge × Breite: das Viereck sagt
+   nur, WO gemessen wurde. Solange niemand eine Ecke angefasst hat, gibt es `m.ecken`
+   gar nicht und die vier Punkte kommen aus x/y/w/h. */
+function fmEcken(m){
+  if(Array.isArray(m.ecken) && m.ecken.length===4) return m.ecken;
+  const x1=Math.min(m.x, m.x+m.w), x2=Math.max(m.x, m.x+m.w);
+  const y1=Math.min(m.y, m.y+m.h), y2=Math.max(m.y, m.y+m.h);
+  return [{x:x1,y:y1},{x:x2,y:y1},{x:x2,y:y2},{x:x1,y:y2}];
+}
+// x/y/w/h als umschliessendes Rechteck nachfuehren — daran haengen Treffer und Druck
+function fmEckenSetzen(m, ecken){
+  m.ecken=ecken.map(q=>({x:mm(q.x), y:mm(q.y)}));
+  const xs=m.ecken.map(q=>q.x), ys=m.ecken.map(q=>q.y);
+  m.x=mm(Math.min(...xs)); m.y=mm(Math.min(...ys));
+  m.w=mm(Math.max(...xs)-m.x); m.h=mm(Math.max(...ys)-m.y);
+}
+const fmVerzogen = m => Array.isArray(m.ecken) && m.ecken.length===4;
+function fmImViereck(p, ecken){          // p und ecken in denselben Einheiten
+  let c=false;
+  for(let i=0, j=3; i<4; j=i++){
+    const a=ecken[i], b=ecken[j];
+    if((a.y>p.y)!==(b.y>p.y) && p.x < a.x+(p.y-a.y)*(b.x-a.x)/(b.y-a.y)) c=!c;
+  }
+  return c;
+}
+const FM_TZEILE=24;                       // Zeichen je Zeile, dann wird umbrochen
+function fmTextZeilen(txt){
+  const out=[];
+  String(txt||'').split(/\n/).forEach(abs=>{
+    let z='';
+    abs.split(/\s+/).forEach(w=>{
+      if(!z) z=w;
+      else if((z+' '+w).length<=FM_TZEILE) z+=' '+w;
+      else { out.push(z); z=w; }
+    });
+    out.push(z);
+  });
+  return out.length?out:[''];
+}
+// Feldgroesse in Bildpixeln (ungezoomt)
+function fmTextBox(m, bb){
+  const z=fmTextZeilen(m.txt);
+  const br=Math.max(60, Math.max(...z.map(l=>l.length))*7.4+14)/fmK;
+  const ho=(z.length*16+10)/fmK;
+  return {x:m.x*bb.w, y:m.y*bb.h, w:br, h:ho, zeilen:z};
 }
 const fmMarkNr = (g, id) => { const e=fmMarken(g).find(x=>x.m.id===id); return e ? e.nr : 0; };
 /* Zuordnung geloescht → Markierung weg. Ohne das bliebe eine Zeichnung im Bild stehen,
@@ -4831,6 +4977,7 @@ function renderSidebar(){
   }
 
   $('#sidebar').innerHTML=html;
+  if(typeof blattTitel==='function') blattTitel();
   // In der Etagen-Anwahl gelten dieselben Raum-Handler wie in der Raumansicht
   wireSidebar(fr || (etagenWahl?roomById(etagenWahl):null));
 }
@@ -5688,18 +5835,62 @@ $('#fsEdit').onclick=()=>{ if(fotoStapel && fotoStapel.length) feStapelEdit(0); 
    Kalibrierung (bekannte Strecke einmessen) steht im Maßfenster ein Vorschlag, den man
    überschreiben kann. Grund: ein schräg aufgenommenes Foto ist perspektivisch verzerrt;
    der Vorschlag hilft beim Abschätzen, ersetzt aber kein Maßband. */
-const dlgFotoMass=$('#dlgFotoMass'), dlgFmMass=$('#dlgFmMass');
+const dlgFotoMass=$('#dlgFotoMass'), dlgFmMass=$('#dlgFmMass'), dlgFmText=$('#dlgFmText');
 let fmObj=null, fmIdx=0, fmRoomId=null, fmSlot=0;
 let fmZug=null;              // laufendes Rechteck bzw. laufende Polylinie
-let fmKalibLauf=null;        // Kalibrierung: erster Punkt gesetzt
+/* Maßstab: {ax,ay} nach dem ersten Punkt, dazu {bx,by} nach dem zweiten. Erst
+   „Anwenden" schreibt ihn ins Foto — bis dahin lassen sich beide Enden nachziehen.
+   Vorher fragte der zweite Tipp sofort per `prompt` nach dem Maß; daneben getippt
+   hiess das: von vorn anfangen. */
+let fmKalibZug=null;
 let fmMassZiel=null;         // Markierung, deren Maß gerade eingegeben wird
 let fmSel=null;              // angetippte Markierung (Kennung)
+let fmK=1, fmTx=0, fmTy=0;   // Zoomfaktor und Verschiebung des Bildes
+let fmHandModus=false;
+let fmTextModus=false;       // T: der nächste Tipp setzt ein Anmerkungsfeld
+let fmTextZiel=null;       // ✋: Ziehen schiebt das Bild, statt zu zeichnen
+let fmSchubs=null;           // laufendes Schieben
+/* Zoomen im Bild: Bild und Zeichnung stecken zusammen im Rahmen `#fmZoom`, eine
+   CSS-Transformation bewegt beide. Dadurch bleiben alle Bildkoordinaten (0…1) und
+   `fmPunkt` unverändert — nur die Strichstärken teile ich durch den Faktor, sonst
+   würden die Linien beim Hineinzoomen mitwachsen und die Stelle verdecken. */
+/* Das Bild bekommt seine Anzeigegroesse in Pixeln gesetzt, statt sie ueber
+   max-width/max-height dem Browser zu ueberlassen: nur so umschliesst der Zoomrahmen
+   das Bild exakt und die Zeichenflaeche deckt es deckungsgleich ab. Vorher war das
+   Bild 800x600 gross, der sichtbare Rahmen aber 800x482 — alle Markierungen sassen
+   senkrecht verschoben. */
+function fmPassen(){
+  const im=$('#fmBild'), b=$('#fmBuehne'); if(!im || !b) return;
+  const nw=im.naturalWidth||1, nh=im.naturalHeight||1;
+  const k=Math.min(b.clientWidth/nw, b.clientHeight/nh) || 1;
+  im.style.width=Math.round(nw*k)+'px';
+  im.style.height=Math.round(nh*k)+'px';
+}
+function fmZoomAnwenden(){
+  const z=$('#fmZoom'), b=$('#fmBuehne'); if(!z||!b) return;
+  const w=z.offsetWidth*fmK, h=z.offsetHeight*fmK;
+  const L=(b.clientWidth - z.offsetWidth)/2, T=(b.clientHeight - z.offsetHeight)/2;
+  const kl=(v,a,c)=>Math.max(Math.min(a,c), Math.min(Math.max(a,c), v));
+  fmTx=kl(fmTx, -L, b.clientWidth-w-L);
+  fmTy=kl(fmTy, -T, b.clientHeight-h-T);
+  z.style.transform=`translate(${fmTx}px, ${fmTy}px) scale(${fmK})`;
+}
+function fmZoomAuf(k, sx, sy){
+  const z=$('#fmZoom'); if(!z) return;
+  const neu=Math.max(1, Math.min(10, k));
+  const r=z.getBoundingClientRect();
+  if(sx==null){ sx=r.left+r.width/2; sy=r.top+r.height/2; }
+  fmTx += (sx-r.left)*(1-neu/fmK);
+  fmTy += (sy-r.top)*(1-neu/fmK);
+  fmK=neu; fmZoomAnwenden(); fmZeichnen();
+}
+const fmZurueck = () => { fmK=1; fmTx=0; fmTy=0; fmZoomAnwenden(); fmZeichnen(); };
 let fmSchieb=null;           // laufendes Schieben/Formändern
 const fmSelMark = () => { const f=fmFoto(); return f ? (f.marken||[]).find(m=>m.id===fmSel)||null : null; };
 /* Treffer werden in Pixeln geprüft, nicht in Bildanteilen: ein Finger ist überall
    gleich breit, ein Bildanteil bei einem querformatigen Foto waagerecht aber viel
    länger als senkrecht. */
-const FM_FASS=11;                       // Fassbreite in Pixeln
+const FM_FASS=11;   // in Bildpixeln; beim Zoomen wird durch den Faktor geteilt                       // Fassbreite in Pixeln
 function fmPxPunkt(q){ const bb=fmBildBox(); return {x:q.x*bb.w, y:q.y*bb.h}; }
 function fmAbstandSeg(p, a, b){
   const dx=b.x-a.x, dy=b.y-a.y, l2=dx*dx+dy*dy;
@@ -5707,19 +5898,26 @@ function fmAbstandSeg(p, a, b){
   return Math.hypot(p.x-(a.x+dx*t), p.y-(a.y+dy*t));
 }
 function fmTrifft(m, q){
+  const FASS=FM_FASS/fmK;
   const p=fmPxPunkt(q), bb=fmBildBox();
   const P=v=>({x:v.x*bb.w, y:v.y*bb.h});
+  if(istText(m)){
+    const b=fmTextBox(m, bb);
+    return p.x>=b.x-FASS/2 && p.x<=b.x+b.w+FASS/2 && p.y>=b.y-FASS/2 && p.y<=b.y+b.h+FASS/2;
+  }
   if(m.art==='flaeche'){
-    const a=P({x:Math.min(m.x,m.x+m.w), y:Math.min(m.y,m.y+m.h)});
-    const b=P({x:Math.max(m.x,m.x+m.w), y:Math.max(m.y,m.y+m.h)});
-    return p.x>=a.x-FM_FASS && p.x<=b.x+FM_FASS && p.y>=a.y-FM_FASS && p.y<=b.y+FM_FASS;
+    const e=fmEcken(m).map(P);
+    if(fmImViereck(p, e)) return true;
+    // knapp daneben zaehlt auch — sonst ist eine schmale Flaeche kaum zu treffen
+    for(let i=0, j=3; i<4; j=i++) if(fmAbstandSeg(p, e[i], e[j])<FASS) return true;
+    return false;
   }
   if(m.art==='linie'){
     const pts=(m.pts||[]).map(P);
-    for(let i=0;i<pts.length-1;i++) if(fmAbstandSeg(p, pts[i], pts[i+1])<FM_FASS) return true;
+    for(let i=0;i<pts.length-1;i++) if(fmAbstandSeg(p, pts[i], pts[i+1])<FASS) return true;
     return false;
   }
-  const c=P(m); return Math.hypot(p.x-c.x, p.y-c.y) < FM_FASS+6;
+  const c=P(m); return Math.hypot(p.x-c.x, p.y-c.y) < FASS+6/fmK;
 }
 // Zuletzt Gezeichnetes liegt oben — von hinten suchen
 function fmTreffer(q){
@@ -5730,43 +5928,53 @@ function fmTreffer(q){
 // Griffe der ausgewählten Markierung: Ecken einer Fläche, Punkte einer Linie
 function fmGriffe(m){
   if(!m) return [];
-  if(m.art==='flaeche'){
-    const x1=Math.min(m.x,m.x+m.w), x2=Math.max(m.x,m.x+m.w);
-    const y1=Math.min(m.y,m.y+m.h), y2=Math.max(m.y,m.y+m.h);
-    return [{x:x1,y:y1},{x:x2,y:y1},{x:x2,y:y2},{x:x1,y:y2}];
-  }
+  if(m.art==='flaeche') return fmEcken(m).map(q=>({x:q.x, y:q.y}));
   if(m.art==='linie') return (m.pts||[]).map(q=>({x:q.x, y:q.y}));
+  if(istText(m)) return [{x:m.px, y:m.py}];        // der Pfeil ist frei setzbar
   return [];
 }
 function fmGriffUnter(m, q){
   const p=fmPxPunkt(q), bb=fmBildBox();
-  return fmGriffe(m).findIndex(gq=>Math.hypot(p.x-gq.x*bb.w, p.y-gq.y*bb.h) < FM_FASS+4);
+  return fmGriffe(m).findIndex(gq=>Math.hypot(p.x-gq.x*bb.w, p.y-gq.y*bb.h) < (FM_FASS+4)/fmK);
 }
 const fmKlemm = v => Math.max(0, Math.min(1, v));
 /* Schieben und Formändern. Die Maße bleiben dabei unangetastet: sie sind vor Ort
    gemessen und getippt, die Zeichnung sagt nur, WO. Ein Verschieben darf keine
    gemessene Zahl überschreiben. */
 function fmSchiebAnwenden(q){
-  const s=fmSchieb, m=s.m, o=s.orig;
+  const s=fmSchieb;
+  if(s.art==='kalib'){
+    const k=fmKalibZug; if(!k) return;
+    if(s.ende==='a'){ k.ax=fmKlemm(q.x); k.ay=fmKlemm(q.y); }
+    else { k.bx=fmKlemm(q.x); k.by=fmKlemm(q.y); }
+    return;
+  }
+  const m=s.m, o=s.orig;
   const dx=q.x-s.start.x, dy=q.y-s.start.y;
   if(s.art==='griff'){
     if(m.art==='flaeche'){
-      const x1=Math.min(o.x,o.x+o.w), x2=Math.max(o.x,o.x+o.w);
-      const y1=Math.min(o.y,o.y+o.h), y2=Math.max(o.y,o.y+o.h);
-      const ex=[x1,x2,x2,x1][s.idx], ey=[y1,y1,y2,y2][s.idx];      // gezogene Ecke
-      const gx=ex===x1?x2:x1, gy=ey===y1?y2:y1;                    // Gegenecke bleibt
-      const nx=fmKlemm(q.x), ny=fmKlemm(q.y);
-      m.x=Math.min(gx,nx); m.y=Math.min(gy,ny);
-      m.w=Math.max(0.01, Math.abs(nx-gx)); m.h=Math.max(0.01, Math.abs(ny-gy));
+      /* Jede Ecke geht dorthin, wo der Finger sie hinzieht — die uebrigen drei bleiben
+         stehen. Damit entstehen perspektivisch schraege Vierecke; Laenge und Breite
+         bleiben davon unberuehrt, die sind vor Ort gemessen. */
+      const e=fmEcken(o).map(q2=>({x:q2.x, y:q2.y}));
+      e[s.idx]={x:fmKlemm(q.x), y:fmKlemm(q.y)};
+      fmEckenSetzen(m, e);
     } else if(m.art==='linie'){
       m.pts[s.idx]={x:fmKlemm(q.x), y:fmKlemm(q.y)};
+    } else if(istText(m)){
+      m.px=fmKlemm(q.x); m.py=fmKlemm(q.y);
     }
     return;
   }
   if(m.art==='flaeche'){
-    m.x=fmKlemm(Math.min(1-Math.abs(o.w), o.x+dx)); m.y=fmKlemm(Math.min(1-Math.abs(o.h), o.y+dy));
+    if(fmVerzogen(o)) fmEckenSetzen(m, o.ecken.map(p2=>({x:fmKlemm(p2.x+dx), y:fmKlemm(p2.y+dy)})));
+    else { m.x=fmKlemm(Math.min(1-Math.abs(o.w), o.x+dx)); m.y=fmKlemm(Math.min(1-Math.abs(o.h), o.y+dy)); }
   } else if(m.art==='linie'){
     m.pts=o.pts.map(p=>({x:fmKlemm(p.x+dx), y:fmKlemm(p.y+dy)}));
+  } else if(istText(m)){
+    // Feld und Pfeilspitze wandern zusammen — der Pfeil zeigt weiter auf dieselbe Stelle
+    m.x=fmKlemm(o.x+dx); m.y=fmKlemm(o.y+dy);
+    m.px=fmKlemm(o.px+dx); m.py=fmKlemm(o.py+dy);
   } else { m.x=fmKlemm(o.x+dx); m.y=fmKlemm(o.y+dy); }
 }
 function fmMarkWeg(){
@@ -5784,10 +5992,11 @@ function fmPunkt(e){
           y:Math.max(0, Math.min(1, (e.clientY-r.top)/r.height))};
 }
 // Bildpunkte in Prozent — die SVG-Lage deckt genau das Bild ab
+/* Die Zeichenfläche liegt deckungsgleich auf dem Bild — gerechnet wird im
+   UNGEZOOMTEN Maß des Bildes, den Rest erledigt die Transformation des Rahmens. */
 function fmBildBox(){
-  const im=$('#fmBild'), b=$('#fmBuehne');
-  const ri=im.getBoundingClientRect(), rb=b.getBoundingClientRect();
-  return {l:ri.left-rb.left, t:ri.top-rb.top, w:ri.width, h:ri.height};
+  const im=$('#fmBild');
+  return {l:0, t:0, w:im.clientWidth||1, h:im.clientHeight||1};
 }
 /* Vorschlag aus der Zeichnung: nur mit Kalibrierung. Gerechnet wird im
    Seitenverhältnis des Bildes, sonst wäre eine senkrechte Strecke anders skaliert
@@ -5806,16 +6015,19 @@ function fmStrecke(a,b){
 const fmVorschlag = d => { const k=fmProM(); return k>0 ? mm(d/k) : null; };
 
 function fmOeffnen(g, idx, roomId){
-  fmObj=g; fmIdx=idx; fmRoomId=roomId; fmZug=null; fmKalibLauf=null;
-  fmSel=null; fmSchieb=null;
+  fmObj=g; fmIdx=idx; fmRoomId=roomId; fmZug=null;
+  fmSel=null; fmSchieb=null; fmKalibZug=null; fmHandModus=false; fmTextModus=false;
+  $('#fmText').classList.remove('active');
+  fmK=1; fmTx=0; fmTy=0;
+  $('#fmHand').classList.remove('active'); $('#fmKalib').classList.remove('active');
   $('#fmAlpha').value=Math.round(fmAlpha()*100);
   const f=fmFoto(); if(!f) return;
   fmSlot=fmSlots(g).findIndex(x=>x.lv);  if(fmSlot<0) fmSlot=0;
   $('#fmBild').src=f.src||'';
   $('#fmTitel').textContent=`Foto ${idx+1} von ${(g.fotos||[]).length}`;
   dlgFotoMass.showModal();
-  $('#fmBild').onload=fmZeichnen;
-  fmZeichnen();
+  $('#fmBild').onload=()=>{ fmPassen(); fmZoomAnwenden(); fmZeichnen(); };
+  fmPassen(); fmZoomAnwenden(); fmZeichnen();
 }
 function fmSlotLeiste(){
   const sl=fmSlots(fmObj);
@@ -5854,31 +6066,47 @@ function fmZeichnen(){
   const nrVon={}; fmMarken(fmObj).forEach(e=>{ nrVon[e.m.id]=e.nr; });
   const belegt=[];                      // schon vergebene Schildplaetze
   const schild=(m, farbe)=>{
-    const txt=String(nrVon[m.id]||''), b=fmSchildBreite(txt);
-    const p=fmFreierOrt(fmSchildKand(m, X, Y, 20), belegt, b, 20);
+    const txt=String(nrVon[m.id]||''), b=fmSchildBreite(txt)/fmK;
+    const p=fmFreierOrt(fmSchildKand(m, X, Y, 20/fmK), belegt, b, 20/fmK);
     return fmSchild(p.x, p.y, txt, farbe, m.id);
   };
   let out='';
   (f.marken||[]).forEach(m=>{
     const farbe=(sl[m.slot]||{}).farbe||'#e53935';
     if(m.art==='flaeche'){
-      const x=X(Math.min(m.x,m.x+m.w)), y=Y(Math.min(m.y,m.y+m.h));
-      const w=Math.abs(m.w)*bb.w, h=Math.abs(m.h)*bb.h;
-      out+=`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${farbe}" fill-opacity="0.18"
-        stroke="${farbe}" stroke-width="2.5" data-fmm="${m.id}" style="cursor:pointer"/>`;
+      const pts=fmEcken(m).map(q=>`${X(q.x)},${Y(q.y)}`).join(' ');
+      out+=`<polygon points="${pts}" fill="${farbe}" fill-opacity="0.18"
+        stroke="${farbe}" stroke-width="${2.5/fmK}" data-fmm="${m.id}" style="cursor:pointer"/>`;
       out+=schild(m, farbe);
     } else if(m.art==='linie'){
       const pts=(m.pts||[]).map(q=>`${X(q.x)},${Y(q.y)}`).join(' ');
-      out+=`<polyline points="${pts}" fill="none" stroke="${farbe}" stroke-width="3"
+      out+=`<polyline points="${pts}" fill="none" stroke="${farbe}" stroke-width="${3/fmK}"
         stroke-linecap="round" stroke-linejoin="round" marker-start="url(#fmPfeil)" marker-end="url(#fmPfeil)"
         data-fmm="${m.id}" style="cursor:pointer"/>`;
       out+=schild(m, farbe);
-    } else {
-      const x=X(m.x), y=Y(m.y), a=9;
+    } else if(istText(m)){
+      const bb2=fmBildBox(), b=fmTextBox(m, bb2);
+      const bx=X(m.x), by=Y(m.y);
+      const zx=bx+b.w/2, zy=by+b.h/2;                 // Mitte des Feldes
+      const px=X(m.px), py=Y(m.py);
+      // Pfeil vom Feldrand zur gemeinten Stelle
+      const dx=px-zx, dy=py-zy, len=Math.hypot(dx,dy)||1;
+      const rx=zx+dx/len*Math.min(b.w/2+2/fmK, len), ry=zy+dy/len*Math.min(b.h/2+2/fmK, len);
+      out+=`<line x1="${rx}" y1="${ry}" x2="${px}" y2="${py}" stroke="${farbe}"
+        stroke-width="${2.5/fmK}" marker-end="url(#fmSpitze)" style="pointer-events:none"/>`;
       out+=`<g data-fmm="${m.id}" style="cursor:pointer">
-        <line x1="${x-a}" y1="${y-a}" x2="${x+a}" y2="${y+a}" stroke="${farbe}" stroke-width="3.5"/>
-        <line x1="${x-a}" y1="${y+a}" x2="${x+a}" y2="${y-a}" stroke="${farbe}" stroke-width="3.5"/>
-        <circle cx="${x}" cy="${y}" r="${a+4}" fill="transparent"/></g>`;
+        <rect x="${bx}" y="${by}" width="${b.w}" height="${b.h}" rx="${5/fmK}"
+          fill="${farbe}" fill-opacity="0.5" stroke="${farbe}" stroke-width="${1.5/fmK}"/>
+        ${b.zeilen.map((l,i)=>`<text x="${bx+7/fmK}" y="${by+(16*(i+1)-3)/fmK}"
+          font-family="Arial, Helvetica, sans-serif" font-size="${13/fmK}" fill="#fff"
+          style="paint-order:stroke" stroke="rgba(0,0,0,.35)" stroke-width="${2/fmK}">${esc(l)}</text>`).join('')}
+      </g>`;
+    } else {
+      const x=X(m.x), y=Y(m.y), a=9/fmK;
+      out+=`<g data-fmm="${m.id}" style="cursor:pointer">
+        <line x1="${x-a}" y1="${y-a}" x2="${x+a}" y2="${y+a}" stroke="${farbe}" stroke-width="${3.5/fmK}"/>
+        <line x1="${x-a}" y1="${y+a}" x2="${x+a}" y2="${y-a}" stroke="${farbe}" stroke-width="${3.5/fmK}"/>
+        <circle cx="${x}" cy="${y}" r="${a+4/fmK}" fill="transparent"/></g>`;
       out+=schild(m, farbe);
     }
   });
@@ -5901,7 +6129,13 @@ function fmZeichnen(){
       stroke="#ffd54f" stroke-width="2" stroke-dasharray="4 4"/>`;
     out+=fmSchild((X(f.kal.ax)+X(f.kal.bx))/2, (Y(f.kal.ay)+Y(f.kal.by))/2, fmt(f.kal.meter,2)+' m', '#a37800', null);
   }
-  if(fmKalibLauf) out+=`<circle cx="${X(fmKalibLauf.x)}" cy="${Y(fmKalibLauf.y)}" r="5" fill="#ffd54f"/>`;
+  if(fmKalibZug){
+    const k=fmKalibZug;
+    if(k.bx!=null) out+=`<line x1="${X(k.ax)}" y1="${Y(k.ay)}" x2="${X(k.bx)}" y2="${Y(k.by)}"
+      stroke="#ffd54f" stroke-width="${2.5/fmK}" stroke-dasharray="${5/fmK} ${4/fmK}"/>`;
+    [[k.ax,k.ay],[k.bx,k.by]].forEach(([px,py])=>{ if(px==null) return;
+      out+=`<circle cx="${X(px)}" cy="${Y(py)}" r="${7/fmK}" fill="#ffd54f" stroke="#7a5a00" stroke-width="${2/fmK}"/>`; });
+  }
   /* Die ausgewählte Markierung bekommt einen hellen Saum und ihre Griffe. Die Griffe
      stehen NICHT in der Deckkraft-Gruppe — sie sollen immer gut sichtbar sein, auch
      wenn die Markierungen fast durchsichtig gestellt sind. */
@@ -5910,38 +6144,49 @@ function fmZeichnen(){
   if(gm){
     const gf=(sl[gm.slot]||{}).farbe||'#e53935';
     if(gm.art==='flaeche'){
-      const x1=X(Math.min(gm.x,gm.x+gm.w)), y1=Y(Math.min(gm.y,gm.y+gm.h));
-      griffe+=`<rect x="${x1}" y="${y1}" width="${Math.abs(gm.w)*bb.w}" height="${Math.abs(gm.h)*bb.h}"
-        fill="none" stroke="#fff" stroke-width="1.5" stroke-dasharray="6 4" style="pointer-events:none"/>`;
+      griffe+=`<polygon points="${fmEcken(gm).map(q=>`${X(q.x)},${Y(q.y)}`).join(' ')}"
+        fill="none" stroke="#fff" stroke-width="${1.5/fmK}" stroke-dasharray="${6/fmK} ${4/fmK}" style="pointer-events:none"/>`;
     } else if(gm.art==='linie'){
       griffe+=`<polyline points="${(gm.pts||[]).map(q=>`${X(q.x)},${Y(q.y)}`).join(' ')}" fill="none"
         stroke="#fff" stroke-width="1.5" stroke-dasharray="6 4" style="pointer-events:none"/>`;
+    } else if(istText(gm)){
+      const bt=fmTextBox(gm, bb);
+      griffe+=`<rect x="${X(gm.x)}" y="${Y(gm.y)}" width="${bt.w}" height="${bt.h}" rx="${5/fmK}"
+        fill="none" stroke="#fff" stroke-width="${1.5/fmK}" stroke-dasharray="${6/fmK} ${4/fmK}"
+        style="pointer-events:none"/>`;
     } else {
-      griffe+=`<circle cx="${X(gm.x)}" cy="${Y(gm.y)}" r="15" fill="none" stroke="#fff"
-        stroke-width="1.5" stroke-dasharray="5 4" style="pointer-events:none"/>`;
+      griffe+=`<circle cx="${X(gm.x)}" cy="${Y(gm.y)}" r="${15/fmK}" fill="none" stroke="#fff"
+        stroke-width="${1.5/fmK}" stroke-dasharray="${5/fmK} ${4/fmK}" style="pointer-events:none"/>`;
     }
-    fmGriffe(gm).forEach(q=>{ griffe+=`<circle cx="${X(q.x)}" cy="${Y(q.y)}" r="7" fill="#fff"
-      stroke="${gf}" stroke-width="2.5" style="pointer-events:none"/>`; });
+    fmGriffe(gm).forEach(q=>{ griffe+=`<circle cx="${X(q.x)}" cy="${Y(q.y)}" r="${7/fmK}" fill="#fff"
+      stroke="${gf}" stroke-width="${2.5/fmK}" style="pointer-events:none"/>`; });
   }
   $('#fmMarkWeg').style.display = gm ? '' : 'none';
   sv.innerHTML=`<defs><marker id="fmPfeil" viewBox="0 0 10 10" refX="9" refY="5"
       markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke"/></marker></defs>`
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke"/></marker>
+    <marker id="fmSpitze" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4"
+      orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke"/></marker></defs>`
     + `<g opacity="${fmAlpha()}">${out}</g>`+griffe;
 
   const art=fmArt(fmSlot);
   $('#fmFertig').style.display = (fmZug && fmZug.art==='linie' && fmZug.pts.length>=2) ? '' : 'none';
-  $('#fmHinweis').textContent = gm ? 'Ausgewählt: ziehen verschiebt, weiße Griffe ändern die Form, nochmal antippen öffnet das Maß.'
-    : fmKalibLauf ? 'Zweiten Punkt der bekannten Strecke antippen.'
+  $('#fmKalibLeiste').style.display = (fmKalibZug && fmKalibZug.bx!=null) ? '' : 'none';
+  $('#fmHinweis').textContent = fmHandModus ? 'Schieben: ziehen bewegt das Bild. Nochmal ✋ antippen beendet das.'
+    : gm ? (gm.art==='flaeche'
+        ? 'Ausgewählt: ziehen verschiebt, jede Ecke lässt sich einzeln setzen (für schräge Flächen). Nochmal antippen öffnet das Maß.'
+        : 'Ausgewählt: ziehen verschiebt, weiße Griffe ändern die Form, nochmal antippen öffnet das Maß.')
+    : (fmKalibZug && fmKalibZug.bx!=null) ? 'Endpunkte nachziehen, Maß eintragen, dann „Anwenden".'
+    : fmKalibZug ? (fmKalibZug.ax==null ? 'Ersten Punkt der bekannten Strecke antippen.' : 'Zweiten Punkt antippen.')
     : art==='kreuz' ? 'Antippen setzt ein Kreuz. Jedes Kreuz zählt ein Stück.'
     : art==='linie' ? 'Punkt für Punkt antippen, dann „Linie abschließen".'
     : 'Rechteck aufziehen. Danach Länge und Breite eintragen.';
 }
 function fmSchild(x, y, txt, farbe, id){
-  const b=Math.max(/^\d+$/.test(txt)?22:30, txt.length*7.2);
+  const b=Math.max(/^\d+$/.test(txt)?22:30, txt.length*7.2)/fmK;
   return `<g${id?` data-fmm="${id}" style="cursor:pointer"`:' style="pointer-events:none"'}>
-    <rect x="${x-b/2}" y="${y-10}" width="${b}" height="20" rx="5" fill="#fff" fill-opacity="0.92" stroke="${farbe}" stroke-width="1.5"/>
-    <text x="${x}" y="${y+4}" text-anchor="middle" font-size="12" font-weight="700" fill="${farbe}">${esc(txt)}</text></g>`;
+    <rect x="${x-b/2}" y="${y-10/fmK}" width="${b}" height="${20/fmK}" rx="${5/fmK}" fill="#fff" fill-opacity="0.92" stroke="${farbe}" stroke-width="${1.5/fmK}"/>
+    <text x="${x}" y="${y+4/fmK}" text-anchor="middle" font-size="${12/fmK}" font-weight="700" fill="${farbe}">${esc(txt)}</text></g>`;
 }
 /* ---- Zeigerbedienung auf dem Bild ---- */
 {
@@ -5951,14 +6196,28 @@ function fmSchild(x, y, txt, farbe, id){
     if(!fmObj) return;
     const f=fmFoto(); if(!f) return;
     const q=fmPunkt(e);
-    if(fmKalibLauf===null && $('#fmKalib').classList.contains('active')){ fmKalibLauf=q; fmZeichnen(); return; }
-    if(fmKalibLauf){                       // zweiter Punkt: Maß erfragen
-      const a=fmKalibLauf; fmKalibLauf=null;
-      $('#fmKalib').classList.remove('active');
-      const t=prompt('Wie lang ist diese Strecke in Metern?', '1,00');
-      const v=parseNum(t||'');
-      if(isFinite(v) && v>0){ f.kal={ax:a.x, ay:a.y, bx:q.x, by:q.y, meter:v}; save(); }
-      fmZeichnen(); return;
+    if(fmHandModus){
+      fmSchubs={sx:e.clientX, sy:e.clientY, tx:fmTx, ty:fmTy};
+      try{ sv.setPointerCapture(e.pointerId); }catch(_){}
+      return;
+    }
+    if(fmTextModus){
+      const m={id:uid(), slot:fmSlot, art:'text', x:fmKlemm(q.x), y:fmKlemm(q.y), txt:'',
+               px:fmKlemm(q.x+0.10), py:fmKlemm(q.y+0.14)};
+      f.marken=[...(f.marken||[]), m];
+      fmTextModus=false; $('#fmText').classList.remove('active');
+      fmSel=m.id; save(); fmZeichnen(); fmTextOeffnen(m); return;
+    }
+    if(fmKalibZug){
+      const k=fmKalibZug;
+      if(k.ax==null){ k.ax=q.x; k.ay=q.y; fmZeichnen(); return; }
+      if(k.bx==null){ k.bx=q.x; k.by=q.y; fmZeichnen(); return; }
+      // beide gesetzt: das nähere Ende anfassen und nachziehen
+      const bb=fmBildBox();
+      const da=Math.hypot((q.x-k.ax)*bb.w, (q.y-k.ay)*bb.h), db=Math.hypot((q.x-k.bx)*bb.w, (q.y-k.by)*bb.h);
+      fmSchieb={art:'kalib', ende:(da<db?'a':'b'), start:q, orig:null};
+      try{ sv.setPointerCapture(e.pointerId); }catch(_){}
+      fmSchiebAnwenden(q); fmZeichnen(); return;
     }
     /* Erst anfassen, dann zeichnen. Eine vorhandene Markierung unter dem Finger hat
        immer Vorrang — sonst liesse sich auf einem vollen Bild nichts mehr auswählen.
@@ -6005,6 +6264,10 @@ function fmSchild(x, y, txt, farbe, id){
     fmZug={art:'flaeche', x:q.x, y:q.y, cur:null}; ziehen=true;
   });
   sv.addEventListener('pointermove', e=>{
+    if(fmSchubs){
+      fmTx=fmSchubs.tx+(e.clientX-fmSchubs.sx); fmTy=fmSchubs.ty+(e.clientY-fmSchubs.sy);
+      fmZoomAnwenden(); return;
+    }
     if(fmSchieb){
       const q=fmPunkt(e);
       if(!fmSchieb.bewegt && Math.hypot(q.x-fmSchieb.start.x, q.y-fmSchieb.start.y)<0.006) return;
@@ -6017,12 +6280,17 @@ function fmSchild(x, y, txt, farbe, id){
     else if(fmZug.art==='linie'){ fmZug.cur=q; fmZeichnen(); }
   });
   sv.addEventListener('pointerup', e=>{
+    if(fmSchubs){ fmSchubs=null; try{ sv.releasePointerCapture(e.pointerId); }catch(_){} return; }
+    if(fmSchieb && fmSchieb.art==='kalib'){
+      fmSchieb=null; try{ sv.releasePointerCapture(e.pointerId); }catch(_){}
+      fmZeichnen(); return;
+    }
     if(fmSchieb){
       const sch=fmSchieb; fmSchieb=null;
       try{ sv.releasePointerCapture(e.pointerId); }catch(_){}
       if(sch.bewegt){ save(); fmZeichnen(); renderAll(); }
       // ohne Bewegung: der zweite Tipp auf dieselbe Markierung öffnet das Maß
-      else if(sch.warGewaehlt) fmMassOeffnen(sch.m);          // auch Kreuze: Anzahl
+      else if(sch.warGewaehlt) (istText(sch.m) ? fmTextOeffnen(sch.m) : fmMassOeffnen(sch.m));
       else fmZeichnen();
       return;
     }
@@ -6050,6 +6318,39 @@ $('#fmFertig').onclick=()=>{
   fmZug=null; fmSel=m.id; save(); fmZeichnen();
   fmMassOeffnen(m);
 };
+$('#fmText').onclick=()=>{
+  fmTextModus=!fmTextModus; $('#fmText').classList.toggle('active', fmTextModus);
+  if(fmTextModus){ fmHandModus=false; $('#fmHand').classList.remove('active');
+    fmKalibZug=null; $('#fmKalib').classList.remove('active');
+    melde('Stelle antippen, an der das Anmerkungsfeld stehen soll.'); }
+  fmZeichnen();
+};
+/* Anmerkung schreiben. Die Farbe kommt aus der LV-Position — voreingestellt ist die
+   erste (rot), damit ohne Zutun etwas Sinnvolles dasteht. */
+function fmTextOeffnen(m){
+  fmTextZiel=m;
+  $('#fmTextTxt').value=m.txt||'';
+  const sl=fmSlots(fmObj);
+  $('#fmTextFarben').innerHTML=sl.map((x,i)=>`<button class="btn small" data-tf="${i}"
+    title="${esc(x.kurz||x.lv||'Position '+(i+1))}"
+    style="width:26px; height:26px; padding:0; background:${x.farbe};
+    outline:${i===m.slot?'2px solid var(--text)':'none'}"></button>`).join('');
+  document.querySelectorAll('[data-tf]').forEach(b=>b.onclick=()=>{
+    m.slot=+b.dataset.tf; fmTextOeffnen(m); fmZeichnen();
+  });
+  dlgFmText.showModal();
+  setTimeout(()=>$('#fmTextTxt').focus(), 30);
+}
+$('#fmTextOk').onclick=()=>{
+  if(!fmTextZiel) return;
+  fmTextZiel.txt=$('#fmTextTxt').value.trim();
+  dlgFmText.close(); save(); fmZeichnen();
+};
+$('#fmTextWeg').onclick=()=>{
+  const f=fmFoto();
+  if(f && fmTextZiel) f.marken=(f.marken||[]).filter(x=>x!==fmTextZiel);
+  fmTextZiel=null; fmSel=null; dlgFmText.close(); save(); fmZeichnen();
+};
 $('#fmMarkWeg').onclick=()=>fmMarkWeg();
 dlgFotoMass.addEventListener('keydown', e=>{
   if((e.key==='Delete'||e.key==='Backspace') && fmSel && !/^(INPUT|TEXTAREA)$/.test((e.target.tagName||''))){
@@ -6075,12 +6376,55 @@ $('#fmUndo').onclick=()=>{
   f.marken.pop(); fmSel=null; save(); fmZeichnen(); renderAll();
 };
 $('#fmKalib').onclick=()=>{
-  const b=$('#fmKalib'); b.classList.toggle('active'); fmKalibLauf=null;
-  melde(b.classList.contains('active')
-    ? 'Zwei Punkte einer bekannten Strecke antippen — danach schlägt das Maßfenster etwas vor.'
-    : 'Maßstab-Modus aus.');
+  const b=$('#fmKalib'), an=!b.classList.contains('active');
+  b.classList.toggle('active', an);
+  const f=fmFoto();
+  // Ein vorhandener Maßstab kommt zum Nachbessern gleich wieder auf den Tisch
+  fmKalibZug = an ? (f && f.kal ? {ax:f.kal.ax, ay:f.kal.ay, bx:f.kal.bx, by:f.kal.by}
+                                : {ax:null, ay:null, bx:null, by:null}) : null;
+  $('#fmKalibM').value = (an && f && f.kal) ? fmt3(f.kal.meter) : '';
+  melde(an ? 'Zwei Punkte einer bekannten Strecke antippen — danach lassen sie sich noch nachziehen.'
+           : 'Maßstab-Modus aus.');
   fmZeichnen();
 };
+$('#fmKalibOk').onclick=()=>{
+  const f=fmFoto(), k=fmKalibZug; if(!f || !k || k.bx==null) return;
+  const v=parseNum($('#fmKalibM').value||'');
+  if(!(isFinite(v) && v>0)){ melde('Bitte die Länge der Strecke eintragen.', true); return; }
+  f.kal={ax:k.ax, ay:k.ay, bx:k.bx, by:k.by, meter:mm(v)};
+  fmKalibZug=null; $('#fmKalib').classList.remove('active');
+  save(); fmZeichnen(); melde('Maßstab gesetzt — das Maßfenster schlägt jetzt Werte vor.');
+};
+$('#fmKalibAb').onclick=()=>{ fmKalibZug=null; $('#fmKalib').classList.remove('active'); fmZeichnen(); };
+// Dreht jemand das Gerät, muss das Bild neu eingepasst werden
+addEventListener('resize', ()=>{ if(dlgFotoMass.open){ fmPassen(); fmZoomAnwenden(); fmZeichnen(); } });
+$('#fmZin').onclick=()=>fmZoomAuf(fmK*1.5);
+$('#fmZout').onclick=()=>fmZoomAuf(fmK/1.5);
+$('#fmZfit').onclick=()=>fmZurueck();
+$('#fmHand').onclick=()=>{ fmHandModus=!fmHandModus; $('#fmHand').classList.toggle('active', fmHandModus); fmZeichnen(); };
+/* Mausrad zoomt an der Zeigerstelle, zwei Finger schieben und zoomen zugleich. */
+$('#fmBuehne').addEventListener('wheel', e=>{
+  if(!dlgFotoMass.open) return;
+  e.preventDefault(); fmZoomAuf(fmK*(e.deltaY<0?1.15:1/1.15), e.clientX, e.clientY);
+}, {passive:false});
+{
+  const finger=new Map(); let start=null;
+  const b=$('#fmBuehne');
+  b.addEventListener('pointerdown', e=>{ finger.set(e.pointerId, e); });
+  b.addEventListener('pointermove', e=>{
+    if(!finger.has(e.pointerId)) return;
+    finger.set(e.pointerId, e);
+    const z=[...finger.values()];
+    if(z.length!==2){ start=null; return; }
+    const dd=Math.hypot(z[0].clientX-z[1].clientX, z[0].clientY-z[1].clientY);
+    const mx=(z[0].clientX+z[1].clientX)/2, my=(z[0].clientY+z[1].clientY)/2;
+    if(!start){ start={d:dd, mx, my, k:fmK, tx:fmTx, ty:fmTy}; return; }
+    fmTx=start.tx+(mx-start.mx); fmTy=start.ty+(my-start.my);
+    fmZoomAuf(start.k*(dd/start.d), mx, my);
+  });
+  const raus=e=>{ finger.delete(e.pointerId); if(finger.size<2) start=null; };
+  b.addEventListener('pointerup', raus); b.addEventListener('pointercancel', raus);
+}
 /* ---- Maßfenster ---- */
 function fmMassOeffnen(m){
   fmMassZiel=m;
@@ -6115,7 +6459,7 @@ $('#fmMassWeg').onclick=()=>{
   f.marken=(f.marken||[]).filter(x=>x.id!==m.id);
   dlgFmMass.close(); save(); fmZeichnen();
 };
-dlgFotoMass.addEventListener('close', ()=>{ fmZug=null; fmKalibLauf=null;
+dlgFotoMass.addEventListener('close', ()=>{ fmZug=null; fmKalibZug=null; fmHandModus=false;
   $('#fmKalib').classList.remove('active'); save(); renderAll(); });
 window.addEventListener('resize', ()=>{ if(dlgFotoMass.open) fmZeichnen(); });
 
@@ -10278,8 +10622,9 @@ function fmDruckSvg(g, f, seitenVerh){
   (f.marken||[]).forEach(m=>{
     const farbe=(sl[m.slot]||{}).farbe||'#e53935';
     if(m.art==='flaeche'){
-      out+=`<rect x="${X(m.x)}" y="${Y(m.y)}" width="${X(m.w)}" height="${Y(m.h)}"
-        fill="${farbe}" fill-opacity="0.16" stroke="${farbe}" stroke-width="0.5"/>`;
+      const pts=fmEcken(m).map(q=>`${X(q.x)},${Y(q.y)}`).join(' ');
+      out+=`<polygon points="${pts}" fill="${farbe}" fill-opacity="0.16"
+        stroke="${farbe}" stroke-width="0.5"/>`;
       out+=schild(m, farbe);
     } else if(m.art==='linie'){
       const pts=(m.pts||[]).map(q=>`${X(q.x)},${Y(q.y)}`).join(' ');
@@ -10287,6 +10632,18 @@ function fmDruckSvg(g, f, seitenVerh){
         stroke-linecap="round" stroke-linejoin="round"
         marker-start="url(#fmpf)" marker-end="url(#fmpf)"/>`;
       out+=schild(m, farbe);
+    } else if(m.art==='text'){
+      const z=fmTextZeilen(m.txt);
+      const br=Math.max(14, Math.max(...z.map(l=>l.length))*1.45+3), ho=z.length*3.4+1.8;
+      const bx=X(m.x), by=Y(m.y), zx=bx+br/2, zy=by+ho/2;
+      const px=X(m.px), py=Y(m.py);
+      const dx=px-zx, dy=py-zy, ln=Math.hypot(dx,dy)||1;
+      out+=`<line x1="${zx+dx/ln*Math.min(br/2, ln)}" y1="${zy+dy/ln*Math.min(ho/2, ln)}"
+        x2="${px}" y2="${py}" stroke="${farbe}" stroke-width="0.5" marker-end="url(#fmspitz)"/>`;
+      out+=`<rect x="${bx}" y="${by}" width="${br}" height="${ho}" rx="1"
+        fill="${farbe}" fill-opacity="0.5" stroke="${farbe}" stroke-width="0.25"/>`;
+      out+=z.map((l,i)=>`<text x="${bx+1.5}" y="${by+3.4*(i+1)-0.7}"
+        font-family="Arial, Helvetica, sans-serif" font-size="2.6" fill="#fff">${esc(l)}</text>`).join('');
     } else {
       const x=X(m.x), y=Y(m.y), a=1.6;
       out+=`<line x1="${x-a}" y1="${y-a}" x2="${x+a}" y2="${y+a}" stroke="${farbe}" stroke-width="0.7"/>`+
@@ -10297,7 +10654,9 @@ function fmDruckSvg(g, f, seitenVerh){
   return `<svg viewBox="0 0 100 ${H}" preserveAspectRatio="none"
     style="position:absolute; inset:0; width:100%; height:100%">
     <defs><marker id="fmpf" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4"
-      orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke"/></marker></defs>
+      orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke"/></marker>
+    <marker id="fmspitz" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4"
+      orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke"/></marker></defs>
     <g opacity="${fmAlpha()}">${out}</g></svg>`;
 }
 function fmDruckSchild(x, y, txt, farbe){
@@ -10596,7 +10955,7 @@ function renderAll(){
   $('#tablv').classList.toggle('active', view==='lv');
   const isPlan=view==='plan';
   $('#main').style.display=isPlan?'':'none';
-  $('#sidebar').style.display=isPlan?'':'none';
+  $('#blatt').style.display=isPlan?'':'none';
   $('#lvview').style.display=isPlan?'none':'block';
   if(isPlan){ renderSidebar(); renderCanvas(); renderCrumb(); }
   else renderLv();
@@ -10611,6 +10970,56 @@ function renderCrumb(){
     : `<span>Etage: <b>${esc(floorName(activeFloorId))}</b></span>`;
   const bb=$('#crumbback'); if(bb) bb.onclick=exitRoom;
 }
+/* ---------- Werkzeugblatt am Handy ----------
+   Drei Hoehen: nur der Griff, halb, ganz. Tippen schaltet weiter, Ziehen setzt die
+   Hoehe frei und rastet beim Loslassen auf die naechste Stufe ein. Halb ist die
+   Voreinstellung: Plan und Eingabefelder gleichzeitig zu sehen ist beim Aufmessen
+   der Normalfall — man tippt eine Wandlaenge ein und will sehen, welche Wand. */
+const BLATT=['zu','halb','voll'];
+function blattStufe(n){
+  const b=$('#blatt'); if(!b) return;
+  b.classList.remove(...BLATT); b.style.height='';
+  b.classList.add(BLATT[Math.max(0, Math.min(2, n))]);
+  if(view==='plan') renderCanvas();
+}
+const blattJetzt = () => BLATT.findIndex(k=>$('#blatt').classList.contains(k));
+{
+  const gr=$('#blattgriff'), b=$('#blatt');
+  let zug=null;
+  gr.addEventListener('pointerdown', e=>{
+    zug={y:e.clientY, h:b.getBoundingClientRect().height, weit:false};
+    b.classList.add('zieht'); try{ gr.setPointerCapture(e.pointerId); }catch(_){}
+  });
+  gr.addEventListener('pointermove', e=>{
+    if(!zug) return;
+    const d=zug.y-e.clientY;
+    if(Math.abs(d)>6) zug.weit=true;
+    if(zug.weit) b.style.height=Math.max(38, Math.min(innerHeight-46, zug.h+d))+'px';
+  });
+  const los=e=>{
+    if(!zug) return;
+    const h=b.getBoundingClientRect().height;
+    b.classList.remove('zieht');
+    try{ gr.releasePointerCapture(e.pointerId); }catch(_){}
+    if(!zug.weit){ blattStufe((blattJetzt()+1)%3); zug=null; return; }
+    // auf die naechstgelegene Stufe einrasten
+    const ziele=[38, innerHeight*0.46, innerHeight-46];
+    let best=0; ziele.forEach((z,i)=>{ if(Math.abs(h-z)<Math.abs(h-ziele[best])) best=i; });
+    blattStufe(best); zug=null;
+  };
+  gr.addEventListener('pointerup', los); gr.addEventListener('pointercancel', los);
+}
+// Der Griff sagt auch zugeklappt, worum es gerade geht
+function blattTitel(){
+  const h=$('#sidebar .panel h3');
+  $('#blatttitel').textContent = h ? h.textContent.replace(/\s+/g,' ').trim() : 'Werkzeuge';
+}
+$('#tbmehrbtn').onclick=()=>$('#tbmehr').classList.toggle('auf');
+document.addEventListener('pointerdown', e=>{
+  const m=$('#tbmehr');
+  if(m.classList.contains('auf') && !m.contains(e.target) && e.target!==$('#tbmehrbtn'))
+    m.classList.remove('auf');
+}, true);
 window.addEventListener('resize', ()=>{ if(view==='plan') renderCanvas(); });
 /* Die Raumsperre läuft nach Zeit ab — ohne Nachsehen fiele der Wechsel erst beim nächsten
    Klick auf. Alle 15 s prüfen und nur bei echtem Wechsel neu zeichnen; während eines
