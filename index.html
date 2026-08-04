@@ -52,6 +52,11 @@
   .row label{font-size:12px; color:var(--muted); min-width:86px;}
   .row input[type=text],.row input[type=search],.row input:not([type]),.row select,.row textarea{flex:1; min-width:60px; border:1px solid var(--line); border-radius:6px; padding:5px 7px;}
   .row textarea{resize:vertical; line-height:1.35; overflow:hidden;}
+  /* Schloss vor einem Maßfeld: Kette = folgt der Zeichnung, offen = eigener Wert.
+     Schmal und ohne Rahmen, damit es die Zeile nicht auseinanderzieht. */
+  .btn.koppel{flex:0 0 auto; padding:3px 5px; font-size:13px; line-height:1;
+    background:#eef7f3; border-color:#bfe3d4;}
+  .btn.koppel.frei{background:#fdf2e7; border-color:#f0d3ae;}
   input.laser{border:1px solid var(--line); border-radius:6px; padding:5px 7px; width:84px; text-align:right;}
   input.laser:focus,
   input.laser.laserziel{outline:2px solid var(--accent2); border-color:var(--accent2); background:#f0fbf7;}
@@ -120,6 +125,10 @@
   dialog .dfoot{padding:10px 16px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:8px;}
   /* Vorschlagsliste für LV-Nummer / Kurztext */
   .sugwrap{position:relative; flex:1; display:flex; min-width:60px;}
+  /* In der Seitenleiste ist das Feld schmal (Farbe, Nummer, Einheit, Summe in einer
+     Zeile) — die Liste darf darüber hinauswachsen, sonst steht dort nur ein Stummel
+     der LV-Nummer. Nach rechts begrenzt auf die Fensterbreite, damit nichts wegläuft. */
+  .sugbox.breit{right:auto; min-width:min(260px, calc(100vw - 64px));}
   .sugbox{position:absolute; left:0; right:0; top:calc(100% + 2px); z-index:9; background:#fff;
     border:1px solid var(--line); border-radius:7px; box-shadow:0 6px 18px rgba(0,0,0,.14);
     max-height:200px; overflow:auto; display:none;}
@@ -442,6 +451,7 @@
         <label><input type="checkbox" id="lvNutzAnsicht" title="Alle Wände + Decke + Boden: 2 × Grundfläche + Umfang × Raumhöhe">Nutze Ansichtsfläche als Fläche</label>
         <label id="lvAutoLZeile" title="Wird die Wand gezogen oder ihre Länge getippt, zieht dieses Maß mit"><input type="checkbox" id="lvAutoL">Länge folgt der Wandlänge</label>
         <label id="lvAutoHZeile" title="Wird die Raumhöhe geändert, zieht dieses Maß mit"><input type="checkbox" id="lvAutoH">Höhe folgt der Raumhöhe</label>
+        <label id="lvAutoObjZeile" title="Länge und Breite kommen aus den Maßen der Fläche bzw. Linie — und damit aus der Zeichnung, solange die dort gekoppelt sind"><input type="checkbox" id="lvAutoObj">Folge Objekt (Länge und Breite)</label>
       </div>
     </fieldset>
     <fieldset><legend>Anmerkung</legend>
@@ -816,29 +826,77 @@
 
 <!-- LV-Position in weitere Räume kopieren -->
 <dialog id="dlgLvKopie" style="width:min(780px,94vw)">
-  <div class="dhead">Position in weitere Räume kopieren <button data-close>✕</button></div>
+  <div class="dhead" id="lkTitel">Position in weitere Räume kopieren <button data-close>✕</button></div>
   <div class="dbody">
     <div class="row">
       <label>Etage</label><select id="lkFloor" style="flex:1"></select>
       <button class="btn small" id="lkAlle">Alle dieser Etage</button>
       <button class="btn small" id="lkKeine">Auswahl leeren</button>
+      <button class="btn small" id="lkRaumWeise" title="Ein Klick in einen Raum wählt alle seine Wände auf einmal">▣ Alle Wände im Raum</button>
+      <span style="flex:0 0 auto; display:flex; gap:3px">
+        <button class="btn small" id="lkZoomOut" title="Herauszoomen">−</button>
+        <button class="btn small" id="lkZoomIn" title="Hineinzoomen">＋</button>
+        <button class="btn small" id="lkZoomFit" title="Alles zeigen">⌂</button>
+      </span>
     </div>
     <p class="hint" id="lkInfo"></p>
     <div id="lkPlan" style="background:var(--canvas); border:1px solid var(--line); border-radius:8px; padding:6px"></div>
     <p class="hint" style="margin-top:6px">
       <b style="color:#1b4ea8">✓ vorhanden</b> · <b style="color:var(--accent2)">＋ wird angelegt</b> ·
       <b style="color:var(--danger)">✕ wird entfernt</b> · <b style="color:#8a8f98">Quelle</b><br>
-      Räume anklicken schaltet um — angehakt heißt „Position soll hier liegen". Wo sie schon liegt,
+      Anklicken schaltet um — angehakt heißt „Position soll hier liegen". Wo sie schon liegt,
       ist von Anfang an angehakt; das Häkchen zu entfernen <b>löscht</b> sie dort.
-      <b>Zweimal hineinkopieren geht nicht</b>, und der Quellraum bleibt außen vor.
-      Die Auswahl gilt über alle Etagen. Jede neue Kopie hängt am <b>Raum</b> (nicht an einem Objekt)
-      und übernimmt Menge, Einheit, Maße, Häkchen und Abschlag aus dem Dialog — bei
-      <b>„Nutze Grundfläche"</b> bzw. <b>„Ansichtsfläche"</b> rechnet jede mit den Maßen ihres eigenen
-      Raums, feste Maße werden unverändert übernommen.</p>
+      <b>Zweimal hineinkopieren geht nicht</b>, Quellraum bzw. Quellwand bleiben außen vor.
+      Die Auswahl gilt über alle Etagen und übernimmt Menge, Einheit, Maße, Häkchen und Abschlag
+      aus dem Dialog — bei <b>„Nutze Grundfläche"</b> bzw. <b>„Ansichtsfläche"</b> rechnet jede Kopie
+      mit den Maßen ihres eigenen Raums, feste Maße werden unverändert übernommen; ein gekoppeltes
+      Wandmaß rechnet sich an der neuen Wand neu.<br>
+      <b>Ausschnitt:</b> Ziehen schiebt, Mausrad zoomt, die Knöpfe <b>−&nbsp;＋&nbsp;⌂</b> ebenso —
+      bei vielen oder kleinen Wänden ist das nötig, um sie sicher zu treffen.</p>
   </div>
   <div class="dfoot">
     <button class="btn" data-close>Abbrechen</button>
     <button class="btn primary" id="lkOk">Anwenden</button>
+  </div>
+</dialog>
+
+<!-- Fotoaufmaß: auf dem Foto messen -->
+<dialog id="dlgFotoMass" class="vollbild">
+  <div class="dhead">Fotoaufmaß <span id="fmTitel" class="hint"></span><button data-close>✕</button></div>
+  <div class="dbody" style="display:flex; flex-direction:column; gap:6px; overflow:hidden">
+    <div class="row" id="fmSlotLeiste" style="flex-wrap:wrap"></div>
+    <div class="row">
+      <button class="btn small" id="fmUndo" title="Letzte Markierung entfernen">↶ Zurück</button>
+      <button class="btn small" id="fmFertig" style="display:none">✓ Linie abschließen</button>
+      <button class="btn small" id="fmKalib" title="Bekannte Strecke einmessen — danach schlägt das Maßfenster etwas vor">⇄ Maßstab</button>
+      <button class="btn small danger" id="fmMarkWeg" style="display:none" title="Ausgewählte Markierung löschen">🗑 Markierung</button>
+      <button class="btn small danger" id="fmFotoWeg" title="Dieses Foto mitsamt seinen Messungen löschen">🗑 Foto</button>
+      <label style="flex:0 0 auto; font-size:12px; color:var(--muted)" title="Deckkraft aller Markierungen">◐
+        <input type="range" id="fmAlpha" min="15" max="100" step="5" style="width:90px; vertical-align:middle"></label>
+      <span class="hint" id="fmHinweis" style="flex:1"></span>
+    </div>
+    <div id="fmBuehne" style="position:relative; flex:1; min-height:0; background:#11151c;
+         border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center">
+      <img id="fmBild" style="max-width:100%; max-height:100%; display:block; user-select:none; -webkit-user-drag:none">
+      <svg id="fmSvg" style="position:absolute; inset:0; width:100%; height:100%; touch-action:none"></svg>
+    </div>
+    <div class="row" id="fmSummen" style="flex-wrap:wrap"></div>
+  </div>
+  <div class="dfoot"><button class="btn primary" data-close>Fertig</button></div>
+</dialog>
+
+<!-- Maß zu einer Markierung -->
+<dialog id="dlgFmMass" style="width:min(360px,94vw)">
+  <div class="dhead" id="fmMassKopf">Maß eintragen <button data-close>✕</button></div>
+  <div class="dbody">
+    <div class="row" id="fmMassZeileM"><label>Menge</label><input class="laser" id="fmMassM"></div>
+    <div class="row" id="fmMassZeileL"><label>Länge (m)</label><input class="laser" id="fmMassL"></div>
+    <div class="row" id="fmMassZeileB"><label>Breite (m)</label><input class="laser" id="fmMassB"></div>
+    <p class="hint" id="fmMassHint"></p>
+  </div>
+  <div class="dfoot">
+    <button class="btn danger" id="fmMassWeg">Markierung löschen</button>
+    <button class="btn primary" id="fmMassOk">Übernehmen</button>
   </div>
 </dialog>
 
@@ -1171,8 +1229,11 @@ async function bilderAufraeumen(){
 
 function save(){
   db.rev=Date.now();                       // Marke für „seit der letzten Sicherung geändert"
+  sperreVereinheitlichen();                // Altbestand: Sperre vom Raum aufs Aufmaß heben
   wandNummernPflegen();                    // Wände mit Fotos bekommen eine Nummer
-  lvMasseNachziehen();                     // gekoppelte Wandmaße folgen der Zeichnung
+  fmAttrsNachziehen();                     // Summen des Fotoaufmaßes in ihre Zuordnungen
+  objMasseNachziehen();                    // Maße an Flächen/Linien folgen der Form …
+  lvMasseNachziehen();                     // … und die Zuordnungen den Wänden bzw. Objekten
   const text=standErfassen();              // ohne Bilddaten — die liegen in IndexedDB
   if(!ohneUndoAktiv){
     if(letzterStand!=null && letzterStand!==text){
@@ -1231,8 +1292,56 @@ function wandNummernPflegen(){
 
    Grundfläche und Ansichtsfläche brauchen das nicht: die speichern gar keine Zahl,
    sondern rechnen in `lvCalc` ohnehin bei jedem Zeichnen frisch aus dem Raum. */
+/* ---------- Maße an Flächen und Linien (seit 2026-08-04) ----------
+   Die Zeichnung ist eine Skizze, das Maß ist die Abrechnung. Solange nichts eingetragen
+   ist, folgen Länge und Breite der gezeichneten Form (`massL`/`massB` werden in `save()`
+   nachgezogen). Wer selbst eine Zahl einträgt, setzt `festL`/`festB` — ab dann steht das
+   Maß still, auch wenn die Form sich noch ändert. Das Häkchen vor dem Feld schaltet
+   zurück und übernimmt dabei wieder die Form.
+
+   **Fehlt das Merkmal, gilt „gekoppelt"** — deshalb `fest…` statt `auto…` wie bei den
+   Wandmaßen: so brauchen vorhandene Objekte keine Umstellung. */
+const objHatMass = g => g && (g.type==='rect' || g.type==='line');
+const objFormL = g => g.type==='rect' ? g.w : lineLen(g);
+const objFormB = g => g.type==='rect' ? g.h : null;
+function objMass(g, welch){
+  if(!objHatMass(g)) return null;
+  if(welch==='B'){
+    if(g.type!=='rect') return null;
+    return g.festB ? (Number.isFinite(g.massB)?g.massB:g.h) : objFormB(g);
+  }
+  return g.festL ? (Number.isFinite(g.massL)?g.massL:objFormL(g)) : objFormL(g);
+}
+// Kette = folgt der Form, offenes Schloss = eigener Wert. Steht VOR dem Eingabefeld.
+const objFest = (g,w) => w==='B' ? !!g.festB : !!g.festL;
+const koppelKnopf = (g,w) => `<button class="btn small koppel${objFest(g,w)?' frei':''}" data-mf="${w}"
+  title="${objFest(g,w)
+    ? 'Eigener Wert — die Form ändert ihn nicht mehr. Klicken koppelt wieder an die Zeichnung.'
+    : 'Folgt der gezeichneten Form. Klicken (oder eine eigene Zahl eintragen) löst die Kopplung.'}">${objFest(g,w)?'🔓':'🔗'}</button>`;
+const koppelHinweis = g => (g.festL||g.festB)
+  ? '<b>Eigene Maße eingetragen</b> — die Form ändert sie nicht mehr; das Schloss koppelt wieder an.'
+  : 'Länge und Breite folgen der Form, bis du selbst eine Zahl einträgst.';
+function objMasseNachziehen(){
+  (proj().rooms||[]).forEach(r=>(r.objects||[]).forEach(g=>{
+    if(!objHatMass(g)) return;
+    if(!g.festL) g.massL=mm(objFormL(g));
+    if(g.type==='rect' && !g.festB) g.massB=mm(objFormB(g));
+  }));
+}
 function lvMasseNachziehen(){
   (proj().attrs||[]).forEach(a=>{
+    /* „Folge Objekt": Länge und Breite der Zuordnung kommen aus den Maßen der Fläche
+       bzw. Linie — und damit mittelbar aus der Zeichnung, solange die gekoppelt ist. */
+    if(a.autoObj){
+      const r0=roomById(a.roomId);
+      const g=r0 && (r0.objects||[]).find(x=>x.id===a.objId);
+      if(!g || !objHatMass(g)) delete a.autoObj;
+      else {
+        const L=objMass(g,'L'), B=objMass(g,'B');
+        if(Number.isFinite(L)) a.laenge=mm(L);
+        if(Number.isFinite(B)) a.breite=mm(B);
+      }
+    }
     if(!a.autoL && !a.autoH) return;
     const r=roomById(a.roomId);
     if(!r){ delete a.autoL; delete a.autoH; return; }        // Raum gelöscht → Kopplung endet
@@ -1250,6 +1359,14 @@ function lvZielText(a, leerBeiRaum){
   const r=roomById(a.roomId);
   if(a.objId){
     const og=r?(((r.objects||[]).find(g=>g.id===a.objId))||((r.openings||[]).find(o=>o.id===a.objId))):null;
+    // Fotoaufmaß steht überall unter diesem Namen — so ist in jeder Liste klar,
+    // dass die Menge aus einer Messung am Bild kommt und nicht aus dem Grundriss
+    // Fotoaufmaß nennt zusätzlich die Nummer im Bild — nur so findet man die Zeile
+    // auf dem Foto wieder, und umgekehrt
+    if(og && istFotoMass(og)){
+      const n=a.fmMark ? fmMarkNr(og, a.fmMark) : 0;
+      return (og.nr?'#'+og.nr+' ':'')+'Fotoaufmaß'+(n?' Nr '+n:'');
+    }
     return og?objAnzeige(og):'– gelöscht –';
   }
   if(a.wall!=null){
@@ -1444,14 +1561,38 @@ function roomStats(r){
    **Objekte, Fotos und LV-Zuordnungen bleiben frei** — genau darum geht es ja: weiter
    aufmessen und zuordnen, ohne die Geometrie zu gefährden.
 
-   Der ganze Zustand steckt in EINER Zahl: `r.aufAt` = Zeitpunkt der letzten Berührung.
+   Der ganze Zustand steckt in EINER Zahl: `p.aufAt` = Zeitpunkt der letzten Berührung.
    Gesperrt = fehlt sie oder liegt sie länger als zwei Minuten zurück. „Öffnen" setzt sie
-   auf jetzt, „Sperren" löscht sie. Damit ist nichts zu synchronisieren, und ein Raum aus
-   einem alten Projekt (ohne das Feld) ist von Haus aus gesperrt — er ist ja fertig. */
+   auf jetzt, „Sperren" löscht sie. Damit ist nichts zu synchronisieren, und ein Aufmaß
+   aus einer alten Fassung (ohne das Feld) ist von Haus aus gesperrt — es ist ja fertig.
+
+   **Die Sperre gilt für ALLE Räume zugleich** (seit 2026-08-04, auf Nutzerwunsch).
+   Vorher hing sie an jedem Raum einzeln (`r.aufAt`); wer über mehrere Räume hinweg
+   arbeitete, musste jeden einzeln aufschließen und hatte gleichzeitig offene und
+   gesperrte. Jetzt öffnet und schließt ein Griff das ganze Aufmaß, und jede Änderung
+   an irgendeinem Raum hält die Zeit für alle am Laufen. */
 const SPERRE_MS=2*60*1000;
-const raumOffen = r => !!r && Number.isFinite(r.aufAt) && (Date.now()-r.aufAt) < SPERRE_MS;
-const raumBeruehrt = r => { if(raumOffen(r)) r.aufAt=Date.now(); };
-const restSekunden = r => raumOffen(r) ? Math.ceil((SPERRE_MS-(Date.now()-r.aufAt))/1000) : 0;
+const sperreOffen = () => {
+  const p=proj();
+  return !!p && Number.isFinite(p.aufAt) && (Date.now()-p.aufAt) < SPERRE_MS;
+};
+// Raumbezogene Form beibehalten: die Aufrufer prüfen damit weiterhin „gibt es den Raum
+// überhaupt" mit ab (ein fehlender Raum gilt als gesperrt).
+const raumOffen = r => !!r && sperreOffen();
+const raumBeruehrt = r => { if(r && sperreOffen()) proj().aufAt=Date.now(); };
+const restSekunden = () => sperreOffen() ? Math.ceil((SPERRE_MS-(Date.now()-proj().aufAt))/1000) : 0;
+/* Altbestand: Bis zum 4.8.2026 hing die Sperre an den Räumen. Den jüngsten Zeitpunkt
+   übernehmen, damit ein gerade offener Raum nach dem Laden nicht plötzlich zu ist —
+   und die alten Felder wegräumen, sonst blieben zwei Wahrheiten nebeneinander. */
+function sperreVereinheitlichen(){
+  (db.projects||[]).forEach(p=>{
+    let neu=null;
+    (p.rooms||[]).forEach(r=>{
+      if(Number.isFinite(r.aufAt)){ neu=Math.max(neu||0, r.aufAt); delete r.aufAt; }
+    });
+    if(neu!=null && !Number.isFinite(p.aufAt)) p.aufAt=neu;
+  });
+}
 const floorRooms = () => proj().rooms.filter(r=>r.floorId===activeFloorId);
 const roomById = id => proj().rooms.find(r=>r.id===id);
 function floorName(fid){ const f=proj().floors.find(f=>f.id===fid); return f?f.name:''; }
@@ -1966,6 +2107,28 @@ function objMarks(r, lbl, interactive){
         out+=`<circle cx="${cx}" cy="${cy}" r="${rr}" fill="none" stroke="${st}" stroke-width="0.035" style="pointer-events:none"/>`;
         out+=`<line x1="${cx-rr}" y1="${cy}" x2="${cx+rr}" y2="${cy}" stroke="${st}" stroke-width="0.03" style="pointer-events:none"/>`;
         out+=`<line x1="${cx}" y1="${cy-rr}" x2="${cx}" y2="${cy+rr}" stroke="${st}" stroke-width="0.03" style="pointer-events:none"/>`;
+      } else if(istFotoMass(g)){
+        /* Kamera mit Maßpfeil darunter. Vorher war es ein leeres Kästchen — im Plan war
+           nicht zu erkennen, wofür das Objekt steht. Gezeichnet in Anteilen der Kantenlänge,
+           damit es in jeder Größe gleich aussieht. */
+        const P=(fx,fy)=>({x:g.x+g.w*fx, y:g.y+g.h*fy});
+        const sw=Math.min(g.w,g.h);
+        const b1=P(0.12,0.34), b2=P(0.88,0.78);
+        const s1=P(0.30,0.22), s2=P(0.52,0.34);
+        const l=P(0.50,0.56), lr=sw*0.16;
+        const bl=P(0.75,0.41);
+        const a1=P(0.12,0.92), a2=P(0.88,0.92);
+        const stift=v=>`stroke="${st}" stroke-width="${sw*v}" style="pointer-events:none"`;
+        out+=`<rect x="${s1.x}" y="${s1.y}" width="${s2.x-s1.x}" height="${s2.y-s1.y}"
+          fill="none" ${stift(0.055)}/>`;                                  // Sucher
+        out+=`<rect x="${b1.x}" y="${b1.y}" width="${b2.x-b1.x}" height="${b2.y-b1.y}"
+          rx="${sw*0.07}" fill="none" ${stift(0.07)}/>`;                   // Gehäuse
+        out+=`<circle cx="${l.x}" cy="${l.y}" r="${lr}" fill="none" ${stift(0.07)}/>`;
+        out+=`<circle cx="${l.x}" cy="${l.y}" r="${lr*0.42}" fill="${st}" style="pointer-events:none"/>`;
+        out+=`<circle cx="${bl.x}" cy="${bl.y}" r="${sw*0.04}" fill="${st}" style="pointer-events:none"/>`;
+        // Maßpfeil mit Endstrichen: hier wird gemessen
+        out+=`<line x1="${a1.x}" y1="${a1.y}" x2="${a2.x}" y2="${a2.y}" ${stift(0.045)}/>`;
+        [a1,a2].forEach(q=>{ out+=`<line x1="${q.x}" y1="${q.y-sw*0.06}" x2="${q.x}" y2="${q.y+sw*0.06}" ${stift(0.045)}/>`; });
       } else {
         const k=(SYMDEFS[g.sub]||{}).k||1;
         for(let i=1;i<k;i++){
@@ -2303,6 +2466,16 @@ function renderCanvas(){
     out+=`<path d="${d}" fill="#e8f0fe" stroke="#2f6fed" stroke-width="0.1" opacity="0.8"/>`;
   }
   out+=magnetFeld(lbl);
+  /* Merkpunkt: zurückhaltend, aber auffindbar — ein kleiner offener Ring auf der
+     angetippten Stelle. Zuletzt gezeichnet, damit er nicht unter einer Wand liegt;
+     ohne Zeigerereignisse, damit er nichts blockiert. Nur in der Raumansicht: in der
+     Etage arbeitet keiner der drei Knöpfe. */
+  if(merkPunkt && fr && mode==='select' && !zoneEdit){
+    const q=merkPunkt.p, rr=lbl*0.42;
+    out+=`<g style="pointer-events:none" opacity="0.75">`+
+      `<circle cx="${q.x}" cy="${q.y}" r="${rr}" fill="none" stroke="#0ea06f" stroke-width="${rr*0.42}"/>`+
+      `<circle cx="${q.x}" cy="${q.y}" r="${rr*0.24}" fill="#0ea06f"/></g>`;
+  }
   svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
   svg.innerHTML=out;
   plakettenAus=false;                  // Druck und Raumansicht zeigen die Nummern weiter
@@ -2628,14 +2801,283 @@ let drag=null; // {kind:'pan'|'room', start, orig, moved}
 let pendingSym=null; // zu platzierendes Symbol (Schleusen/RFA)
 let pendingOpenType=null; // zu platzierende Tür/Fenster ('door'|'window')
 let statsOpen=false; // Raum-Statistik in der Seitenleiste auf-/zugeklappt
+/* ---------- Merkpunkt: „hier, nicht in der Mitte" (seit 2026-08-04) ----------
+   „＋ Ecke einfügen" hat die Wand immer mittig geteilt, Türen und Fenster brauchten
+   erst den Knopf und dann einen zweiten Klick. Beides läuft jetzt über EINE Stelle:
+   Wer eine Wand oder Linie antippt, setzt damit den Merkpunkt — und der Knopf danach
+   arbeitet genau dort. Der Punkt hält nur bis zum nächsten Klick; er wird deshalb in
+   `pointerdown` grundsätzlich gelöscht und nur von den beiden Zweigen neu gesetzt.
+   {roomId, art:'wand'|'linie', wall|objId, seg, t (Abstand ab Segmentanfang), p} */
+let merkPunkt=null;
+// Lot des Punktes q auf die Strecke a–b: Abstand ab a, geklemmt auf die Strecke
+function aufStrecke(q, a, b){
+  const dx=b.x-a.x, dy=b.y-a.y, L=Math.hypot(dx,dy);
+  if(L<1e-9) return null;
+  const t=Math.max(0, Math.min(L, ((q.x-a.x)*dx+(q.y-a.y)*dy)/L));
+  return {t, L, p:{x:a.x+dx/L*t, y:a.y+dy/L*t}};
+}
+const merkFuerWand = (r,i) =>
+  merkPunkt && merkPunkt.art==='wand' && merkPunkt.roomId===r.id && merkPunkt.wall===i
+    ? merkPunkt.t : null;
+const merkFuerLinie = g =>
+  merkPunkt && merkPunkt.art==='linie' && merkPunkt.objId===g.id ? merkPunkt : null;
+
+/* ---------- Durchtippen bei übereinanderliegenden Bauteilen (seit 2026-08-04) ----------
+   Wo Objekt, Tür, Ecke und Wand übereinanderliegen, gewann bisher immer dasselbe — an
+   das darunter kam man nicht heran. Jetzt sammelt `kandidatenUnter` alles unter dem
+   Finger, und ein **Tipp auf das bereits Gewählte schaltet zum nächsten weiter**.
+
+   Warum am bereits Gewählten und nicht bei jedem Tipp: Sonst wäre das Ziehen nicht mehr
+   erreichbar. Die App arbeitet überall nach „erst anwählen, dann ziehen"; würde jeder
+   Tipp weiterschalten, käme man nie zum zweiten Griff. So bleibt beides: **drücken und
+   bewegen** zieht das gewählte Bauteil, **drücken und loslassen ohne Bewegung** geht zum
+   nächsten darunter. Der Zyklus gilt nur, solange am selben Fleck getippt wird. */
+const ZYK_PX=16;                          // derselbe Fleck: 16 Bildschirmpunkte Toleranz
+let zyklus=null;                          // {x, y, idx}
+/* **Objektgriffe sind NICHT dabei.** Sie erscheinen erst, wenn das Objekt gewählt ist —
+   sie wären also ab dem zweiten Tipp plötzlich im Zyklus und würden ihn blockieren
+   (gemessen: aus 3 Kandidaten wurden 4, und der Zyklus blieb am Griff hängen). Ein Griff
+   gehört zur laufenden Bearbeitung des Objekts, nicht zu den Bauteilen darunter. */
+const ZYK_RANG={obj:1, open:2, vertex:3, wall:4};
+function kandidatenUnter(e){
+  const roh=document.elementsFromPoint(e.clientX, e.clientY);
+  const raus=[], gesehen=new Set();
+  roh.forEach(el=>{
+    const ds=el.dataset; if(!ds) return;
+    let art=null, schl=null;
+    if(ds.objh!==undefined) return;                      // Griffe bleiben draußen
+    if(ds.obj!==undefined){ art='obj'; schl='obj:'+ds.obj; }
+    else if(ds.open!==undefined){ art='open'; schl='open:'+ds.open; }
+    else if(ds.vertex!==undefined){ art='vertex'; schl='vertex:'+(ds.roomid||'')+':'+ds.vertex; }
+    else if(ds.wall!==undefined){ art='wall'; schl='wall:'+(ds.roomid||'')+':'+ds.wall; }
+    if(!art || gesehen.has(schl)) return;
+    gesehen.add(schl); raus.push({art, el, schl});
+  });
+  // Reihenfolge wie bisher, damit der ERSTE Tipp sich nicht anders verhält als früher
+  raus.sort((a,b)=>ZYK_RANG[a.art]-ZYK_RANG[b.art]);
+  return raus;
+}
+// Auswahl auf ein Element setzen — für den Weiterschritt im Zyklus, der die
+// vollen `pointerdown`-Zweige (Ziehen vorbereiten, Sperren prüfen) nicht braucht
+function kandidatWaehlen(el){
+  const ds=el.dataset||{};
+  if(ds.objh!==undefined){ sel={roomId:focusRoomId, wall:null, vertex:null, objId:ds.obj, objH:+ds.objh}; return true; }
+  if(ds.obj!==undefined){  sel={roomId:focusRoomId, wall:null, vertex:null, objId:ds.obj, objH:null}; return true; }
+  if(ds.open!==undefined){ sel={roomId:focusRoomId, wall:null, vertex:null, openId:ds.open}; return true; }
+  if(ds.vertex!==undefined){ sel={roomId:ds.roomid||focusRoomId, wall:null, vertex:+ds.vertex}; return true; }
+  if(ds.wall!==undefined){   sel={roomId:ds.roomid||focusRoomId, wall:+ds.wall, vertex:null}; return true; }
+  return false;
+}
+// Ist dieses Element das, was gerade ausgewählt ist?
+function istGewaehlt(el){
+  const ds=el.dataset||{};
+  if(ds.objh!==undefined) return sel.objId===ds.obj && sel.objH===+ds.objh;
+  if(ds.obj!==undefined)  return sel.objId===ds.obj && sel.objH==null;
+  if(ds.open!==undefined) return sel.openId===ds.open;
+  if(ds.vertex!==undefined) return sel.roomId===(ds.roomid||focusRoomId) && sel.vertex===+ds.vertex;
+  if(ds.wall!==undefined)   return sel.roomId===(ds.roomid||focusRoomId) && sel.wall===+ds.wall;
+  return false;
+}
 const SYMDEFS={
   '1k':{label:'1-K-Schleuse', w:1.0, h:1.0, k:1},
   '2k':{label:'2-K-Schleuse', w:2.0, h:1.0, k:2},
   '4k':{label:'4-K-Schleuse', w:4.0, h:1.0, k:4},
   'rfa':{label:'RFA', w:1.2, h:1.2, k:0},
-  'p360':{label:'360°-Aufnahme', w:0.6, h:0.6, k:0, foto360:true}
+  'p360':{label:'360°-Aufnahme', w:0.6, h:0.6, k:0, foto360:true},
+  'fotom':{label:'Fotoaufmaß', w:0.6, h:0.6, k:0, fotoMass:true}
 };
 const ist360 = g => g && g.type==='sym' && g.sub==='p360';
+/* ---------- Fotoaufmaß (seit 2026-08-04) ----------
+   Ein Punkt im Raum, an dem bis zu drei Fotos hängen. Auf jedem Foto wird direkt
+   gemessen: Rechtecke für Flächen, Polylinien für Längen, Kreuze zum Zählen. Jede
+   Markierung gehört zu einem von FÜNF farbigen Slots, und jeder Slot zeigt auf eine
+   LV-Position. Die Summe je Slot wandert ins Aufmaß.
+
+   **Die Zahlen werden getippt, die Zeichnung schlägt nur vor.** Ein Foto lässt sich
+   einmalig kalibrieren (bekannte Strecke einmessen); danach steht im Maßfenster ein
+   Vorschlag. Das ist Absicht: ein schräg aufgenommenes Foto ist perspektivisch
+   verzerrt, gemessen wird vor Ort — die Zeichnung sagt nur, WO.
+
+   Datenmodell am Objekt:
+     slots : [{farbe, lv, kurz, einheit}] × 5
+     fotos : [{id, src, ts, kal:{ax,ay,bx,by,meter}, marken:[…]}] × ≤ 3
+   Markierungen (Koordinaten 0…1, also unabhängig von der Bildgröße):
+     {id, slot, art:'flaeche', x,y,w,h, laenge, breite}
+     {id, slot, art:'linie',   pts:[{x,y}…], laenge}
+     {id, slot, art:'kreuz',   x,y} */
+const istFotoMass = g => g && g.type==='sym' && g.sub==='fotom';
+const FM_FARBEN=['#e53935','#1e88e5','#43a047','#8e24aa','#fb8c00'];
+const FM_MAX_FOTOS=3;
+/* Menge je Markierung: „dreimal dasselbe Fenster", „fünf Dosen an dieser Stelle".
+   Ohne Eintrag 1 — eine Markierung ist eine Messung. */
+const fmMenge = m => { const v=+((m||{}).menge); return v>0 ? v : 1; };
+/* Deckkraft aller Markierungen — ein Regler fuer alle, im Projekt gespeichert, damit
+   Bildschirm und Druck dasselbe zeigen. Auf stark gemusterten Fotos verdeckt eine
+   volldeckende Flaeche genau das, was man sehen will. */
+const fmAlpha = () => { const v=proj() ? proj().fmAlpha : null; return Number.isFinite(v) ? v : 1; };
+// Welches Werkzeug gehört zu welcher Einheit? Volumen ist bewusst nicht dabei.
+const FM_WERKZEUG={Flache:'flaeche', Lange:'linie', Stuck:'kreuz'};
+const fmSlots = g => {
+  if(!Array.isArray(g.slots) || g.slots.length!==5)
+    g.slots=FM_FARBEN.map(f=>({farbe:f, lv:'', kurz:'', einheit:'Flache'}));
+  return g.slots;
+};
+// Summe eines Slots über ALLE Fotos des Objekts
+function fmSumme(g, si){
+  const sl=fmSlots(g)[si]; if(!sl) return 0;
+  const art=FM_WERKZEUG[sl.einheit]||'flaeche';
+  let s=0;
+  (g.fotos||[]).forEach(f=>(f.marken||[]).forEach(m=>{
+    if(m.slot!==si || m.art!==art) return;
+    const n=fmMenge(m);                    // dieselbe Messung mehrfach
+    if(art==='kreuz') s+=n;
+    else if(art==='linie') s+=n*(+m.laenge||0);
+    else s+=n*(+m.laenge||0)*(+m.breite||0);
+  }));
+  return mm(s);
+}
+const fmAnzahl = (g,si) => (g.fotos||[]).reduce((n,f)=>
+  n+(f.marken||[]).filter(m=>m.slot===si).length, 0);
+/* Alle Markierungen des Objekts in einer Reihe — Foto fuer Foto, darin in Zeichenfolge.
+   Daraus kommt die laufende Nummer, die im Bild steht und in der Positionsliste wieder
+   auftaucht. Bewusst berechnet und nicht gespeichert: nach dem Loeschen einer
+   Markierung stimmt die Reihe sonst nicht mehr mit der Liste ueberein. */
+/* Wo darf die Nummer stehen? Reihenfolge der Wunschplaetze — der erste freie gewinnt.
+   Das Schild wandert dabei ENTLANG der eigenen Markierung: auf der Linie hin und her,
+   auf den Diagonalen („dem Kreuz") der Flaeche nach aussen, beim Kreuz rundherum.
+   Ein einfach zur Seite geschobenes Schild waere nicht mehr zuzuordnen.
+   X/Y bilden 0…1 auf die Zielflaeche ab (Pixel im Editor, viewBox-Einheiten im Druck),
+   `u` ist die Hoehe eines Schildes in derselben Einheit. */
+function fmSchildKand(m, X, Y, u){
+  const K=[];
+  if(m.art==='flaeche'){
+    const x1=X(Math.min(m.x, m.x+m.w)), x2=X(Math.max(m.x, m.x+m.w));
+    const y1=Y(Math.min(m.y, m.y+m.h)), y2=Y(Math.max(m.y, m.y+m.h));
+    const cx=(x1+x2)/2, cy=(y1+y2)/2;
+    const ecken=[[x1,y1],[x2,y1],[x2,y2],[x1,y2]];
+    K.push({x:cx, y:cy});
+    [0.3, 0.5, 0.7, 0.88].forEach(t=>ecken.forEach(([ex,ey])=>
+      K.push({x:cx+(ex-cx)*t, y:cy+(ey-cy)*t})));
+  } else if(m.art==='linie'){
+    const pts=(m.pts||[]).map(q=>({x:X(q.x), y:Y(q.y)}));
+    [0.5,0.4,0.6,0.3,0.7,0.2,0.8,0.12,0.88].forEach(t=>{
+      const q=fmAufLinie(pts, t); if(q) K.push(q);
+    });
+  } else {
+    const x=X(m.x), y=Y(m.y);
+    [[0,-1.6],[1.9,0],[-1.9,0],[0,1.6],[0,-2.9],[3.4,0],[-3.4,0],[0,2.9]]
+      .forEach(([dx,dy])=>K.push({x:x+dx*u, y:y+dy*u}));
+  }
+  return K.length ? K : [{x:X(m.x||0), y:Y(m.y||0)}];
+}
+// Punkt auf einer Polylinie bei Anteil t der Gesamtlaenge
+function fmAufLinie(pts, t){
+  if(!pts || pts.length<2) return (pts||[])[0] || null;
+  const d=[]; let L=0;
+  for(let i=0;i<pts.length-1;i++){
+    const l=Math.hypot(pts[i+1].x-pts[i].x, pts[i+1].y-pts[i].y); d.push(l); L+=l;
+  }
+  if(!(L>0)) return pts[0];
+  let rest=L*t;
+  for(let i=0;i<d.length;i++){
+    if(rest<=d[i] || i===d.length-1){
+      const f=d[i] ? Math.max(0, Math.min(1, rest/d[i])) : 0;
+      return {x:pts[i].x+(pts[i+1].x-pts[i].x)*f, y:pts[i].y+(pts[i+1].y-pts[i].y)*f};
+    }
+    rest-=d[i];
+  }
+  return pts[pts.length-1];
+}
+// Ersten Platz nehmen, der kein schon gesetztes Schild schneidet
+function fmFreierOrt(K, belegt, b, h){
+  const frei=p=>!belegt.some(o=>Math.abs(p.x-o.x)<(b+o.b)/2 && Math.abs(p.y-o.y)<(h+o.h)/2);
+  const p=K.find(frei) || K[0];
+  belegt.push({x:p.x, y:p.y, b:b, h:h});
+  return p;
+}
+const fmSchildBreite = txt => Math.max(/^\d+$/.test(txt)?22:30, txt.length*7.2);
+function fmMarken(g){
+  const out=[];
+  (g.fotos||[]).forEach((f,fi)=>(f.marken||[]).forEach(m=>out.push({m, f, fi, nr:out.length+1})));
+  return out;
+}
+const fmMarkNr = (g, id) => { const e=fmMarken(g).find(x=>x.m.id===id); return e ? e.nr : 0; };
+/* Zuordnung geloescht → Markierung weg. Ohne das bliebe eine Zeichnung im Bild stehen,
+   die zu keiner Position mehr gehoert, und `fmAttrsNachziehen` legte sie beim naechsten
+   Speichern gleich wieder an. Der Weg zurueck (Markierung geloescht → Zuordnung weg)
+   laeuft ueber `fmAttrsNachziehen`. */
+function fmMarkeLoeschen(fmMark){
+  if(!fmMark) return;
+  (proj().rooms||[]).forEach(r=>(r.objects||[]).forEach(g=>{
+    if(!istFotoMass(g)) return;
+    (g.fotos||[]).forEach(f=>{
+      if((f.marken||[]).some(m=>m.id===fmMark)) f.marken=f.marken.filter(m=>m.id!==fmMark);
+    });
+  }));
+}
+// Gehoert die Markierung noch zum Werkzeug ihres Slots? (Einheit spaeter umgestellt)
+const fmPasst = (g,m) => m.art === (FM_WERKZEUG[(fmSlots(g)[m.slot]||{}).einheit] || 'flaeche');
+/* Jede einzelne Messung ist eine ganz normale LV-Zuordnung — kein Sonderweg.
+   Flaeche: Menge 1, Laenge × Hoehe = die getippten Masse, Seite „Vorn".
+   Laenge:  Menge 1, Laenge = das getippte Mass.  Stueck: Menge 1.
+   Damit rechnet `lvCalc` wie bei jeder anderen Zuordnung, und die Zeile steht in
+   jeder Liste, jedem Export und jeder Summe an der Stelle, an die sie gehoert.
+   Verknuepft ueber `a.fmMark` = Kennung der Markierung. Laeuft in `save()`. */
+function fmAttrsNachziehen(){
+  const p=proj();
+  const lebt=new Set();
+  (p.rooms||[]).forEach(r=>(r.objects||[]).forEach(g=>{
+    if(!istFotoMass(g)) return;
+    const sl=fmSlots(g);
+    fmMarken(g).forEach(({m})=>{
+      const x=sl[m.slot];
+      if(!x || !x.lv || !fmPasst(g,m)) return;      // ohne Position bzw. falsches Werkzeug
+      let a=(p.attrs||[]).find(y=>y.fmMark===m.id);
+      if(!a){
+        a={id:uid(), fmMark:m.id, abschlag:p.abschlag, fotos:[]};
+        p.attrs.push(a);
+        if(!g.nr) g.nr=nextObjNr();
+      }
+      lebt.add(m.id);
+      a.roomId=r.id; a.objId=g.id;
+      a.lv=x.lv; a.kurz=x.kurz||a.kurz; a.einheit=x.einheit;
+      /* Nur die Masse fuellen, die diese Messung wirklich hat — die uebrigen bleiben 0.
+         Eine 1 stuende sonst als „1,00 m" in der Tabelle, wo gar nichts gemessen wurde.
+         Ungenutzte Masse gehen in keine Formel ein: Flaeche rechnet ueber die Seite
+         „Vorn" L×H, Laenge menge×L, Stueck nur die Menge. */
+      a.menge=mm(fmMenge(m)); a.laenge=0; a.breite=0; a.hoehe=0;
+      a.vorn=a.hinten=a.links=a.rechts=a.oben=a.unten=false;
+      a.nutzGrund=a.nutzAnsicht=false;
+      if(m.art==='flaeche'){ a.laenge=mm(+m.laenge||0); a.hoehe=mm(+m.breite||0); a.vorn=true; }
+      else if(m.art==='linie'){ a.laenge=mm(+m.laenge||0); }
+    });
+  }));
+  /* Weg damit: Markierung oder Foto geloescht — und die alten Slot-Summen (`autoFoto`)
+     aus der ersten Fassung, die sonst neben den Einzelzeilen ein zweites Mal zaehlten.
+     Die Markierungen selbst bleiben, daraus entstehen die Einzelzeilen gerade neu. */
+  p.attrs=(p.attrs||[]).filter(a => a.autoFoto===undefined
+    && (a.fmMark===undefined || lebt.has(a.fmMark)));
+}
+/* Eine Nummer aus dem Katalog auf einen Slot legen: Kurztext und Einheit kommen mit.
+   Passt die Einheit zu keinem Werkzeug (Volumen), bleibt die bisherige stehen und es
+   gibt eine Meldung — sonst stünde dort ein Slot, auf dem sich nichts zeichnen lässt. */
+function fmSlotAusKatalog(g, i, lv, roomId){
+  const sl=fmSlots(g)[i];
+  const k=(proj().lvTexts||{})[lv] || sl.kurz;
+  const e=(proj().lvUnits||{})[lv];
+  const einheit=(e && FM_WERKZEUG[e]) ? e : sl.einheit;
+  if(e && !FM_WERKZEUG[e])
+    melde(`„${lv}" hat die Einheit ${einhTxt(e)} — dafür gibt es kein Werkzeug. Slot bleibt bei ${einhTxt(sl.einheit)}.`, true);
+  fmSlotSetzen(g, i, lv, k, einheit, roomId);
+  save(); renderAll();
+}
+/* Slot mit einer LV-Position belegen. Legt selbst KEINE Zuordnung an — die entstehen
+   je Markierung in `fmAttrsNachziehen`. Ein Slot ohne Markierung ist nur eine Vorgabe
+   fuer den Stift und soll im Aufmass noch nichts erzeugen. */
+function fmSlotSetzen(g, si, lv, kurz, einheit, roomId){
+  const sl=fmSlots(g)[si];
+  sl.lv=lv||''; sl.kurz=kurz||''; sl.einheit=einheit||'Flache';
+}
 /* ---------- Zwei-Finger-Gesten: Zoomen und Verschieben (iPad) ---------- */
 const zeiger=new Map();          // aktive Finger/Zeiger
 let pinch=null;
@@ -2757,15 +3199,29 @@ svg.addEventListener('pointerdown', e=>{
     return;
   }
   let t=e.target;
-  /* Unter dem Finger liegen oft mehrere Flächen übereinander. Die Wand-Trefferflächen
-     werden NACH den Objekten gezeichnet und liegen deshalb darüber — ein Objektpunkt auf
-     oder dicht an einer Wand war dadurch kaum zu greifen. Deshalb: alle Elemente unter dem
-     Zeiger ansehen und einen **Objektgriff** vorziehen. Bewusst nur die Griffe (`objh`),
-     nicht ganze Objekte — sonst würde eine große Fläche die Wand darunter verdecken. */
-  if(t.dataset && (t.dataset.wall!==undefined || t.dataset.vertex!==undefined)){
-    const objGriff=document.elementsFromPoint(e.clientX, e.clientY)
+  merkPunkt=null;          // hält nur bis zum nächsten Klick — die Zweige unten setzen ihn neu
+  /* Unter dem Finger liegen oft mehrere Bauteile übereinander — Objektgriff auf einer
+     Wand, Tür in der Wand, Ecke am Wandende. `kandidatenUnter` sammelt sie in der
+     bisherigen Rangfolge (Griff → Objekt → Öffnung → Ecke → Wand), damit der ERSTE Tipp
+     sich verhält wie früher. Weitergeschaltet wird erst beim Loslassen (siehe
+     `pointerup`), sonst käme man nie zum Ziehen. */
+  if(!zoneEdit){
+    const selbeStelle = zyklus && Math.abs(zyklus.x-e.clientX)<ZYK_PX && Math.abs(zyklus.y-e.clientY)<ZYK_PX;
+    /* Objektgriff auf einer Wand: Er wird NACH den Objekten gezeichnet und lag deshalb
+       unter der Wand-Trefferfläche — ohne diesen Vorzug war er kaum zu greifen. Der
+       Vorzug gilt aber nur beim FRISCHEN Tipp: Wer schon durchtippt, will nach unten,
+       nicht auf einen Griff des Objekts, das er gerade übersprungen hat. */
+    const griff = selbeStelle ? null : document.elementsFromPoint(e.clientX, e.clientY)
       .find(el=>el.dataset && el.dataset.objh!==undefined);
-    if(objGriff) t=objGriff;
+    if(griff){ t=griff; zyklus=null; }
+    else {
+      const kand=kandidatenUnter(e);
+      if(kand.length){
+        const idx = selbeStelle ? Math.min(zyklus.idx, kand.length-1) : 0;
+        t=kand[idx].el;
+        zyklus={x:e.clientX, y:e.clientY, idx, kand, warGewaehlt:istGewaehlt(t)};
+      } else zyklus=null;
+    }
   }
   /* Farbzone bearbeiten ist ein AUSSCHLIESSLICHER Modus: nur die Eckgriffe reagieren,
      alles andere (Raum wählen, Wände, Ecken, Objekte, Türen) ist gesperrt, bis
@@ -2804,6 +3260,18 @@ svg.addEventListener('pointerdown', e=>{
         renderAll(); return;
       }
       sel={...sel, objH:null};
+      /* Linie: die Stelle merken, an der getippt wurde — „＋ Ecke einfügen" setzt die
+         neue Ecke dann dort statt im längsten Abschnitt. Das nächstgelegene Segment
+         entscheidet, denn die Trefferfläche liegt über der ganzen Linie. */
+      if(g.type==='line' && (g.points||[]).length>1){
+        let best=null;
+        for(let j=0;j<g.points.length-1;j++){
+          const s=aufStrecke(p, g.points[j], g.points[j+1]); if(!s) continue;
+          const d=Math.hypot(p.x-s.p.x, p.y-s.p.y);
+          if(!best || d<best.d) best={d, seg:j, t:s.t, p:s.p};
+        }
+        if(best) merkPunkt={art:'linie', roomId:r.id, objId:g.id, seg:best.seg, t:best.t, p:best.p};
+      }
       if(neuesObjekt) renderAll();
       drag={kind:'objmove', room:r, g, start:p, orig:JSON.parse(JSON.stringify(g)), moved:false};
       return;
@@ -2862,6 +3330,12 @@ svg.addEventListener('pointerdown', e=>{
     sel={roomId:t.dataset.roomid, wall:i, vertex:null};
     const r=roomById(sel.roomId);
     raumBeruehrt(r);
+    // Angetippte Stelle merken — „＋ Ecke einfügen", „+ Tür" und „+ Fenster" arbeiten
+    // danach genau dort statt in der Wandmitte
+    {
+      const [wa,wb]=wallPoints(r,i), s=aufStrecke(p, wa, wb);
+      if(s) merkPunkt={art:'wand', roomId:r.id, wall:i, t:s.t, p:s.p};
+    }
     // Gesperrt: die Wand ist angewählt und ausfüllbar, aber der zweite Griff zieht nicht
     if(schon && raumOffen(r)){
       const vor=wandZiehenVorbereiten(r, i);
@@ -2870,6 +3344,7 @@ svg.addEventListener('pointerdown', e=>{
           origA:vor.A, origB:vor.B, gA:vor.gA, gB:vor.gB, nx:vor.nx, ny:vor.ny,
           lockSnap:lockAbbild(r)};   // nach dem Vorbereiten: Indizes passen zum Abbild
         sel={roomId:r.id, wall:vor.idx, vertex:null};    // Index kann sich verschoben haben
+        if(merkPunkt) merkPunkt.wall=vor.idx;            // … dann auch für den Merkpunkt
       }
     }
     renderAll(); return;
@@ -3112,6 +3587,8 @@ svg.addEventListener('pointercancel', e=>{
 });
 svg.addEventListener('pointerup', e=>{
   zeiger.delete(e.pointerId);
+  // Wurde wirklich gezogen, liegt der Merkpunkt nicht mehr da, wo er gesetzt wurde
+  if(drag && drag.moved) merkPunkt=null;
   magnetTreffer=[];                     // grünes Feld nur solange gezogen wird
   haltenAbbrechen();                        // losgelassen = kein langer Druck mehr
   if(pinch){                      // Ende der Zoom-Geste — kein Klick auslösen
@@ -3143,6 +3620,22 @@ svg.addEventListener('pointerup', e=>{
     if(d.kind==='pan' && !d.moved) handleDrawClick(svgPoint(e));
     else renderCanvas();
     return;
+  }
+  /* Durchtippen: Ein Tipp auf das BEREITS GEWÄHLTE Bauteil, ohne den Finger zu bewegen,
+     geht zum nächsten darunter. Wer stattdessen bewegt, zieht — beides bleibt also
+     erreichbar. Steht nichts darunter, ändert sich nichts und der zweite Griff zieht
+     weiter wie bisher. */
+  if(mode==='select' && !zoneEdit && zyklus && zyklus.warGewaehlt && zyklus.kand.length>1
+     && (!drag || !drag.moved)
+     && Math.abs(zyklus.x-e.clientX)<ZYK_PX && Math.abs(zyklus.y-e.clientY)<ZYK_PX){
+    const naechst=(zyklus.idx+1)%zyklus.kand.length;
+    if(kandidatWaehlen(zyklus.kand[naechst].el)){
+      zyklus.idx=naechst; zyklus.warGewaehlt=false;
+      drag=null; renderAll();
+      const art={objh:'Objektpunkt', obj:'Objekt', open:'Tür/Fenster', vertex:'Ecke', wall:'Wand'}[zyklus.kand[naechst].art];
+      melde(`${art} — ${naechst+1} von ${zyklus.kand.length} an dieser Stelle. Nochmal tippen geht weiter.`);
+      return;
+    }
   }
   if(drag){
     if(drag.kind==='room' && !drag.moved && mode==='select'){
@@ -3302,7 +3795,8 @@ function addSegment(L){
 function closeDraft(){
   if(draft.points.length<3){ cancelModes(); return; }
   const r={id:uid(), floorId:activeFloorId, name:'Raum '+(proj().rooms.length+1), height:lastHeight,
-    points:draft.points, openings:[], aufAt:Date.now()};   // frisch gezeichnet = offen
+    points:draft.points, openings:[]};
+  proj().aufAt=Date.now();               // frisch gezeichnet = alles offen
   proj().rooms.push(r); save();
   cancelModes(); focusRoom(r.id);
 }
@@ -3400,7 +3894,8 @@ function commitPlace(p){
   const c=centroid(placing.points);
   const pts=placing.points.map(q=>({x:mm(q.x-c.x+p.x), y:mm(q.y-c.y+p.y)}));
   const r={id:uid(), floorId:activeFloorId, name:placing.name||('Raum '+(proj().rooms.length+1)),
-    height:placing.height||2.5, points:pts, openings:[], aufAt:Date.now()};
+    height:placing.height||2.5, points:pts, openings:[]};
+  proj().aufAt=Date.now();               // frisch platziert = alles offen
   proj().rooms.push(r); save();
   lastHeight=r.height;
   cancelModes(); focusRoom(r.id);
@@ -3615,17 +4110,30 @@ function wandRefsUmschreiben(r, mapFn){
   });
 }
 // Neue Ecke in der Mitte der Wand i — die Wand wird dadurch geteilt
-function eckeEinfuegen(r, i){
+/* `tWunsch` = Abstand ab dem Wandanfang. Fehlt er, wird wie bisher mittig geteilt.
+   Gesetzt wird er vom Merkpunkt, also von der Stelle, die zuletzt angetippt wurde. */
+function eckeEinfuegen(r, i, tWunsch){
   const [a,b]=wallPoints(r,i); const L=dist(a,b);
   if(L<0.1){ alert('Diese Wand ist zu kurz zum Teilen.'); return false; }
   if(wandGesperrt(r,i)){ melde(`Wand ${i+1} ist gesperrt und kann nicht geteilt werden.`, true); return false; }
-  const half=L/2;
+  // Nicht direkt auf eine Ecke setzen — daraus entstünde eine Wand der Länge null
+  const RAND=0.05;
+  let tt = Number.isFinite(tWunsch) ? Math.max(RAND, Math.min(L-RAND, tWunsch)) : L/2;
+  /* Eine Tür/ein Fenster darf nicht zerschnitten werden: die Öffnung gehört genau EINER
+     Wand, ein Schnitt mittendrin würde sie stillschweigend verkürzen. Lieber sagen,
+     woran es liegt. */
+  const drin=(r.openings||[]).find(o=>o.wall===i && tt>o.offset+0.001 && tt<o.offset+o.width-0.001);
+  if(drin){
+    melde(`Hier sitzt ${drin.type==='door'?'eine Tür':'ein Fenster'} — die Ecke kann nicht mitten hinein.`, true);
+    return false;
+  }
   (r.openings||[]).forEach(o=>{
-    if(o.wall===i){ if(o.offset>=half){ o.wall=i+1; o.offset=mm(o.offset-half); } }
+    if(o.wall===i){ if(o.offset>=tt-0.001){ o.wall=i+1; o.offset=mm(o.offset-tt); } }
     else if(o.wall>i) o.wall++;
   });
   wandRefsUmschreiben(r, w=>w>i?w+1:w);
-  r.points.splice(i+1, 0, {x:mm((a.x+b.x)/2), y:mm((a.y+b.y)/2)});
+  const u={x:(b.x-a.x)/L, y:(b.y-a.y)/L};
+  r.points.splice(i+1, 0, {x:mm(a.x+u.x*tt), y:mm(a.y+u.y*tt)});
   if(r.wallDicke && r.wallDicke[i]!=null) r.wallDicke[i+1]=r.wallDicke[i];   // Hälfte erbt die Stärke
   return true;
 }
@@ -3829,18 +4337,30 @@ function eckeLoeschen(r, i){
 }
 /* ---------- Linien: Ecken einfügen/löschen ---------- */
 // Neue Ecke: ohne Auswahl im längsten Segment, sonst neben der gewählten Ecke
-function eckeInLinieEinfuegen(g, k){
-  let i;
-  if(k==null){
-    i=0; let best=-1;
-    for(let j=0;j<g.points.length-1;j++){
-      const d=dist(g.points[j], g.points[j+1]);
-      if(d>best){ best=d; i=j; }
-    }
-  } else i = k<g.points.length-1 ? k : k-1;
-  if(i<0) return null;
-  const a=g.points[i], b=g.points[i+1];
-  g.points.splice(i+1, 0, {x:mm((a.x+b.x)/2), y:mm((a.y+b.y)/2)});
+/* `mp` = Merkpunkt {seg, t}, also die zuletzt angetippte Stelle auf DIESER Linie.
+   Ist er da, entsteht die Ecke genau dort; sonst wie bisher mittig — im längsten
+   Abschnitt bzw. neben der gewählten Ecke. */
+function eckeInLinieEinfuegen(g, k, mp){
+  let i, a, b, neu;
+  if(mp && mp.seg>=0 && mp.seg<g.points.length-1){
+    i=mp.seg; a=g.points[i]; b=g.points[i+1];
+    const L=dist(a,b);
+    if(L<0.02) return null;
+    const RAND=0.02, t=Math.max(RAND, Math.min(L-RAND, mp.t));
+    neu={x:mm(a.x+(b.x-a.x)/L*t), y:mm(a.y+(b.y-a.y)/L*t)};
+  } else {
+    if(k==null){
+      i=0; let best=-1;
+      for(let j=0;j<g.points.length-1;j++){
+        const d=dist(g.points[j], g.points[j+1]);
+        if(d>best){ best=d; i=j; }
+      }
+    } else i = k<g.points.length-1 ? k : k-1;
+    if(i<0) return null;
+    a=g.points[i]; b=g.points[i+1];
+    neu={x:mm((a.x+b.x)/2), y:mm((a.y+b.y)/2)};
+  }
+  g.points.splice(i+1, 0, neu);
   return i+1;                       // Index der neuen Ecke
 }
 // Ecke einer Linie entfernen — die Nachbarsegmente verschmelzen
@@ -3867,10 +4387,10 @@ function deleteRoom(id){
    Hand umschalten lässt — offen zeigt sie außerdem, wie lange es noch dauert. */
 const sperrZeile = r => raumOffen(r)
   ? `<div class="row" style="margin-top:6px"><button class="btn small" id="rsperr" style="flex:1"
-      title="Wände, Ecken, Türen und Fenster sofort festsetzen">🔓 Offen — schließt in ${
-        Math.max(1, Math.ceil(restSekunden(r)/60))} min · jetzt sperren</button></div>`
+      title="Wände, Ecken, Türen und Fenster in ALLEN Räumen sofort festsetzen">🔓 Alle offen — schließt in ${
+        Math.max(1, Math.ceil(restSekunden()/60))} min · jetzt sperren</button></div>`
   : `<div class="row" style="margin-top:6px"><button class="btn small active" id="rsperr" style="flex:1"
-      title="Wände, Ecken, Türen und Fenster wieder freigeben">🔒 Gesperrt — zum Bearbeiten öffnen</button></div>`;
+      title="Wände, Ecken, Türen und Fenster in ALLEN Räumen wieder freigeben">🔒 Alle gesperrt — zum Bearbeiten öffnen</button></div>`;
 const anmerkungFeld = r => `<div style="margin-top:6px">
   <label class="hint" style="display:block; margin-bottom:2px">Anmerkung — erscheint im Druck unter dem Plan</label>
   <textarea id="ranm" rows="2" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:6px"
@@ -3880,25 +4400,63 @@ const anmerkungFeld = r => `<div style="margin-top:6px">
    Rechts steht die Abschlagszahlung statt der Sollmenge aus dem Import — beim Arbeiten
    ist die Frage „gehört das zum laufenden Abschlag?" die wichtigere. Positionen
    fremder Abschläge rutschen nach unten und bekommen einen grauen Punkt. */
+/* Woher stammt diese Zuordnung? Liefert Sortierschluessel und Ueberschrift.
+   Beim Fotoaufmass steht bewusst das OBJEKT in der Ueberschrift und nicht die einzelne
+   Messung — sonst bekaeme jede Markierung ihre eigene Gruppe mit einer Zeile darin. */
+function lvHerkunft(a){
+  const r=roomById(a.roomId);
+  if(a.projekt) return {rang:3, key:'projekt', titel:'Projekt'};
+  if(a.objId){
+    const og=r ? ((r.objects||[]).find(g=>g.id===a.objId) || (r.openings||[]).find(o=>o.id===a.objId)) : null;
+    if(!og) return {rang:2, key:'weg:'+a.objId, titel:'– gelöschtes Objekt –'};
+    const name = og.type==='door' ? 'Tür' : og.type==='window' ? 'Fenster'
+      : istFotoMass(og) ? 'Fotoaufmaß' : ist360(og) ? '360°-Aufnahme'
+      : og.type==='rect' ? 'Fläche' : og.type==='line' ? 'Linie'
+      : (SYMDEFS[og.sub]||{}).label || 'Objekt';
+    return {rang:2, key:'obj:'+og.id, titel:name+(og.nr?` (${og.nr})`:''), nr:og.nr||0};
+  }
+  if(a.wall!=null){
+    const nr=wallNrOf(r, a.wall);
+    return {rang:1, key:'wand:'+a.wall, titel:`Wand (${nr||(a.wall+1)})`, nr:a.wall};
+  }
+  return {rang:0, key:'raum', titel:'Raum'};
+}
+/* Die Liste am Fuss der Seitenleiste. Im Raum stehen hier auch die Zuordnungen der
+   Waende und Objekte — ohne Ueberschrift war nicht zu sehen, wo eine Zeile herkommt
+   (gewuenscht 2026-08-04). Reihenfolge: Raum, Waende, Objekte, Projekt. */
 function lvListHtml(list){
   if(!list.length) return '';
   const p=proj(), akt=p.abschlag;
-  const sortiert=[...list].sort((a,b)=>
-    (abschlagVon(a)===akt?0:1)-(abschlagVon(b)===akt?0:1)
-    || abschlagVon(b)-abschlagVon(a)              // darunter die jüngeren zuerst
-    || lvCmp(a.lv,b.lv));
-  return `<div style="margin-top:8px; border-top:1px solid var(--line); padding-top:6px">
-    <h3>Verknüpfte LV-Positionen</h3>${sortiert.map(a=>{
+  const grp={};
+  list.forEach(a=>{
+    const h=lvHerkunft(a);
+    (grp[h.key] = grp[h.key] || {h, list:[]}).list.push(a);
+  });
+  const gruppen=Object.values(grp).sort((x,y)=>
+    x.h.rang-y.h.rang || (x.h.nr||0)-(y.h.nr||0) || x.h.titel.localeCompare(y.h.titel));
+  const zeile=a=>{
     const n=abschlagVon(a), an=n===akt;
     const c=an ? lvColor(p,a.lv) : '#c2c6cd';
+    // Beim Fotoaufmass sagt die Nummer, welche Markierung im Bild gemeint ist
+    const r=roomById(a.roomId);
+    const og=a.fmMark && r ? (r.objects||[]).find(g=>g.id===a.objId) : null;
+    const mark=og ? ` <span style="color:var(--muted)">Nr ${fmMarkNr(og, a.fmMark)}</span>` : '';
     return `<div class="stat" style="cursor:pointer${an?'':'; opacity:.62'}" data-lvopen="${a.id}"
         title="LV-Position bearbeiten — Abschlag ${n}${an?' (laufend)':''}">
       <span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${
-        c?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c};margin-right:5px"></span>`:''}${esc(a.lv)}
+        c?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c};margin-right:5px"></span>`:''}${esc(a.lv)}${mark}
         <span style="color:var(--muted)">${esc(ohneMenge(a.kurz||''))}</span>${
         a.anmerkung?` <span title="${esc(a.anmerkung)}">📝</span>`:''}</span>
       <b style="font-weight:600; color:var(--muted); white-space:nowrap; margin-left:8px">AZ ${n}</b></div>`;
-  }).join('')}</div>`;
+  };
+  return `<div style="margin-top:8px; border-top:1px solid var(--line); padding-top:6px">
+    <h3>Verknüpfte LV-Positionen</h3>${gruppen.map((g,i)=>`
+      <div style="font-size:11px; font-weight:700; color:var(--muted); letter-spacing:.02em;
+        margin:${i?'8px':'2px'} 0 2px">${esc(g.h.titel)}</div>
+      ${[...g.list].sort((a,b)=>
+          (abschlagVon(a)===akt?0:1)-(abschlagVon(b)===akt?0:1)
+          || abschlagVon(b)-abschlagVon(a)
+          || lvCmp(a.lv,b.lv)).map(zeile).join('')}`).join('')}</div>`;
 }
 /* Eigener Kasten für Fotos und die verknüpften LV-Positionen — steht bei Raum, Wand,
    Objekt und Tür/Fenster gleich aussehend am Fuß der Seitenleiste. Beides wird beim
@@ -4026,12 +4584,47 @@ function renderSidebar(){
       if(selObj.type==='rect'){
         html+=`<div class="panel"><h3>▭ Fläche${nrTxt} — ausgewählt</h3>
           <div class="row"><label>Name</label><input type="text" id="objname" value="${esc(selObj.name||'')}"></div>
-          <div class="row"><label>Länge (m)</label><input class="laser objdim" data-f="w" value="${fmt(selObj.w,3)}"></div>
-          <div class="row"><label>Breite (m)</label><input class="laser objdim" data-f="h" value="${fmt(selObj.h,3)}"></div>
-          <div class="stat"><span>Fläche</span><b>${fmt(selObj.w*selObj.h,3)} m²</b></div>
-          <div class="stat"><span>Umfang</span><b>${fmt(2*(selObj.w+selObj.h),3)} m</b></div>
+          <div class="row"><label>Länge (m)</label>${koppelKnopf(selObj,'L')}<input class="laser objdim" data-f="L" value="${fmt(objMass(selObj,'L'),3)}"></div>
+          <div class="row"><label>Breite (m)</label>${koppelKnopf(selObj,'B')}<input class="laser objdim" data-f="B" value="${fmt(objMass(selObj,'B'),3)}"></div>
+          <div class="stat"><span>Fläche</span><b>${fmt(objMass(selObj,'L')*objMass(selObj,'B'),3)} m²</b></div>
+          <div class="stat"><span>Umfang</span><b>${fmt(2*(objMass(selObj,'L')+objMass(selObj,'B')),3)} m</b></div>
+          ${(selObj.festL||selObj.festB)?`<div class="stat"><span style="color:var(--muted)">gezeichnet</span><b style="color:var(--muted)">${fmt(selObj.w,3)} × ${fmt(selObj.h,3)} m</b></div>`:''}
           ${btns}
-          <p class="hint">Ziehen verschiebt, Eckgriffe ändern die Größe. Entf = löschen, Esc = abwählen.</p></div>`;
+          <p class="hint">Ziehen verschiebt, Eckgriffe ändern die Größe. ${koppelHinweis(selObj)} Entf = löschen, Esc = abwählen.</p></div>`;
+      } else if(istFotoMass(selObj)){
+        const sl=fmSlots(selObj), fo=selObj.fotos||[];
+        html+=`<div class="panel"><h3>📐 Fotoaufmaß${nrTxt} — ausgewählt</h3>
+          <div class="row"><label>Name</label><input type="text" id="objname" value="${esc(selObj.name||'')}"></div>
+          <p class="hint">Fünf Farben, fünf LV-Positionen. Auf dem Foto wird je nach Einheit ein
+            <b>Rechteck</b> (Fläche), eine <b>Linie</b> (Länge) oder ein <b>Kreuz</b> (Stück) gesetzt —
+            die Maße tippst du ein, die Zeichnung zeigt nur, wo gemessen wurde.</p>
+          ${sl.map((x,i)=>`<div class="row" style="align-items:center">
+            <span style="flex:0 0 auto; width:16px; height:16px; border-radius:4px; background:${x.farbe}; border:1px solid rgba(0,0,0,.2)"></span>
+            <span class="sugwrap"><input type="text" class="fmlv" data-i="${i}" autocomplete="off"
+              value="${esc(x.lv||'')}" placeholder="LV Position" style="flex:1; min-width:76px; border:1px solid var(--line); border-radius:6px; padding:4px 6px"><div class="sugbox breit" id="fmsug${i}"></div></span>
+            <select class="fmeinheit" data-i="${i}" style="flex:0 0 auto">
+              ${Object.keys(FM_WERKZEUG).map(e=>`<option value="${e}" ${x.einheit===e?'selected':''}>${einhTxt(e)}</option>`).join('')}
+            </select>
+            <b style="flex:0 0 auto; min-width:72px; text-align:right">${
+              x.lv ? fmt(fmSumme(selObj,i),2)+' '+(EINH_SYM[x.einheit]||'') : '—'}</b>
+          </div>
+          ${x.lv?`<div class="row" style="margin-top:-2px"><label></label>
+            <input type="text" class="fmkurz" data-i="${i}" value="${esc(x.kurz||'')}" placeholder="Kurztext"
+              style="flex:1; border:1px solid var(--line); border-radius:6px; padding:3px 6px; font-size:12px">
+            <span class="hint" style="flex:0 0 auto">${fmAnzahl(selObj,i)} Einträge</span></div>`:''}`).join('')}
+          ${btns}
+          </div>
+        <div class="panel"><h3>Fotos (${fo.length} von ${FM_MAX_FOTOS})</h3>
+          <div class="row">
+            <button class="btn small" id="fmFotoAdd" ${fo.length>=FM_MAX_FOTOS?'disabled title="Mehr als drei Fotos gehen nicht"':''}>📷 ＋ Foto</button>
+          </div>
+          ${fo.length?`<div class="row" style="gap:6px; flex-wrap:wrap">${fo.map((f,k)=>`
+            <button class="btn small" data-fmfoto="${k}" title="Foto ${k+1} — zum Messen antippen"
+              style="flex:0 0 auto; padding:3px 7px 3px 3px; display:inline-flex; align-items:center; gap:5px">
+              <img src="${f.src||''}" style="width:30px; height:30px; object-fit:cover; border-radius:4px; display:block">
+              ${(f.marken||[]).length}${f.kal?' ⇄':''}</button>`).join('')}</div>`
+            : '<p class="hint">Noch kein Foto — ohne Foto lässt sich nichts messen.</p>'}
+          <p class="hint">Ein Tipp aufs Foto öffnet das Messen — dort wird auch gelöscht.</p></div>`;
       } else if(ist360(selObj)){
         const dir=selObj.rot||0;
         html+=`<div class="panel"><h3>📷 360°-Aufnahme${nrTxt} — ausgewählt</h3>
@@ -4070,10 +4663,13 @@ function renderSidebar(){
         const L=lineLen(selObj);
         html+=`<div class="panel"><h3>╱ Linie${nrTxt} — ausgewählt</h3>
           <div class="row"><label>Name</label><input type="text" id="objname" value="${esc(selObj.name||'')}"></div>
-          <div class="row"><label>Gesamtlänge (m)</label><input class="laser objdim" data-f="len" value="${fmt(L,3)}"></div>
+          <div class="row"><label>Gesamtlänge (m)</label>${koppelKnopf(selObj,'L')}<input class="laser objdim" data-f="L" value="${fmt(objMass(selObj,'L'),3)}"></div>
+          ${selObj.festL?`<div class="stat"><span style="color:var(--muted)">gezeichnet</span><b style="color:var(--muted)">${fmt(L,3)} m</b></div>`:''}
           <div class="stat"><span>Punkte</span><b>${selObj.points.length}</b></div>
           <div class="row">
-            <button class="btn small" id="ptadd" title="Neue Ecke einfügen — im längsten Abschnitt bzw. neben der gewählten Ecke">＋ Ecke einfügen</button>
+            <button class="btn small" id="ptadd" title="${merkFuerLinie(selObj)
+              ? 'Neue Ecke an der angetippten Stelle (grüner Ring)'
+              : 'Neue Ecke — im längsten Abschnitt bzw. neben der gewählten Ecke. Auf die Linie tippen bestimmt die Stelle.'}">＋ Ecke einfügen</button>
             <button class="btn small danger" id="ptdel" ${sel.objH==null?'disabled title="Erst eine Ecke anklicken"':''}>Ecke löschen</button>
           </div>
           <p class="hint">${sel.objH!=null?`Ecke ${sel.objH+1} von ${selObj.points.length} ausgewählt — nochmal anfassen zum Ziehen. Die neue Ecke entsteht daneben.`:'Auf die Linie ziehen verschiebt sie. „＋ Ecke einfügen“ teilt den längsten Abschnitt; Ecke anklicken zum Auswählen.'}</p>
@@ -4155,7 +4751,9 @@ function renderSidebar(){
           <button class="btn small" id="wopwin"${zu}>🪟 ＋ Fenster</button>
         </div>
         <div class="row">
-          <button class="btn small" id="wallsplit"${zu} title="Teilt diese Wand in der Mitte — es entsteht eine neue Ecke">＋ Ecke einfügen</button>
+          <button class="btn small" id="wallsplit"${zu} title="${merkFuerWand(r, sel.wall)!=null
+            ? 'Teilt die Wand an der angetippten Stelle (grüner Ring)'
+            : 'Teilt diese Wand in der Mitte — tippe vorher auf die Wand, um die Stelle zu bestimmen'}">＋ Ecke einfügen</button>
         </div>
         <div class="row">
           <button class="btn small ${magnetAn()?'active':''}" id="magnettoggle" style="flex:1"
@@ -4169,9 +4767,12 @@ function renderSidebar(){
           <button class="btn green small" id="walllv">＋ LV-Position</button>
           <button class="btn small" id="walldesel" title="Schließt nur die Wand-Ansicht — Raum und Wand bleiben erhalten">Entfernen</button>
         </div>
-        ${zu?`<p class="hint" style="color:var(--danger)"><b>Raum gesperrt:</b> Maße und Form sind
+        ${zu?`<p class="hint" style="color:var(--danger)"><b>Gesperrt:</b> Maße und Form aller Räume sind
           festgesetzt. LV-Positionen und Fotos lassen sich weiter anhängen — zum Umformen den
-          Raum oben im Raum-Panel öffnen.</p>`:''}
+          Schloss oben im Raum-Panel öffnen — es gilt für alle Räume.</p>`:''}
+        <p class="hint">${merkFuerWand(r, sel.wall)!=null
+          ? `<b>Stelle gemerkt</b> (grüner Ring, ${fmt(merkFuerWand(r, sel.wall),2)} m ab dem Wandanfang) — „＋ Ecke einfügen“, „+ Tür“ und „+ Fenster“ setzen genau dort an. Woanders hintippen verschiebt die Stelle.`
+          : 'Auf die Wand tippen merkt sich die Stelle — „＋ Ecke einfügen“, „+ Tür“ und „+ Fenster“ setzen dann genau dort an, sonst mittig bzw. in der größten Lücke.'}</p>
         <p class="hint">Nochmal anfassen und ziehen verschiebt die Wand parallel — die Nachbarwände behalten ihre Richtung und werden nur länger oder kürzer. <b>„＋ Ecke einfügen“ und dann eine Hälfte ziehen ergibt einen rechtwinkligen Vor- oder Rücksprung.</b> Wandlänge ändern verschiebt die nachfolgenden Ecken mit. „Entfernen“ schließt nur diese Ansicht (Esc geht auch).</p></div>`;
       html+=fotoPanel((r.wallFotos||{})[sel.wall], 'wfoto',
         p.attrs.filter(a=>a.roomId===r.id && a.wall===sel.wall));
@@ -4218,6 +4819,9 @@ function renderSidebar(){
         </div>
         <div class="row">
           <button class="btn small symbtn ${mode==='objsym'&&pendingSym==='p360'?'active':''}" data-sym="p360" title="Standort einer 360°-Aufnahme — Pfeil zeigt die Blickrichtung" style="flex:1">📷 360°-Aufnahme</button>
+        </div>
+        <div class="row">
+          <button class="btn small symbtn ${mode==='objsym'&&pendingSym==='fotom'?'active':''}" data-sym="fotom" title="Auf Fotos messen: fünf farbige Slots mit LV-Positionen, Flächen/Längen/Kreuze direkt im Bild" style="flex:1">📐 Fotoaufmaß</button>
         </div>
         <p class="hint">Objekt-Typ wählen, dann im Raum aufziehen bzw. platzieren (Tür/Fenster: Wand anklicken). Auswahl per Klick im Plan.</p>
       </div>`;
@@ -4347,11 +4951,15 @@ function wireSidebar(r){
   if(r){
     /* Raum-Panel */
     on('#rsperr','onclick',()=>{
-      if(raumOffen(r)) delete r.aufAt; else r.aufAt=Date.now();
+      // Gilt fürs ganze Aufmaß, nicht nur für diesen Raum
+      const p0=proj();
+      if(sperreOffen()) delete p0.aufAt; else p0.aufAt=Date.now();
       sel={roomId:r.id, wall:null, vertex:null};   // Auswahl passt zum neuen Zustand nicht mehr
       save(); renderAll();
-      melde(raumOffen(r) ? `„${r.name}" ist offen — schließt nach 2 Minuten ohne Änderung von selbst.`
-                         : `„${r.name}" ist gesperrt: Wände, Ecken, Türen und Fenster sind festgesetzt.`);
+      const n=(p0.rooms||[]).length;
+      melde(sperreOffen()
+        ? `Alle ${n} Räume sind offen — schließen nach 2 Minuten ohne Änderung von selbst.`
+        : `Alle ${n} Räume sind gesperrt: Wände, Ecken, Türen und Fenster sind festgesetzt.`);
     });
     on('#rname','onchange',e=>{ r.name=e.target.value||r.name; save(); renderAll(); });
     // Anmerkung: nur speichern, kein renderAll — der Text steht schon im Feld
@@ -4431,7 +5039,7 @@ function wireSidebar(r){
       if(!isFinite(v)||v<=0){ renderAll(); return; }
       /* Der Laser schreibt über `dispatchEvent` direkt hierher und geht damit an einem
          `disabled` vorbei — die Sperre muss deshalb AUCH hier stehen, nicht nur im HTML. */
-      if(!raumOffen(r)){ melde(`„${r.name}" ist gesperrt — Länge nicht geändert.`, true); renderAll(); return; }
+      if(!raumOffen(r)){ melde('Das Aufmaß ist gesperrt — Länge nicht geändert.', true); renderAll(); return; }
       raumBeruehrt(r);                      // Tippen zählt als Arbeit am Raum
       // Direkte Änderung einer gesperrten Wand geht — aber nur nach Rückfrage
       if(wandGesperrt(r,i) && Math.abs(v-dist(...wallPoints(r,i)))>0.0005
@@ -4496,7 +5104,8 @@ function wireSidebar(r){
     });
     on('#walldesel','onclick',()=>{ sel={roomId:focusRoomId, wall:null, vertex:null}; renderAll(); });
     on('#wallsplit','onclick',()=>{                       // Wand teilen → neue Ecke
-      if(eckeEinfuegen(r, sel.wall)){
+      if(eckeEinfuegen(r, sel.wall, merkFuerWand(r, sel.wall))){
+        merkPunkt=null;                                   // verbraucht
         sel={roomId:r.id, wall:null, vertex:sel.wall+1};
         syncSharedDoors(); save(); renderAll();
       }
@@ -4511,10 +5120,14 @@ function wireSidebar(r){
       }
     });
     on('#eckedesel','onclick',()=>{ sel={roomId:focusRoomId, wall:null, vertex:null}; renderAll(); });
-    // Tür/Fenster direkt auf der gewählten Wand anlegen (sucht die freie Lücke)
+    /* Tür/Fenster direkt auf der gewählten Wand anlegen. Der Merkpunkt gibt die Mitte
+       vor — wer die Wand dort angetippt hat, wo die Tür hin soll, bekommt sie dort.
+       Ohne Merkpunkt bleibt es beim bisherigen Verhalten: größte freie Lücke.
+       `placeOpening` schiebt die Öffnung ohnehin in eine passende Lücke, wenn an der
+       gewünschten Stelle kein Platz ist. */
     const addOnWall=type=>{
-      const o=placeOpening(r, sel.wall, type, null);
-      if(o){ sel={roomId:r.id, wall:null, vertex:null, openId:o.id}; save(); renderAll(); }
+      const o=placeOpening(r, sel.wall, type, merkFuerWand(r, sel.wall));
+      if(o){ merkPunkt=null; sel={roomId:r.id, wall:null, vertex:null, openId:o.id}; save(); renderAll(); }
     };
     on('#wopdoor','onclick',()=>addOnWall('door'));
     on('#wopwin','onclick',()=>addOnWall('window'));
@@ -4524,7 +5137,7 @@ function wireSidebar(r){
       inp.onchange=()=>{
         const o=r.openings.find(o=>o.id===inp.dataset.op); if(!o) return;
         // wie bei der Wandlänge: der Laser umgeht `disabled`, die Sperre gehört hierher
-        if(!raumOffen(r)){ melde(`„${r.name}" ist gesperrt — Maß nicht geändert.`, true); renderAll(); return; }
+        if(!raumOffen(r)){ melde('Das Aufmaß ist gesperrt — Maß nicht geändert.', true); renderAll(); return; }
         raumBeruehrt(r);
         const v=parseNum(inp.value);
         if(isFinite(v)&&v>=0){ o[inp.dataset.f]=v; pushDoorToPartner(r,o); save(); renderAll(); }
@@ -4570,19 +5183,68 @@ function wireSidebar(r){
       document.querySelectorAll('.objdim').forEach(inp=>{
         inp.onchange=()=>{
           const v=parseNum(inp.value); if(!isFinite(v)||v<=0) return;
-          if(inp.dataset.f==='w') selObj.w=v;
-          else if(inp.dataset.f==='h') selObj.h=v;
-          else{
-            // Gesamtlänge setzen: ganze Polylinie vom Startpunkt aus skalieren
-            const cur=lineLen(selObj)||1;
-            const f=v/cur, p0=selObj.points[0];
-            selObj.points=selObj.points.map(pt=>({
-              x:Math.round((p0.x+(pt.x-p0.x)*f)*1000)/1000,
-              y:Math.round((p0.y+(pt.y-p0.y)*f)*1000)/1000 }));
-          }
+          const f=inp.dataset.f;
+          /* 'L'/'B' sind MASSE (Fläche und Linie): eine eigene Zahl löst die Kopplung
+             an die Form. 'w'/'h' bleiben Geometrie — die Symbole werden weiterhin
+             über ihre Kantenlängen eingestellt. */
+          if(f==='L'){ selObj.massL=v; selObj.festL=true; }
+          else if(f==='B'){ selObj.massB=v; selObj.festB=true; }
+          else if(f==='w') selObj.w=v;
+          else if(f==='h') selObj.h=v;
           save(); renderAll();
         };
       });
+      // Schloss vor dem Feld: koppeln ⇄ entkoppeln
+      document.querySelectorAll('.koppel').forEach(btn=>{
+        btn.onclick=()=>{
+          const w=btn.dataset.mf;
+          if(w==='B'){ if(selObj.festB){ delete selObj.festB; } else selObj.festB=true; }
+          else { if(selObj.festL){ delete selObj.festL; } else selObj.festL=true; }
+          save(); renderAll();          // save() zieht ein wieder gekoppeltes Maß gleich nach
+        };
+      });
+      if(istFotoMass(selObj)){
+        /* Dieselbe Vorschlagsliste wie im LV-Dialog (`makeSuggest`), damit man aus den
+           **vorhandenen** Positionen wählt statt Nummern blind zu tippen. Übernommen wird
+           erst, wenn die Nummer wirklich im Katalog steht — beim Tippen soll die
+           Seitenleiste nicht bei jedem Zeichen neu aufgebaut werden. */
+        document.querySelectorAll('.fmlv').forEach(inp=>{
+          const i=+inp.dataset.i, box=document.querySelector('#fmsug'+i);
+          if(!box) return;
+          makeSuggest(inp, box,
+            (it,q)=>!q || it.lv.toLowerCase().startsWith(q) || (it.kurz||'').toLowerCase().includes(q),
+            it=>({a:it.lv, b:it.kurz, num:'a'}),
+            null,
+            it=>fmSlotAusKatalog(selObj, i, it.lv, r.id));
+        });
+        document.querySelectorAll('.fmlv').forEach(inp=>{ inp.onchange=()=>{
+          const i=+inp.dataset.i, lv=inp.value.trim();
+          const sl=fmSlots(selObj)[i];
+          // Kurztext und Einheit aus dem Katalog holen, wenn die Nummer bekannt ist
+          const k=(proj().lvTexts||{})[lv] || sl.kurz;
+          const e=(proj().lvUnits||{})[lv];
+          const einheit=(e && FM_WERKZEUG[e]) ? e : sl.einheit;
+          if(e && !FM_WERKZEUG[e]) melde(`„${lv}" hat die Einheit ${einhTxt(e)} — dafür gibt es kein Werkzeug. Bitte Fläche, Länge oder Stück wählen.`, true);
+          fmSlotSetzen(selObj, i, lv, k, einheit, r.id);
+          save(); renderAll();
+        }; });
+        document.querySelectorAll('.fmkurz').forEach(inp=>{ inp.onchange=()=>{
+          fmSlots(selObj)[+inp.dataset.i].kurz=inp.value.trim(); save(); renderAll(); }; });
+        document.querySelectorAll('.fmeinheit').forEach(seq=>{ seq.onchange=()=>{
+          const i=+seq.dataset.i;
+          fmSlots(selObj)[i].einheit=seq.value;
+          save(); renderAll();
+          melde('Werkzeug für diesen Slot: '+({flaeche:'Rechteck', linie:'Linie', kreuz:'Kreuz'})[FM_WERKZEUG[seq.value]]+'.');
+        }; });
+        on('#fmFotoAdd','onclick',()=>fotoOeffnen({add:neu=>{
+          selObj.fotos=[...(selObj.fotos||[]), ...neu].slice(0, FM_MAX_FOTOS);
+          save(); renderAll();
+        }}));
+        document.querySelectorAll('[data-fmfoto]').forEach(im=>{
+          im.onclick=()=>fmOeffnen(selObj, +im.dataset.fmfoto, r.id);
+        });
+
+      }
       on('#objlv','onclick',()=>openLvDialog(null, r.id, selObj.id));
       on('#objdup','onclick',()=>{
         const c=JSON.parse(JSON.stringify(selObj)); c.id=uid(); delete c.nr; delete c.fotos;
@@ -4632,8 +5294,8 @@ function wireSidebar(r){
       on('#p360proj','onchange',e=>{ localStorage.setItem(P360_PROJ_KEY, e.target.value); p360WinkelText(); });
       on('#p360laden','onclick',()=>{ p360Ziel={objId:selObj.id, roomId:r.id}; $('#p360file').click(); });
       on('#ptadd','onclick',()=>{                         // neue Ecke — auch ohne gewählte Ecke
-        const neu=eckeInLinieEinfuegen(selObj, sel.objH);
-        if(neu!=null){ sel={...sel, objH:neu}; save(); renderAll(); }
+        const neu=eckeInLinieEinfuegen(selObj, sel.objH, merkFuerLinie(selObj));
+        if(neu!=null){ merkPunkt=null; sel={...sel, objH:neu}; save(); renderAll(); }
       });
       on('#ptdel','onclick',()=>{                         // Ecke der Linie entfernen
         if(sel.objH==null) return;
@@ -4757,7 +5419,10 @@ function lvZielAnzeige(){
   /* Kopieren gibt es nur für Positionen am Raum (und auf Projektebene) — die Kopien
      hängen immer am Raum. An einer Wand oder einem Objekt wäre der Knopf sinnlos:
      das Gegenstück gibt es im Zielraum gar nicht. */
-  $('#lvKopieren').style.display = (lvObjId || lvPresetWall!=null) ? 'none' : '';
+  /* Kopieren gibt es am Raum und (seit 2026-08-04) an der Wand. An Objekten, Türen und
+     Fenstern nicht: dort hinge die Kopie an einem Bauteil, das es anderswo nicht gibt. */
+  $('#lvKopieren').style.display = lvObjId ? 'none' : '';
+  $('#lvKopieren').textContent = lvPresetWall!=null ? '⧉ Auf Wände kopieren' : '⧉ In Räume kopieren';
   if(lvProjektEbene){
     $('#lvZiel').textContent = r ? `Projekt  (abgelegt in ${r.name})` : 'Projekt';
     return;
@@ -4807,6 +5472,20 @@ function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
     // Kurztext und Einheit kommen wie bei der Auswahl aus dem Katalog
     if(presetVals.lv){ $('#lvPos').value=presetVals.lv; lvApplyKnown(presetVals.lv); }
   }
+  /* Voreingabe bei einer NEUEN Zuordnung: die zuletzt gesetzte Position (seit 2026-08-04).
+     Auf der Baustelle wird dieselbe Position reihum an viele Bauteile gehängt — sie jedes
+     Mal neu zu suchen war der häufigste Handgriff. Die Einheit kommt wie sonst aus dem
+     Katalog, der Kurztext dagegen aus der letzten Eingabe: der kann von Hand angepasst
+     worden sein, und dann ist genau der gemeint. Ein Klick ins Feld wählt alles aus,
+     Übertippen ist also ein Handgriff. */
+  if(!a && !(presetVals && presetVals.lv)){
+    const v=letzteLvEingabe();
+    if(v && v.lv){
+      $('#lvPos').value=v.lv;
+      lvApplyKnown(v.lv);
+      if(v.kurz) $('#lvKurz').value=v.kurz;
+    }
+  }
   ['Vorn','Oben','Links','Rechts','Hinten','Unten'].forEach(k=>{ $('#lv'+k).checked=a?!!a[k.toLowerCase()]:false; });
   $('#lvNutzGrund').checked=a?!!a.nutzGrund:false;
   $('#lvNutzAnsicht').checked=a?!!a.nutzAnsicht:false;
@@ -4818,6 +5497,19 @@ function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
   $('#lvAutoHZeile').style.display = anWand?'':'none';
   $('#lvAutoL').checked = anWand && (a ? !!a.autoL : true);
   $('#lvAutoH').checked = anWand && (a ? !!a.autoH : true);
+  /* „Folge Objekt" gibt es nur an Flächen und Linien — nur die haben Maße. Bei Türen,
+     Fenstern und Symbolen bleibt die Zeile weg. Neu angelegt ist sie an: wer eine
+     Position an eine Fläche hängt, meint fast immer deren Maß. */
+  const objJetzt = lvObjId ? (roomById(lvRoomId)||{objects:[]}).objects
+    && ((roomById(lvRoomId).objects||[]).find(x=>x.id===lvObjId)) : null;
+  const anObj = !!(objJetzt && objHatMass(objJetzt));
+  $('#lvAutoObjZeile').style.display = anObj?'':'none';
+  $('#lvAutoObj').checked = anObj && (a ? !!a.autoObj : true);
+  if(anObj && !a){                       // Voreingabe gleich mit den Objektmaßen füllen
+    const L=objMass(objJetzt,'L'), B=objMass(objJetzt,'B');
+    if(Number.isFinite(L)) $('#lvL').value=fmt3(L);
+    if(Number.isFinite(B)) $('#lvB').value=fmt3(B);
+  }
   $('#lvAnm').value=a?(a.anmerkung||''):'';
   /* Altbestand „Nutze Umfang als Länge": das Häkchen gibt es nicht mehr. Beim Öffnen
      wird der Umfang einmalig als Zahl in die Länge geschrieben; beim Speichern fällt
@@ -4854,6 +5546,12 @@ const lvWandMass = () => {
   const [p1,p2]=wallPoints(r, lvPresetWall);
   return {laenge:mm(dist(p1,p2)), hoehe:r.height};
 };
+// „Folge Objekt" fällt, sobald Länge ODER Breite von Hand kommt — beide hängen daran
+['#lvL','#lvB'].forEach(id=>{
+  const loesen=()=>{ $('#lvAutoObj').checked=false; };
+  $(id).addEventListener('input', loesen);
+  $(id).addEventListener('change', loesen);
+});
 [['#lvL','#lvAutoL','laenge'], ['#lvH','#lvAutoH','hoehe']].forEach(([feld, haken, k])=>{
   const loesen=()=>{ $(haken).checked=false; };
   $(feld).addEventListener('input', loesen);
@@ -4875,6 +5573,17 @@ function lvApplyKnown(lv){
   // Fällt sie in lvUnits aus (Import vor der Alias-Erweiterung), aus der Mengenklammer ableiten.
   const e=(p.lvUnits||{})[lv] || einheitAusKurz(k);
   if(e) $('#lvEinheit').value=e;
+}
+/* Zuletzt gesetzte LV-Position — Voreingabe für die nächste neue Zuordnung.
+   Nach einem Neuladen ist die Variable leer; dann zählt der **jüngste Eintrag im
+   Aufmaß**. `p.attrs` steht in Anlagereihenfolge, das letzte Element mit Nummer ist
+   also das richtige. So gibt es die Voreingabe auch am Morgen danach. */
+let letzteLv=null;                       // {lv, kurz}
+function letzteLvEingabe(){
+  if(letzteLv && letzteLv.lv) return letzteLv;
+  const at=proj().attrs||[];
+  for(let i=at.length-1;i>=0;i--) if(at[i].lv) return {lv:at[i].lv, kurz:at[i].kurz||''};
+  return null;
 }
 /* ---------- Fotos an LV-Positionen ----------
    Bilder werden verkleinert als JPEG-DataURL im Projekt gespeichert (kommen so auch ins Backup). */
@@ -4968,6 +5677,448 @@ $('#fsMehr').onclick=()=>{
   else $(fotoQuelle).click();
 };
 $('#fsEdit').onclick=()=>{ if(fotoStapel && fotoStapel.length) feStapelEdit(0); };
+
+/* ================= Fotoaufmaß: auf dem Foto messen =================
+   Die Markierungen bleiben ALS DATEN am Foto (anders als beim Fotoeditor, der seine
+   Zeichnungen beim Speichern ins Bild rechnet) — sie tragen ja die Maße, die ins
+   Aufmaß gehen. Koordinaten liegen in 0…1 des Bildes, damit sie von der Anzeigegröße
+   unabhängig sind: dasselbe Foto misst am Telefon wie am Rechner gleich.
+
+   Gemessen wird NICHT aus der Zeichnung — die Zahl tippt der Nutzer. Nach einer
+   Kalibrierung (bekannte Strecke einmessen) steht im Maßfenster ein Vorschlag, den man
+   überschreiben kann. Grund: ein schräg aufgenommenes Foto ist perspektivisch verzerrt;
+   der Vorschlag hilft beim Abschätzen, ersetzt aber kein Maßband. */
+const dlgFotoMass=$('#dlgFotoMass'), dlgFmMass=$('#dlgFmMass');
+let fmObj=null, fmIdx=0, fmRoomId=null, fmSlot=0;
+let fmZug=null;              // laufendes Rechteck bzw. laufende Polylinie
+let fmKalibLauf=null;        // Kalibrierung: erster Punkt gesetzt
+let fmMassZiel=null;         // Markierung, deren Maß gerade eingegeben wird
+let fmSel=null;              // angetippte Markierung (Kennung)
+let fmSchieb=null;           // laufendes Schieben/Formändern
+const fmSelMark = () => { const f=fmFoto(); return f ? (f.marken||[]).find(m=>m.id===fmSel)||null : null; };
+/* Treffer werden in Pixeln geprüft, nicht in Bildanteilen: ein Finger ist überall
+   gleich breit, ein Bildanteil bei einem querformatigen Foto waagerecht aber viel
+   länger als senkrecht. */
+const FM_FASS=11;                       // Fassbreite in Pixeln
+function fmPxPunkt(q){ const bb=fmBildBox(); return {x:q.x*bb.w, y:q.y*bb.h}; }
+function fmAbstandSeg(p, a, b){
+  const dx=b.x-a.x, dy=b.y-a.y, l2=dx*dx+dy*dy;
+  const t=l2 ? Math.max(0, Math.min(1, ((p.x-a.x)*dx+(p.y-a.y)*dy)/l2)) : 0;
+  return Math.hypot(p.x-(a.x+dx*t), p.y-(a.y+dy*t));
+}
+function fmTrifft(m, q){
+  const p=fmPxPunkt(q), bb=fmBildBox();
+  const P=v=>({x:v.x*bb.w, y:v.y*bb.h});
+  if(m.art==='flaeche'){
+    const a=P({x:Math.min(m.x,m.x+m.w), y:Math.min(m.y,m.y+m.h)});
+    const b=P({x:Math.max(m.x,m.x+m.w), y:Math.max(m.y,m.y+m.h)});
+    return p.x>=a.x-FM_FASS && p.x<=b.x+FM_FASS && p.y>=a.y-FM_FASS && p.y<=b.y+FM_FASS;
+  }
+  if(m.art==='linie'){
+    const pts=(m.pts||[]).map(P);
+    for(let i=0;i<pts.length-1;i++) if(fmAbstandSeg(p, pts[i], pts[i+1])<FM_FASS) return true;
+    return false;
+  }
+  const c=P(m); return Math.hypot(p.x-c.x, p.y-c.y) < FM_FASS+6;
+}
+// Zuletzt Gezeichnetes liegt oben — von hinten suchen
+function fmTreffer(q){
+  const f=fmFoto(); if(!f) return null;
+  const l=(f.marken||[]).slice().reverse();
+  return l.find(m=>fmTrifft(m,q)) || null;
+}
+// Griffe der ausgewählten Markierung: Ecken einer Fläche, Punkte einer Linie
+function fmGriffe(m){
+  if(!m) return [];
+  if(m.art==='flaeche'){
+    const x1=Math.min(m.x,m.x+m.w), x2=Math.max(m.x,m.x+m.w);
+    const y1=Math.min(m.y,m.y+m.h), y2=Math.max(m.y,m.y+m.h);
+    return [{x:x1,y:y1},{x:x2,y:y1},{x:x2,y:y2},{x:x1,y:y2}];
+  }
+  if(m.art==='linie') return (m.pts||[]).map(q=>({x:q.x, y:q.y}));
+  return [];
+}
+function fmGriffUnter(m, q){
+  const p=fmPxPunkt(q), bb=fmBildBox();
+  return fmGriffe(m).findIndex(gq=>Math.hypot(p.x-gq.x*bb.w, p.y-gq.y*bb.h) < FM_FASS+4);
+}
+const fmKlemm = v => Math.max(0, Math.min(1, v));
+/* Schieben und Formändern. Die Maße bleiben dabei unangetastet: sie sind vor Ort
+   gemessen und getippt, die Zeichnung sagt nur, WO. Ein Verschieben darf keine
+   gemessene Zahl überschreiben. */
+function fmSchiebAnwenden(q){
+  const s=fmSchieb, m=s.m, o=s.orig;
+  const dx=q.x-s.start.x, dy=q.y-s.start.y;
+  if(s.art==='griff'){
+    if(m.art==='flaeche'){
+      const x1=Math.min(o.x,o.x+o.w), x2=Math.max(o.x,o.x+o.w);
+      const y1=Math.min(o.y,o.y+o.h), y2=Math.max(o.y,o.y+o.h);
+      const ex=[x1,x2,x2,x1][s.idx], ey=[y1,y1,y2,y2][s.idx];      // gezogene Ecke
+      const gx=ex===x1?x2:x1, gy=ey===y1?y2:y1;                    // Gegenecke bleibt
+      const nx=fmKlemm(q.x), ny=fmKlemm(q.y);
+      m.x=Math.min(gx,nx); m.y=Math.min(gy,ny);
+      m.w=Math.max(0.01, Math.abs(nx-gx)); m.h=Math.max(0.01, Math.abs(ny-gy));
+    } else if(m.art==='linie'){
+      m.pts[s.idx]={x:fmKlemm(q.x), y:fmKlemm(q.y)};
+    }
+    return;
+  }
+  if(m.art==='flaeche'){
+    m.x=fmKlemm(Math.min(1-Math.abs(o.w), o.x+dx)); m.y=fmKlemm(Math.min(1-Math.abs(o.h), o.y+dy));
+  } else if(m.art==='linie'){
+    m.pts=o.pts.map(p=>({x:fmKlemm(p.x+dx), y:fmKlemm(p.y+dy)}));
+  } else { m.x=fmKlemm(o.x+dx); m.y=fmKlemm(o.y+dy); }
+}
+function fmMarkWeg(){
+  const f=fmFoto(), m=fmSelMark(); if(!f || !m) return;
+  f.marken=(f.marken||[]).filter(x=>x!==m);
+  fmSel=null; save(); fmZeichnen(); renderAll();
+}
+
+const fmFoto = () => (fmObj && (fmObj.fotos||[])[fmIdx]) || null;
+const fmArt = si => FM_WERKZEUG[(fmSlots(fmObj)[si]||{}).einheit] || 'flaeche';
+// Bildkoordinaten 0…1 aus einem Zeigerereignis — das Bild ist zentriert und skaliert
+function fmPunkt(e){
+  const im=$('#fmBild'), r=im.getBoundingClientRect();
+  return {x:Math.max(0, Math.min(1, (e.clientX-r.left)/r.width)),
+          y:Math.max(0, Math.min(1, (e.clientY-r.top)/r.height))};
+}
+// Bildpunkte in Prozent — die SVG-Lage deckt genau das Bild ab
+function fmBildBox(){
+  const im=$('#fmBild'), b=$('#fmBuehne');
+  const ri=im.getBoundingClientRect(), rb=b.getBoundingClientRect();
+  return {l:ri.left-rb.left, t:ri.top-rb.top, w:ri.width, h:ri.height};
+}
+/* Vorschlag aus der Zeichnung: nur mit Kalibrierung. Gerechnet wird im
+   Seitenverhältnis des Bildes, sonst wäre eine senkrechte Strecke anders skaliert
+   als eine waagerechte. */
+function fmProM(){
+  const f=fmFoto(); if(!f || !f.kal || !(f.kal.meter>0)) return 0;
+  const im=$('#fmBild'), ar=(im.naturalWidth&&im.naturalHeight) ? im.naturalHeight/im.naturalWidth : 1;
+  const dx=f.kal.bx-f.kal.ax, dy=(f.kal.by-f.kal.ay)*ar;
+  const d=Math.hypot(dx,dy);
+  return d>0 ? d/f.kal.meter : 0;      // Bildanteile je Meter
+}
+function fmStrecke(a,b){
+  const im=$('#fmBild'), ar=(im.naturalWidth&&im.naturalHeight) ? im.naturalHeight/im.naturalWidth : 1;
+  return Math.hypot(b.x-a.x, (b.y-a.y)*ar);
+}
+const fmVorschlag = d => { const k=fmProM(); return k>0 ? mm(d/k) : null; };
+
+function fmOeffnen(g, idx, roomId){
+  fmObj=g; fmIdx=idx; fmRoomId=roomId; fmZug=null; fmKalibLauf=null;
+  fmSel=null; fmSchieb=null;
+  $('#fmAlpha').value=Math.round(fmAlpha()*100);
+  const f=fmFoto(); if(!f) return;
+  fmSlot=fmSlots(g).findIndex(x=>x.lv);  if(fmSlot<0) fmSlot=0;
+  $('#fmBild').src=f.src||'';
+  $('#fmTitel').textContent=`Foto ${idx+1} von ${(g.fotos||[]).length}`;
+  dlgFotoMass.showModal();
+  $('#fmBild').onload=fmZeichnen;
+  fmZeichnen();
+}
+function fmSlotLeiste(){
+  const sl=fmSlots(fmObj);
+  $('#fmSlotLeiste').innerHTML=sl.map((x,i)=>{
+    const aus=!x.lv;
+    const werk={flaeche:'Rechteck', linie:'Linie', kreuz:'Kreuz'}[FM_WERKZEUG[x.einheit]||'flaeche'];
+    return `<button class="btn small fmslot" data-i="${i}" ${aus?'disabled':''}
+      title="${aus?'Diesem Slot ist keine LV-Position zugeordnet':werk}"
+      style="flex:1 1 120px; text-align:left; ${i===fmSlot?`outline:2px solid ${x.farbe}; font-weight:700`:''}">
+      <span style="display:inline-block; width:11px; height:11px; border-radius:3px; background:${x.farbe}; margin-right:5px"></span>
+      ${esc(x.kurz||x.lv||'— frei —')}</button>`;
+  }).join('');
+  document.querySelectorAll('.fmslot').forEach(b=>b.onclick=()=>{
+    fmSlot=+b.dataset.i; fmZug=null; fmZeichnen();
+  });
+}
+function fmSummenLeiste(){
+  const sl=fmSlots(fmObj);
+  $('#fmSummen').innerHTML=sl.map((x,i)=>!x.lv?'':
+    `<span style="flex:1 1 120px; font-size:12px">
+      <span style="display:inline-block; width:9px; height:9px; border-radius:2px; background:${x.farbe}"></span>
+      <b>${fmt(fmSumme(fmObj,i),2)} ${EINH_SYM[x.einheit]||''}</b>
+      <span style="color:var(--muted)">${esc(x.kurz||x.lv)}</span></span>`).join('');
+}
+function fmZeichnen(){
+  if(!fmObj) return;
+  fmSlotLeiste(); fmSummenLeiste();
+  const f=fmFoto(); if(!f) return;
+  const bb=fmBildBox();
+  const sv=$('#fmSvg');
+  const X=v=>bb.l+v*bb.w, Y=v=>bb.t+v*bb.h;
+  const sl=fmSlots(fmObj);
+  /* Im Bild steht nur die laufende Nummer. Die Masse selbst stehen als eigene
+     Zuordnung in der Positionsliste — zwei Zahlen im Bild verdecken bei mehreren
+     Markierungen einander und das Foto gleich mit. Antippen oeffnet das Massfenster. */
+  const nrVon={}; fmMarken(fmObj).forEach(e=>{ nrVon[e.m.id]=e.nr; });
+  const belegt=[];                      // schon vergebene Schildplaetze
+  const schild=(m, farbe)=>{
+    const txt=String(nrVon[m.id]||''), b=fmSchildBreite(txt);
+    const p=fmFreierOrt(fmSchildKand(m, X, Y, 20), belegt, b, 20);
+    return fmSchild(p.x, p.y, txt, farbe, m.id);
+  };
+  let out='';
+  (f.marken||[]).forEach(m=>{
+    const farbe=(sl[m.slot]||{}).farbe||'#e53935';
+    if(m.art==='flaeche'){
+      const x=X(Math.min(m.x,m.x+m.w)), y=Y(Math.min(m.y,m.y+m.h));
+      const w=Math.abs(m.w)*bb.w, h=Math.abs(m.h)*bb.h;
+      out+=`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${farbe}" fill-opacity="0.18"
+        stroke="${farbe}" stroke-width="2.5" data-fmm="${m.id}" style="cursor:pointer"/>`;
+      out+=schild(m, farbe);
+    } else if(m.art==='linie'){
+      const pts=(m.pts||[]).map(q=>`${X(q.x)},${Y(q.y)}`).join(' ');
+      out+=`<polyline points="${pts}" fill="none" stroke="${farbe}" stroke-width="3"
+        stroke-linecap="round" stroke-linejoin="round" marker-start="url(#fmPfeil)" marker-end="url(#fmPfeil)"
+        data-fmm="${m.id}" style="cursor:pointer"/>`;
+      out+=schild(m, farbe);
+    } else {
+      const x=X(m.x), y=Y(m.y), a=9;
+      out+=`<g data-fmm="${m.id}" style="cursor:pointer">
+        <line x1="${x-a}" y1="${y-a}" x2="${x+a}" y2="${y+a}" stroke="${farbe}" stroke-width="3.5"/>
+        <line x1="${x-a}" y1="${y+a}" x2="${x+a}" y2="${y-a}" stroke="${farbe}" stroke-width="3.5"/>
+        <circle cx="${x}" cy="${y}" r="${a+4}" fill="transparent"/></g>`;
+      out+=schild(m, farbe);
+    }
+  });
+  // laufende Eingabe
+  const farbe=(sl[fmSlot]||{}).farbe||'#e53935';
+  if(fmZug && fmZug.art==='flaeche' && fmZug.cur){
+    const x=X(Math.min(fmZug.x,fmZug.cur.x)), y=Y(Math.min(fmZug.y,fmZug.cur.y));
+    out+=`<rect x="${x}" y="${y}" width="${Math.abs(fmZug.cur.x-fmZug.x)*bb.w}"
+      height="${Math.abs(fmZug.cur.y-fmZug.y)*bb.h}" fill="${farbe}" fill-opacity="0.14"
+      stroke="${farbe}" stroke-width="2" stroke-dasharray="6 4"/>`;
+  }
+  if(fmZug && fmZug.art==='linie'){
+    const alle=fmZug.pts.concat(fmZug.cur?[fmZug.cur]:[]);
+    out+=`<polyline points="${alle.map(q=>`${X(q.x)},${Y(q.y)}`).join(' ')}" fill="none"
+      stroke="${farbe}" stroke-width="3" stroke-dasharray="7 5" stroke-linecap="round"/>`;
+    fmZug.pts.forEach(q=>{ out+=`<circle cx="${X(q.x)}" cy="${Y(q.y)}" r="4" fill="${farbe}"/>`; });
+  }
+  if(f.kal){
+    out+=`<line x1="${X(f.kal.ax)}" y1="${Y(f.kal.ay)}" x2="${X(f.kal.bx)}" y2="${Y(f.kal.by)}"
+      stroke="#ffd54f" stroke-width="2" stroke-dasharray="4 4"/>`;
+    out+=fmSchild((X(f.kal.ax)+X(f.kal.bx))/2, (Y(f.kal.ay)+Y(f.kal.by))/2, fmt(f.kal.meter,2)+' m', '#a37800', null);
+  }
+  if(fmKalibLauf) out+=`<circle cx="${X(fmKalibLauf.x)}" cy="${Y(fmKalibLauf.y)}" r="5" fill="#ffd54f"/>`;
+  /* Die ausgewählte Markierung bekommt einen hellen Saum und ihre Griffe. Die Griffe
+     stehen NICHT in der Deckkraft-Gruppe — sie sollen immer gut sichtbar sein, auch
+     wenn die Markierungen fast durchsichtig gestellt sind. */
+  const gm=fmSelMark();
+  let griffe='';
+  if(gm){
+    const gf=(sl[gm.slot]||{}).farbe||'#e53935';
+    if(gm.art==='flaeche'){
+      const x1=X(Math.min(gm.x,gm.x+gm.w)), y1=Y(Math.min(gm.y,gm.y+gm.h));
+      griffe+=`<rect x="${x1}" y="${y1}" width="${Math.abs(gm.w)*bb.w}" height="${Math.abs(gm.h)*bb.h}"
+        fill="none" stroke="#fff" stroke-width="1.5" stroke-dasharray="6 4" style="pointer-events:none"/>`;
+    } else if(gm.art==='linie'){
+      griffe+=`<polyline points="${(gm.pts||[]).map(q=>`${X(q.x)},${Y(q.y)}`).join(' ')}" fill="none"
+        stroke="#fff" stroke-width="1.5" stroke-dasharray="6 4" style="pointer-events:none"/>`;
+    } else {
+      griffe+=`<circle cx="${X(gm.x)}" cy="${Y(gm.y)}" r="15" fill="none" stroke="#fff"
+        stroke-width="1.5" stroke-dasharray="5 4" style="pointer-events:none"/>`;
+    }
+    fmGriffe(gm).forEach(q=>{ griffe+=`<circle cx="${X(q.x)}" cy="${Y(q.y)}" r="7" fill="#fff"
+      stroke="${gf}" stroke-width="2.5" style="pointer-events:none"/>`; });
+  }
+  $('#fmMarkWeg').style.display = gm ? '' : 'none';
+  sv.innerHTML=`<defs><marker id="fmPfeil" viewBox="0 0 10 10" refX="9" refY="5"
+      markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke"/></marker></defs>`
+    + `<g opacity="${fmAlpha()}">${out}</g>`+griffe;
+
+  const art=fmArt(fmSlot);
+  $('#fmFertig').style.display = (fmZug && fmZug.art==='linie' && fmZug.pts.length>=2) ? '' : 'none';
+  $('#fmHinweis').textContent = gm ? 'Ausgewählt: ziehen verschiebt, weiße Griffe ändern die Form, nochmal antippen öffnet das Maß.'
+    : fmKalibLauf ? 'Zweiten Punkt der bekannten Strecke antippen.'
+    : art==='kreuz' ? 'Antippen setzt ein Kreuz. Jedes Kreuz zählt ein Stück.'
+    : art==='linie' ? 'Punkt für Punkt antippen, dann „Linie abschließen".'
+    : 'Rechteck aufziehen. Danach Länge und Breite eintragen.';
+}
+function fmSchild(x, y, txt, farbe, id){
+  const b=Math.max(/^\d+$/.test(txt)?22:30, txt.length*7.2);
+  return `<g${id?` data-fmm="${id}" style="cursor:pointer"`:' style="pointer-events:none"'}>
+    <rect x="${x-b/2}" y="${y-10}" width="${b}" height="20" rx="5" fill="#fff" fill-opacity="0.92" stroke="${farbe}" stroke-width="1.5"/>
+    <text x="${x}" y="${y+4}" text-anchor="middle" font-size="12" font-weight="700" fill="${farbe}">${esc(txt)}</text></g>`;
+}
+/* ---- Zeigerbedienung auf dem Bild ---- */
+{
+  const sv=$('#fmSvg');
+  let ziehen=false;
+  sv.addEventListener('pointerdown', e=>{
+    if(!fmObj) return;
+    const f=fmFoto(); if(!f) return;
+    const q=fmPunkt(e);
+    if(fmKalibLauf===null && $('#fmKalib').classList.contains('active')){ fmKalibLauf=q; fmZeichnen(); return; }
+    if(fmKalibLauf){                       // zweiter Punkt: Maß erfragen
+      const a=fmKalibLauf; fmKalibLauf=null;
+      $('#fmKalib').classList.remove('active');
+      const t=prompt('Wie lang ist diese Strecke in Metern?', '1,00');
+      const v=parseNum(t||'');
+      if(isFinite(v) && v>0){ f.kal={ax:a.x, ay:a.y, bx:q.x, by:q.y, meter:v}; save(); }
+      fmZeichnen(); return;
+    }
+    /* Erst anfassen, dann zeichnen. Eine vorhandene Markierung unter dem Finger hat
+       immer Vorrang — sonst liesse sich auf einem vollen Bild nichts mehr auswählen.
+       Während eine Linie läuft (`fmZug`) gilt das nicht: dort setzt jeder Tipp einen
+       weiteren Punkt. */
+    if(!fmZug){
+      const sm=fmSelMark();
+      if(sm){
+        const gi=fmGriffUnter(sm, q);
+        if(gi>=0){
+          fmSchieb={m:sm, art:'griff', idx:gi, start:q, orig:JSON.parse(JSON.stringify(sm))};
+          try{ sv.setPointerCapture(e.pointerId); }catch(_){}
+          return;
+        }
+      }
+      const tr=fmTreffer(q);
+      if(tr){
+        fmSchieb={m:tr, art:'move', start:q, orig:JSON.parse(JSON.stringify(tr)),
+                  warGewaehlt:fmSel===tr.id};
+        fmSel=tr.id;
+        try{ sv.setPointerCapture(e.pointerId); }catch(_){}
+        fmZeichnen(); return;
+      }
+      /* Daneben getippt: abwählen. Beim Kreuz-Werkzeug endet der Tipp damit — sonst
+         setzte derselbe Tipp gleich ein Kreuz. Rechteck und Linie ziehen dagegen weiter:
+         dort wäre eine verschluckte Ziehbewegung nur ärgerlich. */
+      if(fmSel){
+        fmSel=null;
+        if(fmArt(fmSlot)==='kreuz'){ fmZeichnen(); return; }
+      }
+    }
+    const sl=fmSlots(fmObj)[fmSlot];
+    if(!sl || !sl.lv){ melde('Diesem Slot ist keine LV-Position zugeordnet.', true); return; }
+    const art=fmArt(fmSlot);
+    if(art==='kreuz'){
+      f.marken=[...(f.marken||[]), {id:uid(), slot:fmSlot, art:'kreuz', x:q.x, y:q.y}];
+      save(); fmZeichnen(); renderAll(); return;
+    }
+    if(art==='linie'){
+      if(!fmZug || fmZug.art!=='linie') fmZug={art:'linie', pts:[q], cur:null};
+      else fmZug.pts.push(q);
+      fmZeichnen(); return;
+    }
+    fmZug={art:'flaeche', x:q.x, y:q.y, cur:null}; ziehen=true;
+  });
+  sv.addEventListener('pointermove', e=>{
+    if(fmSchieb){
+      const q=fmPunkt(e);
+      if(!fmSchieb.bewegt && Math.hypot(q.x-fmSchieb.start.x, q.y-fmSchieb.start.y)<0.006) return;
+      fmSchieb.bewegt=true;
+      fmSchiebAnwenden(q); fmZeichnen(); return;
+    }
+    if(!fmObj || !fmZug) return;
+    const q=fmPunkt(e);
+    if(fmZug.art==='flaeche' && ziehen){ fmZug.cur=q; fmZeichnen(); }
+    else if(fmZug.art==='linie'){ fmZug.cur=q; fmZeichnen(); }
+  });
+  sv.addEventListener('pointerup', e=>{
+    if(fmSchieb){
+      const sch=fmSchieb; fmSchieb=null;
+      try{ sv.releasePointerCapture(e.pointerId); }catch(_){}
+      if(sch.bewegt){ save(); fmZeichnen(); renderAll(); }
+      // ohne Bewegung: der zweite Tipp auf dieselbe Markierung öffnet das Maß
+      else if(sch.warGewaehlt) fmMassOeffnen(sch.m);          // auch Kreuze: Anzahl
+      else fmZeichnen();
+      return;
+    }
+    if(!fmObj || !fmZug || fmZug.art!=='flaeche' || !ziehen) return;
+    ziehen=false;
+    const q=fmPunkt(e), f=fmFoto();
+    const w=q.x-fmZug.x, h=q.y-fmZug.y;
+    if(Math.abs(w)<0.02 || Math.abs(h)<0.02){ fmZug=null; fmZeichnen(); return; }
+    const im=$('#fmBild');
+    const m={id:uid(), slot:fmSlot, art:'flaeche',
+      x:Math.min(fmZug.x,q.x), y:Math.min(fmZug.y,q.y), w:Math.abs(w), h:Math.abs(h),
+      laenge:fmVorschlag(Math.abs(w))||0,
+      breite:fmVorschlag(Math.abs(h)*((im.naturalWidth&&im.naturalHeight)?im.naturalHeight/im.naturalWidth:1))||0};
+    f.marken=[...(f.marken||[]), m];
+    fmZug=null; fmSel=m.id; save(); fmZeichnen();
+    fmMassOeffnen(m);
+  });
+}
+$('#fmFertig').onclick=()=>{
+  if(!fmZug || fmZug.art!=='linie' || fmZug.pts.length<2) return;
+  const f=fmFoto();
+  let d=0; for(let i=0;i<fmZug.pts.length-1;i++) d+=fmStrecke(fmZug.pts[i], fmZug.pts[i+1]);
+  const m={id:uid(), slot:fmSlot, art:'linie', pts:fmZug.pts.slice(), laenge:fmVorschlag(d)||0};
+  f.marken=[...(f.marken||[]), m];
+  fmZug=null; fmSel=m.id; save(); fmZeichnen();
+  fmMassOeffnen(m);
+};
+$('#fmMarkWeg').onclick=()=>fmMarkWeg();
+dlgFotoMass.addEventListener('keydown', e=>{
+  if((e.key==='Delete'||e.key==='Backspace') && fmSel && !/^(INPUT|TEXTAREA)$/.test((e.target.tagName||''))){
+    e.preventDefault(); fmMarkWeg();
+  }
+});
+$('#fmFotoWeg').onclick=()=>{
+  if(!fmObj) return;
+  const f=fmFoto(); if(!f) return;
+  const n=(f.marken||[]).length;
+  if(n && !confirm(`Auf diesem Foto stehen ${n} Messungen. Foto mitsamt Messungen löschen?`)) return;
+  fmObj.fotos.splice(fmIdx,1);
+  fmSel=null; save(); renderAll();
+  dlgFotoMass.close();
+};
+/* Ein Regler für alle Markierungen. Beim Ziehen nur neu zeichnen, gespeichert wird
+   erst beim Loslassen — sonst liefe `save()` bei jedem Pixel. */
+$('#fmAlpha').oninput=()=>{ const p=proj(); if(p) p.fmAlpha=(+$('#fmAlpha').value||100)/100; fmZeichnen(); };
+$('#fmAlpha').onchange=()=>{ save(); };
+$('#fmUndo').onclick=()=>{
+  if(fmZug){ fmZug=null; fmZeichnen(); return; }
+  const f=fmFoto(); if(!f || !(f.marken||[]).length) return;
+  f.marken.pop(); fmSel=null; save(); fmZeichnen(); renderAll();
+};
+$('#fmKalib').onclick=()=>{
+  const b=$('#fmKalib'); b.classList.toggle('active'); fmKalibLauf=null;
+  melde(b.classList.contains('active')
+    ? 'Zwei Punkte einer bekannten Strecke antippen — danach schlägt das Maßfenster etwas vor.'
+    : 'Maßstab-Modus aus.');
+  fmZeichnen();
+};
+/* ---- Maßfenster ---- */
+function fmMassOeffnen(m){
+  fmMassZiel=m;
+  const flaeche=m.art==='flaeche', kreuz=m.art==='kreuz';
+  $('#fmMassZeileB').style.display=flaeche?'':'none';
+  $('#fmMassZeileL').style.display=kreuz?'none':'';   // ein Kreuz hat nur eine Anzahl
+  $('#fmMassKopf').firstChild.nodeValue=flaeche?'Maße der Fläche ':kreuz?'Anzahl ':'Länge der Linie ';
+  $('#fmMassL').value=m.laenge?fmt3(m.laenge):'';
+  $('#fmMassB').value=m.breite?fmt3(m.breite):'';
+  // ganze Zahlen ohne Nachkommastellen — „1" liest sich besser als „1,000"
+  const n=fmMenge(m);
+  $('#fmMassM').value=Number.isInteger(n)?String(n):fmt3(n);
+  const k=fmProM();
+  $('#fmMassHint').textContent = k>0
+    ? 'Vorschlag aus der Zeichnung — überschreiben, wenn du vor Ort anders gemessen hast.'
+    : kreuz ? 'Steht die Markierung für mehrere gleiche Stücke, hier die Anzahl eintragen.'
+    : 'Kein Maßstab gesetzt: bitte eintippen. Über „⇄ Maßstab" lässt sich einer einmessen.';
+  dlgFmMass.showModal();
+  setTimeout(()=>{ const el=$(kreuz?'#fmMassM':'#fmMassL'); el.focus(); try{ el.select(); }catch(_){} }, 30);
+}
+$('#fmMassOk').onclick=()=>{
+  const m=fmMassZiel; if(!m) return;
+  const L=parseNum($('#fmMassL').value), B=parseNum($('#fmMassB').value);
+  const M=parseNum($('#fmMassM').value);
+  m.laenge=isFinite(L)&&L>0?mm(L):0;
+  if(m.art==='flaeche') m.breite=isFinite(B)&&B>0?mm(B):0;
+  m.menge=isFinite(M)&&M>0?mm(M):1;
+  dlgFmMass.close(); save(); fmZeichnen(); renderAll();
+};
+$('#fmMassWeg').onclick=()=>{
+  const m=fmMassZiel, f=fmFoto(); if(!m||!f) return;
+  f.marken=(f.marken||[]).filter(x=>x.id!==m.id);
+  dlgFmMass.close(); save(); fmZeichnen();
+};
+dlgFotoMass.addEventListener('close', ()=>{ fmZug=null; fmKalibLauf=null;
+  $('#fmKalib').classList.remove('active'); save(); renderAll(); });
+window.addEventListener('resize', ()=>{ if(dlgFotoMass.open) fmZeichnen(); });
+
 /* ================= Foto bearbeiten =================
    Einkreisen, Bereiche verpixeln, beschriften. Solange der Dialog offen ist, liegen
    die Zeichnungen als Objektliste ÜBER dem Bild — „Zurück" und „Verwerfen" kosten
@@ -5610,7 +6761,11 @@ function lvTipShow(anchor, it, fest){
 // Tipp auf den Kasten schließt ihn (Touch); am Rechner stört es nicht
 $('#lvtip').addEventListener('mousedown', e=>{ e.preventDefault(); lvTipHide(); });
 /* Eigene Vorschlagsliste (statt datalist) — Filterart je Feld frei wählbar */
-function makeSuggest(inp, box, match, row, onInput){
+/* onChoose: was beim Auswählen einer Zeile geschehen soll. Ohne Angabe werden die
+   Felder des LV-Dialogs gefüllt — das ist der ursprüngliche Zweck. Aufrufer ausserhalb
+   des Dialogs (Fotoaufmaß-Slots) brauchen ihr eigenes Verhalten, sonst landete die
+   Auswahl im unsichtbaren Dialog statt im angeklickten Feld. */
+function makeSuggest(inp, box, match, row, onInput, onChoose){
   let items=[], idx=-1;
   const close=()=>{ box.classList.remove('on'); box.innerHTML=''; idx=-1; lvTipHide(); };
   const paint=()=>{
@@ -5648,6 +6803,7 @@ function makeSuggest(inp, box, match, row, onInput){
     });
   };
   const choose=it=>{
+    if(onChoose){ onChoose(it); close(); return; }
     $('#lvPos').value=it.lv;
     $('#lvKurz').value=it.kurz;
     lvApplyKnown(it.lv);
@@ -5738,6 +6894,7 @@ function lvDialogDaten(){
   // ein `false` im Aufmaß, das niemand braucht (und `delete` beim Bearbeiten greift).
   if(lvPresetWall!=null && $('#lvAutoL').checked) data.autoL=true;
   if(lvPresetWall!=null && $('#lvAutoH').checked) data.autoH=true;
+  if(lvObjId && $('#lvAutoObj').checked && $('#lvAutoObjZeile').style.display!=='none') data.autoObj=true;
   return data;
 }
 // Objekt-/Wandnummer wird erst vergeben, wenn wirklich eine LV-Position daran hängt
@@ -5763,7 +6920,9 @@ function lvSpeichern(){
   // NICHT weg — ein abgehaktes Häkchen bliebe sonst wirkungslos.
   if(!data.autoL) delete ziel.autoL;
   if(!data.autoH) delete ziel.autoH;
+  if(!data.autoObj) delete ziel.autoObj;
   lvNummerVergeben(ziel);
+  letzteLv={lv:data.lv, kurz:data.kurz||''};   // Voreingabe für die nächste neue Zuordnung
   assignLvColors(p);
   // Paar LV-Nummer ↔ Kurztext projektweit merken (letzter Stand gewinnt)
   if(data.lv && data.kurz){ p.lvTexts=p.lvTexts||{}; p.lvTexts[data.lv]=data.kurz; }
@@ -5778,18 +6937,29 @@ $('#lvOk').onclick=()=>{
    Etagenplan als Auswahlfläche: Räume anklicken, Etage wechseln, „Anwenden".
    Die Auswahl lebt über alle Etagen hinweg in einem Set. */
 const dlgLvKopie=$('#dlgLvKopie');
-let lkWahl=new Set(), lkFloorId=null, lkLv='';
-/* Liegt genau diese Position schon im Raum? Gezählt wird nur, was zum Raum selbst
-   gehört (kein Objekt, keine Wand) — eine gleichnamige Position an einer Tür ist
-   etwas anderes und darf nicht mitgelöscht werden. Das Original bleibt außen vor. */
-function lkVorhanden(roomId){
-  return (proj().attrs||[]).filter(a=>a.roomId===roomId && a.lv===lkLv
-    && !a.objId && a.wall==null && a.id!==lvEditId);
+/* ---------- Position in weitere Räume ODER auf weitere Wände kopieren ----------
+   Zwei Betriebsarten in EINER Auswahl (`lkModus`), weil sich nur die Trefferflächen
+   unterscheiden — Zustände, Bilanz, Rückfrage und Anwenden sind dieselbe Mechanik:
+     'raum'  Position hängt am Raum       → Räume anklicken
+     'wand'  Position hängt an einer Wand → Wände anklicken (seit 2026-08-04)
+   Geschlüsselt wird über `lkWahl` mit `roomId` bzw. `roomId#wandIndex`. */
+let lkWahl=new Set(), lkFloorId=null, lkLv='', lkModus='raum', lkRaumWeise=false;
+let lkVb=null, lkGezogen=false;                 // Ausschnitt der Auswahlansicht
+const lkKey=(rid,w)=>lkModus==='wand' ? rid+'#'+w : rid;
+const lkQuelle=()=>lkModus==='wand' ? lkKey(lvRoomId, lvPresetWall) : lvRoomId;
+/* Liegt genau diese Position schon dort? Gezählt wird nur, was zum selben Träger gehört:
+   im Raummodus der Raum selbst (kein Objekt, keine Wand), im Wandmodus genau diese Wand.
+   Eine gleichnamige Position an einer Tür ist etwas anderes und bleibt unangetastet.
+   Das Original bleibt außen vor. */
+function lkVorhanden(key){
+  const teile=String(key).split('#'), rid=teile[0], w=+teile[1];
+  return (proj().attrs||[]).filter(a=>a.roomId===rid && a.lv===lkLv && !a.objId
+    && a.id!==lvEditId
+    && (lkModus==='wand' ? a.wall===w : a.wall==null));
 }
-// Zustand eines Raums: was passiert beim Anwenden?
-function lkZustand(r){
-  if(r.id===lvRoomId) return 'quelle';
-  const da=lkVorhanden(r.id).length>0, soll=lkWahl.has(r.id);
+function lkZustand(key){
+  if(key===lkQuelle()) return 'quelle';
+  const da=lkVorhanden(key).length>0, soll=lkWahl.has(key);
   return da ? (soll?'bleibt':'weg') : (soll?'neu':'ohne');
 }
 const LK_STIL={
@@ -5799,98 +6969,257 @@ const LK_STIL={
   neu:   {f:'#d7f0e3', s:'#0ea06f', t:'#0b6e4c', txt:'wird angelegt'},
   ohne:  {f:'#fff',    s:'#2b3345', t:'#333',    txt:''}
 };
+// alle Schlüssel — für „Alle dieser Etage" und die Bilanz über alle Etagen
+function lkAlleKeys(nurEtage){
+  const raus=[];
+  proj().rooms.forEach(r=>{
+    if(nurEtage && r.floorId!==lkFloorId) return;
+    if(lkModus==='wand') r.points.forEach((_,i)=>raus.push(lkKey(r.id,i)));
+    else raus.push(r.id);
+  });
+  return raus;
+}
+/* Seitenverhältnis des Kastens ist Pflicht, nicht Kosmetik: Passt der Ausschnitt nicht
+   zum Kasten, zentriert SVG den Inhalt (`preserveAspectRatio` = `meet`) und lässt Ränder
+   frei — dann trifft die Umrechnung Bildschirm→Welt nicht mehr, und Anklicken, Schieben
+   und Radzoom liegen daneben. Der Ausschnitt wird deshalb IMMER auf das Verhältnis des
+   Kastens gebracht, genau wie `zoomFit()` auf der großen Zeichenfläche. */
+function lkKastenRatio(){
+  const sv=$('#lkPlan') && $('#lkPlan').querySelector('#lkSvg');
+  const r=sv && sv.getBoundingClientRect();
+  return (r && r.width>0) ? r.height/r.width : 0.62;
+}
+function lkPassend(x, y, w, h){
+  const ratio=lkKastenRatio(), cx=x+w/2, cy=y+h/2;
+  if(h/w > ratio) w=h/ratio; else h=w*ratio;
+  return {x:cx-w/2, y:cy-h/2, w:w, h:h};
+}
+function lkZoomFit(){
+  const rooms=proj().rooms.filter(r=>r.floorId===lkFloorId);
+  if(!rooms.length){ lkVb=null; return; }
+  const bb=bboxOf(rooms.flatMap(r=>r.points));
+  const pad=(Math.max(bb.maxx-bb.minx, bb.maxy-bb.miny)||1)*0.06;
+  lkVb=lkPassend(bb.minx-pad, bb.miny-pad, bb.maxx-bb.minx+2*pad, bb.maxy-bb.miny+2*pad);
+}
+// Zoomen um einen festgehaltenen Punkt (Rad) bzw. um die Mitte (Knöpfe)
+function lkZoom(f, ankerX, ankerY){
+  if(!lkVb) return;
+  const ax=ankerX==null?lkVb.x+lkVb.w/2:ankerX, ay=ankerY==null?lkVb.y+lkVb.h/2:ankerY;
+  const w=Math.max(0.5, Math.min(400, lkVb.w*f)), h=w*lkKastenRatio();
+  lkVb={x:ax-(ax-lkVb.x)*(w/lkVb.w), y:ay-(ay-lkVb.y)*(h/lkVb.h), w:w, h:h};
+  lkRender();
+}
 function lkRender(){
   const p=proj(), rooms=p.rooms.filter(r=>r.floorId===lkFloorId), el=$('#lkPlan');
   if(!rooms.length){
     el.innerHTML='<p class="hint" style="padding:8px">Auf dieser Etage liegen keine Räume.</p>';
   } else {
-    const bb=bboxOf(rooms.flatMap(r=>r.points));
-    const spanne=Math.max(bb.maxx-bb.minx, bb.maxy-bb.miny) || 1;
-    const pad=spanne*0.06;
-    const w=bb.maxx-bb.minx+2*pad, h=bb.maxy-bb.miny+2*pad;
-    const lbl=Math.max(0.15, w/34);
-    el.innerHTML=`<svg viewBox="${bb.minx-pad} ${bb.miny-pad} ${w} ${h}"
-        style="width:100%; height:auto; max-height:44vh; display:block">
-      ${rooms.map(r=>{
-        const z=lkZustand(r), st=LK_STIL[z], dick=z!=='ohne';
+    if(!lkVb) lkZoomFit();
+    const w=lkVb.w, lbl=Math.max(0.12, w/34);
+    let inhalt='';
+    if(lkModus==='wand'){
+      /* Wandmodus: Räume nur als blasser Hintergrund, damit man sich zurechtfindet —
+         angeklickt werden die Wände. Über jeder Wand liegt zusätzlich ein unsichtbares,
+         breiteres Band; es hängt am Ausschnitt und bleibt beim Zoomen gleich gut
+         treffbar. */
+      inhalt=rooms.map(r=>{
+        const d=r.points.map((q,i)=>(i?'L':'M')+q.x+' '+q.y).join(' ')+' Z';
+        const c=raumMitte(r);
+        /* Mit „Alle Wände im Raum" wird die Raumfläche selbst zur Trefferfläche. Sie
+           liegt UNTER den Wandbändern, ein Klick auf eine einzelne Wand geht also
+           weiterhin an die Wand — nur der Klick ins Raumesinnere trifft den Raum. */
+        const ganz=lkRaumWeise
+          ? ' data-lkraum="'+r.id+'" style="cursor:pointer"' : ' style="pointer-events:none"';
+        return '<path d="'+d+'" fill="'+(lkRaumWeise?'#f4f7fb':'#fbfbfc')+'" stroke="#c9ced7" stroke-width="'+(w/700)+
+          '" stroke-linejoin="miter"'+ganz+'/>'+
+          '<text x="'+c.x+'" y="'+c.y+'" text-anchor="middle" font-size="'+(lbl*0.8)+'" fill="#a8adb6"'+
+          ' style="pointer-events:none">'+esc(r.name)+'</text>';
+      }).join('')
+      + rooms.map(r=>r.points.map((a,i)=>{
+        const b=r.points[(i+1)%r.points.length], L=dist(a,b);
+        if(L<0.05) return '';
+        const key=lkKey(r.id,i), z=lkZustand(key), st=LK_STIL[z];
+        const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+        const zeichen={bleibt:'✓', weg:'✕', neu:'＋'}[z]||'';
+        const nr=wallNrOf(r,i);
+        const beschr=(zeichen||nr)
+          ? '<text x="'+mx+'" y="'+my+'" text-anchor="middle" dominant-baseline="middle" font-size="'+(lbl*0.9)+
+            '" font-weight="700" fill="'+st.t+'" stroke="#fff" stroke-width="'+(lbl*0.18)+
+            '" paint-order="stroke" style="pointer-events:none">'+zeichen+(nr?(zeichen?' ':'')+'#'+nr:'')+'</text>'
+          : '';
+        return '<g'+(z==='quelle'?'':' data-lkkey="'+key+'" style="cursor:pointer"')+'>'+
+          '<line x1="'+a.x+'" y1="'+a.y+'" x2="'+b.x+'" y2="'+b.y+'" stroke="'+st.s+
+            '" stroke-width="'+(z==='ohne'?w/260:w/110)+'" stroke-linecap="round"/>'+
+          '<line x1="'+a.x+'" y1="'+a.y+'" x2="'+b.x+'" y2="'+b.y+'" stroke="transparent" stroke-width="'+(w/45)+'"/>'+
+          beschr+'</g>';
+      }).join('')).join('');
+    } else {
+      inhalt=rooms.map(r=>{
+        const z=lkZustand(r.id), st=LK_STIL[z], dick=z!=='ohne';
         const d=r.points.map((q,i)=>(i?'L':'M')+q.x+' '+q.y).join(' ')+' Z';
         const c=raumMitte(r), rs=roomStats(r);
         const zeichen={bleibt:'✓ ', weg:'✕ ', neu:'＋ '}[z]||'';
-        return `<g${z==='quelle'?'':` data-lkroom="${r.id}" style="cursor:pointer"`}>
-          <path d="${d}" fill="${st.f}" stroke="${st.s}"
-            stroke-width="${dick?w/200:w/500}" stroke-linejoin="miter"/>
-          <text x="${c.x}" y="${c.y}" text-anchor="middle" font-size="${lbl}"
-            fill="${st.t}" style="pointer-events:none">
-            <tspan x="${c.x}" dy="-0.1" font-weight="${dick?700:400}">${zeichen}${esc(r.name)}</tspan>
-            <tspan x="${c.x}" dy="${lbl*1.2}" font-size="${lbl*0.75}" fill="${st.t}">${
-              st.txt || fmt(rs.area,2)+' m²'}</tspan></text>
-        </g>`;
-      }).join('')}
-    </svg>`;
-    el.querySelectorAll('[data-lkroom]').forEach(g=>g.onclick=()=>{
-      const id=g.dataset.lkroom;
-      if(lkWahl.has(id)) lkWahl.delete(id); else lkWahl.add(id);
-      lkRender();
-    });
+        return '<g'+(z==='quelle'?'':' data-lkkey="'+r.id+'" style="cursor:pointer"')+'>'+
+          '<path d="'+d+'" fill="'+st.f+'" stroke="'+st.s+'" stroke-width="'+(dick?w/200:w/500)+'" stroke-linejoin="miter"/>'+
+          '<text x="'+c.x+'" y="'+c.y+'" text-anchor="middle" font-size="'+lbl+'" fill="'+st.t+'" style="pointer-events:none">'+
+            '<tspan x="'+c.x+'" dy="-0.1" font-weight="'+(dick?700:400)+'">'+zeichen+esc(r.name)+'</tspan>'+
+            '<tspan x="'+c.x+'" dy="'+(lbl*1.2)+'" font-size="'+(lbl*0.75)+'" fill="'+st.t+'">'+
+              (st.txt || fmt(rs.area,2)+' m²')+'</tspan></text></g>';
+      }).join('');
+    }
+    el.innerHTML='<svg id="lkSvg" viewBox="'+lkVb.x+' '+lkVb.y+' '+lkVb.w+' '+lkVb.h+
+      '" style="width:100%; height:44vh; display:block; touch-action:none">'+inhalt+'</svg>';
+    const sv=el.querySelector('#lkSvg');
+    // Der Kasten steht erst jetzt fest — Ausschnitt auf sein Verhältnis bringen
+    const angepasst=lkPassend(lkVb.x, lkVb.y, lkVb.w, lkVb.h);
+    if(Math.abs(angepasst.h-lkVb.h)>1e-6 || Math.abs(angepasst.w-lkVb.w)>1e-6){
+      lkVb=angepasst;
+      sv.setAttribute('viewBox', lkVb.x+' '+lkVb.y+' '+lkVb.w+' '+lkVb.h);
+    }
+    lkPlanBedienung(sv);
   }
   const bilanz=lkBilanz();
-  $('#lkInfo').innerHTML=`Position <b>${esc(lkLv)}</b> — `+
+  const wort=lkModus==='wand'?'Wand/Wänden':'Raum/Räumen';
+  $('#lkInfo').innerHTML='Position <b>'+esc(lkLv)+'</b> — '+
     (bilanz.neu||bilanz.weg
-      ? [bilanz.neu?`<b style="color:var(--accent2)">${bilanz.neu} anlegen</b>`:'',
-         bilanz.weg?`<b style="color:var(--danger)">${bilanz.weg} entfernen</b>`:'']
-        .filter(Boolean).join(' · ')+` (${bilanz.bleibt} bleiben unverändert)`
-      : `liegt in ${bilanz.bleibt} weiteren Raum/Räumen — nichts zu tun.`);
+      ? [bilanz.neu?'<b style="color:var(--accent2)">'+bilanz.neu+' anlegen</b>':'',
+         bilanz.weg?'<b style="color:var(--danger)">'+bilanz.weg+' entfernen</b>':'']
+        .filter(Boolean).join(' · ')+' ('+bilanz.bleibt+' bleiben unverändert)'
+      : 'liegt in '+bilanz.bleibt+' weiteren '+wort+' — nichts zu tun.');
   $('#lkOk').textContent = (bilanz.neu||bilanz.weg) ? 'Anwenden' : 'Nichts zu ändern';
   $('#lkOk').disabled = !(bilanz.neu||bilanz.weg);
+  const rw=$('#lkRaumWeise');
+  if(rw) rw.classList.toggle('active', lkRaumWeise);
+}
+/* Ziehen schiebt den Ausschnitt, Rad zoomt, ein Tipp ohne Bewegung wählt aus.
+   Dieselbe Trennung wie auf der großen Zeichenfläche: erst beim Loslassen ohne
+   Bewegung gilt es als Klick — sonst wählte jedes Schieben etwas mit an.
+
+   **Kein `setPointerCapture` und kein `click`-Handler auf den Formen.** Beides hatte
+   die Auswahl lahmgelegt: Mit Zeigerfang gehen alle folgenden Ereignisse an die
+   SVG-Fläche, der Klick erreichte die Räume und Wände also nie mehr (die Knöpfe
+   „Alle dieser Etage" und der Zoom funktionierten weiter — sie hängen nicht am Plan).
+   Jetzt wird beim Loslassen selbst nachgesehen, was unter dem Zeiger liegt. */
+function lkPlanBedienung(svgEl){
+  if(!svgEl) return;
+  let start=null;
+  const inWelt=e=>{
+    const r=svgEl.getBoundingClientRect();
+    return {x:lkVb.x+(e.clientX-r.left)/r.width*lkVb.w, y:lkVb.y+(e.clientY-r.top)/r.height*lkVb.h};
+  };
+  svgEl.addEventListener('pointerdown', e=>{
+    start={cx:e.clientX, cy:e.clientY, vb:{x:lkVb.x, y:lkVb.y, w:lkVb.w, h:lkVb.h}};
+    lkGezogen=false;
+  });
+  svgEl.addEventListener('pointermove', e=>{
+    if(!start) return;
+    if(!lkGezogen && Math.hypot(e.clientX-start.cx, e.clientY-start.cy)<5) return;
+    lkGezogen=true;
+    const r=svgEl.getBoundingClientRect();
+    const dx=(e.clientX-start.cx)/r.width*start.vb.w, dy=(e.clientY-start.cy)/r.height*start.vb.h;
+    lkVb={x:start.vb.x-dx, y:start.vb.y-dy, w:start.vb.w, h:start.vb.h};
+    svgEl.setAttribute('viewBox', lkVb.x+' '+lkVb.y+' '+lkVb.w+' '+lkVb.h);
+  });
+  svgEl.addEventListener('pointerup', e=>{
+    const gezogen=lkGezogen;
+    start=null; lkGezogen=false;
+    if(gezogen) return;                       // das war ein Schieben, keine Auswahl
+    // Was liegt unter dem Zeiger? `closest` findet die Gruppe über der Trefferfläche.
+    const stapel=document.elementsFromPoint(e.clientX, e.clientY);
+    const treffer=stapel.map(el=>el.closest && el.closest('[data-lkkey]')).find(Boolean);
+    if(treffer){
+      const k=treffer.dataset.lkkey;
+      if(lkWahl.has(k)) lkWahl.delete(k); else lkWahl.add(k);
+      lkRender(); return;
+    }
+    /* Klick ins Raumesinnere bei „Alle Wände im Raum": Sind schon ALLE wählbaren Wände
+       dieses Raums dabei, nimmt der Klick sie wieder heraus — sonst wählt er sie alle.
+       Die Quellwand bleibt außen vor, sie gehört nicht zur Auswahl. */
+    const raum=stapel.map(el=>el.closest && el.closest('[data-lkraum]')).find(Boolean);
+    if(!raum) return;
+    const r=roomById(raum.dataset.lkraum); if(!r) return;
+    const keys=r.points.map((_,i)=>lkKey(r.id,i)).filter(k=>k!==lkQuelle());
+    if(!keys.length) return;
+    const alleDrin=keys.every(k=>lkWahl.has(k));
+    keys.forEach(k=>{ if(alleDrin) lkWahl.delete(k); else lkWahl.add(k); });
+    lkRender();
+  });
+  svgEl.addEventListener('pointercancel', ()=>{ start=null; lkGezogen=false; });
+  svgEl.addEventListener('pointerleave', ()=>{ start=null; });
+  svgEl.addEventListener('wheel', e=>{
+    e.preventDefault();
+    const q=inWelt(e);
+    lkZoom(e.deltaY>0?1.15:1/1.15, q.x, q.y);
+  }, {passive:false});
 }
 // Was würde „Anwenden" tun? (über alle Etagen)
 function lkBilanz(){
   let neu=0, weg=0, bleibt=0;
-  proj().rooms.forEach(r=>{
-    const z=lkZustand(r);
+  lkAlleKeys(false).forEach(k=>{
+    const z=lkZustand(k);
     if(z==='neu') neu++; else if(z==='weg') weg++; else if(z==='bleibt') bleibt++;
   });
-  return {neu, weg, bleibt};
+  return {neu:neu, weg:weg, bleibt:bleibt};
 }
 $('#lvKopieren').onclick=()=>{
   const lv=$('#lvPos').value.trim();
   if(!lv){ alert('Bitte zuerst eine LV Position angeben.'); return; }
   const p=proj();
   lkLv=lv;
+  lkModus = lvPresetWall!=null ? 'wand' : 'raum';
+  lkRaumWeise=false;
+  $('#lkRaumWeise').style.display = lkModus==='wand' ? '' : 'none';
+  $('#lkTitel').firstChild.nodeValue = lkModus==='wand'
+    ? 'Position auf weitere Wände kopieren ' : 'Position in weitere Räume kopieren ';
   // Startzustand = Wirklichkeit: angehakt ist, wo die Position schon liegt
-  lkWahl=new Set(p.rooms.filter(r=>r.id!==lvRoomId && lkVorhanden(r.id).length).map(r=>r.id));
+  lkWahl=new Set(lkAlleKeys(false).filter(k=>k!==lkQuelle() && lkVorhanden(k).length));
   lkFloorId=(roomById(lvRoomId)||{}).floorId || (p.floors[0]||{}).id;
   $('#lkFloor').innerHTML=p.floors.map(f=>
-    `<option value="${f.id}" ${f.id===lkFloorId?'selected':''}>${esc(f.name)}</option>`).join('');
-  lkRender();
+    '<option value="'+f.id+'" '+(f.id===lkFloorId?'selected':'')+'>'+esc(f.name)+'</option>').join('');
+  /* Erst zeigen, dann zeichnen: Solange der Dialog verborgen ist, hat der Plankasten
+     die Größe null — das Seitenverhältnis wäre geraten und die erste Anzeige verzerrt
+     (gemessen: Kasten 0,877, Ausschnitt 0,62; der erste Klick ging daneben). */
   dlgLvKopie.showModal();
+  lkVb=null; lkZoomFit();
+  lkRender();
 };
-$('#lkFloor').onchange=e=>{ lkFloorId=e.target.value; lkRender(); };
+$('#lkFloor').onchange=e=>{ lkFloorId=e.target.value; lkVb=null; lkZoomFit(); lkRender(); };
 $('#lkAlle').onclick=()=>{
-  proj().rooms.filter(r=>r.floorId===lkFloorId && r.id!==lvRoomId).forEach(r=>lkWahl.add(r.id));
+  lkAlleKeys(true).forEach(k=>{ if(k!==lkQuelle()) lkWahl.add(k); });
   lkRender();
 };
 $('#lkKeine').onclick=()=>{ lkWahl.clear(); lkRender(); };
+$('#lkRaumWeise').onclick=()=>{ lkRaumWeise=!lkRaumWeise; lkRender(); };
+$('#lkZoomIn').onclick=()=>lkZoom(1/1.3);
+$('#lkZoomOut').onclick=()=>lkZoom(1.3);
+$('#lkZoomFit').onclick=()=>{ lkZoomFit(); lkRender(); };
 $('#lkOk').onclick=()=>{
   const p=proj(), daten=lvDialogDaten();
   if(!daten.lv){ alert('Bitte eine LV Position angeben.'); return; }
   const bilanz=lkBilanz();
-  if(bilanz.weg && !confirm(`In ${bilanz.weg} Raum/Räumen wird die Position „${lkLv}" `+
-    `entfernt${bilanz.neu?`, in ${bilanz.neu} neu angelegt`:''}.\n\nFortfahren?`)) return;
-  // Erst die bearbeitete Position selbst sichern, dann Räume angleichen
+  const wort=lkModus==='wand'?'Wand/Wänden':'Raum/Räumen';
+  if(bilanz.weg && !confirm('In '+bilanz.weg+' '+wort+' wird die Position „'+lkLv+'" entfernt'+
+    (bilanz.neu?', in '+bilanz.neu+' neu angelegt':'')+'.\n\nFortfahren?')) return;
+  // Erst die bearbeitete Position selbst sichern, dann angleichen
   if(!lvSpeichern()) return;
   let neu=0, weg=0;
-  p.rooms.forEach(r=>{
-    const z=lkZustand(r);
+  lkAlleKeys(false).forEach(k=>{
+    const z=lkZustand(k);
+    const teile=String(k).split('#'), rid=teile[0], wi=+teile[1];
     if(z==='neu'){
-      /* Kopien hängen am Raum: kein Objekt, keine Wand — und **ohne Fotos**. Früher bekam
-         jede Kopie eigene Bildkopien; bei 20 Räumen lag dasselbe Foto danach 20-mal im
-         Projekt und im Airtable-Upload (Ticket #2). */
-      const kopie={...daten, id:uid(), roomId:r.id, objId:null, projekt:false, fotos:[]};
-      delete kopie.wall;
+      /* Kopien hängen am selben Trägertyp wie das Original — und **ohne Fotos**. Früher
+         bekam jede Kopie eigene Bildkopien; bei 20 Räumen lag dasselbe Foto danach
+         20-mal im Projekt und im Airtable-Upload (Ticket #2). */
+      const kopie=Object.assign({}, daten, {id:uid(), roomId:rid, objId:null, projekt:false, fotos:[]});
+      if(lkModus==='wand'){
+        kopie.wall=wi;
+        /* Die Kopie liegt an einer ANDEREN Wand. Gekoppelte Maße dürfen nicht die Zahlen
+           der Quellwand mitnehmen — `save()` zieht sie über `lvMasseNachziehen` gleich
+           für die neue Wand nach. */
+      } else delete kopie.wall;
       p.attrs.push(kopie); neu++;
     } else if(z==='weg'){
-      const raus=new Set(lkVorhanden(r.id).map(a=>a.id));
+      const raus=new Set(lkVorhanden(k).map(a=>a.id));
       p.attrs=p.attrs.filter(a=>!raus.has(a.id));
       weg+=raus.size;
     }
@@ -5899,7 +7228,7 @@ $('#lkOk').onclick=()=>{
   save();
   dlgLvKopie.close(); dlgLv.close();
   renderAll(); if(view!=='lv') renderLv();
-  melde(`Position „${daten.lv}": ${neu} angelegt, ${weg} entfernt.`);
+  melde('Position „'+daten.lv+'": '+neu+' angelegt, '+weg+' entfernt.');
 };
 /* ---------- Mengenermittlung: exakt wie die VBA-Pipeline (Makro3–Makro6) ----------
    Stuck   : Menge
@@ -6185,6 +7514,7 @@ function lvZelleAendern(id, feld, wert){
     // Muss VOR `save()` stehen, sonst zieht `lvMasseNachziehen` den Wert gleich wieder zurück.
     if(feld==='laenge') delete a.autoL;
     if(feld==='hoehe') delete a.autoH;
+    if(feld==='laenge' || feld==='breite') delete a.autoObj;
   }
   save();
   renderCanvas();          // Farben und Beschriftungen im Plan hängen an den LV-Werten
@@ -6234,15 +7564,18 @@ function renderLvDetail(){
     ${rows.map(a=>{
       const r=roomById(a.roomId);
       const flags=[a.nutzGrund?'Grundfl.':null,a.nutzAnsicht?'Ansicht':null,a.nutzUmfang?'Umfang→L':null,
-        a.autoL?'L↔Wand':null, a.autoH?'H↔Raum':null].filter(Boolean).join(', ')||'–';
+        a.autoL?'L↔Wand':null, a.autoH?'H↔Raum':null, a.autoObj?'L/B↔Objekt':null].filter(Boolean).join(', ')||'–';
       const res=lvCalc(a, g.alleNein);
       // Maße und Abschlag direkt in der Zeile: unauffälliges Feld, das erst beim Anfassen auffällt
       const zahl=(feld, wert, leerErlaubt=true) => {
         // Gekoppelte Maße grün gerandet — sonst wäre nicht zu sehen, warum sich eine Zahl
         // von selbst ändert (und dass ein eigener Eintrag die Kopplung beendet)
-        const auto=(feld==='laenge'&&a.autoL)||(feld==='hoehe'&&a.autoH);
+        const auto=(feld==='laenge'&&(a.autoL||a.autoObj))||(feld==='hoehe'&&a.autoH)
+          ||(feld==='breite'&&a.autoObj);
+        const woher=a.autoObj&&(feld==='laenge'||feld==='breite') ? 'dem Maß des Objekts'
+          : (feld==='laenge'?'der Wandlänge':'der Raumhöhe');
         return `<input class="lvz${auto?' gekoppelt':''}" inputmode="decimal" data-lvid="${a.id}" data-lvfeld="${feld}"
-          ${auto?`title="Folgt ${feld==='laenge'?'der Wandlänge':'der Raumhöhe'} — ein eigener Wert löst die Kopplung"`:''}
+          ${auto?`title="Folgt ${woher} — ein eigener Wert löst die Kopplung"`:''}
           value="${isFinite(wert)?fmt3(wert):(leerErlaubt?'':'')}">`;
       };
       return `<tr data-lvrow="${a.id}">
@@ -6293,6 +7626,7 @@ function renderLvDetail(){
     const alt=abschlagVon(a)<proj().abschlag
       ? `\n\nAchtung: gehört zum bereits abgeschlossenen Abschlag ${abschlagVon(a)}.` : '';
     if(!confirm(`LV-Zuordnung „${a.lv}" (${lvZielText(a)}) löschen?${alt}`)) return;
+    fmMarkeLoeschen(a.fmMark);          // Fotoaufmaß: auch die Markierung im Bild
     proj().attrs=proj().attrs.filter(x=>x.id!==b.dataset.lvdel); save(); renderLv();
   });
 }
@@ -8042,6 +9376,11 @@ document.addEventListener('focusin', e=>{
    Die Leiste erscheint nur auf Geräten mit Fingerbedienung. Am Rechner hat die Tastatur
    eine Eingabetaste und die Leiste wäre nur im Weg. */
 const ZAHLFELD='input.laser, input.lvz:not([type=number]), #wdicke, #planbreite, #plandreh, #kalibMass, #btmanual';
+/* Felder, deren Inhalt beim Antippen komplett ausgewählt wird, obwohl sie keine Zahlen
+   sind: LV-Nummer und Kurztext im LV-Dialog. Beide sind mit der zuletzt gesetzten
+   Position vorbelegt — gemeint ist fast immer „dieselbe wieder" oder „ganz neu",
+   selten eine Korrektur an einer Stelle. Übertippen ist so ein Handgriff. */
+const ALLESFELD='#lvPos, #lvKurz';
 const TASTFELD='input:not([type=checkbox]):not([type=radio]):not([type=range])'
              + ':not([type=color]):not([type=file]):not([type=password]), textarea';
 /* Ob die Leiste überhaupt erscheint, hängt an dieser einen Abfrage — geht sie daneben,
@@ -8139,7 +9478,7 @@ function leisteAbbrechen(){
 document.addEventListener('focusin', e=>{
   const el=e.target;
   if(!el || !el.matches) return;
-  if(el.matches(ZAHLFELD) || el.type==='number'){
+  if(el.matches(ZAHLFELD) || el.matches(ALLESFELD) || el.type==='number'){
     const alles=()=>{ try{ el.select(); }catch(_){} };
     alles(); setTimeout(alles, 0);   // iOS hebt die Auswahl direkt nach dem Fokus wieder auf
   }
@@ -8637,6 +9976,31 @@ const LV_RAUMMASS=[
   ['Umfang',      a=>{const r=roomById(a.roomId); return r?roomStats(r).per:NaN;}],
   ['Raumhöhe',    a=>{const r=roomById(a.roomId); return r?r.height:NaN;}]
 ];
+/* Die Positionstabelle des Drucks — dieselbe unter dem Raum wie hinter einem Foto.
+   Herausgeloest, damit beide Stellen wirklich gleich aussehen und nicht auseinanderlaufen. */
+function lvDruckTabelle(lvs, p){
+  if(!lvs.length) return '<div style="color:#888; font-size:11px">Keine LV-Positionen zugeordnet.</div>';
+  const masse=lvMassSpalten(lvs);
+  const ansicht=lvs.some(hatAnsicht);      // Spalte nur bei vorhandenem Eintrag
+  return `<table><thead><tr>
+    <th>LV</th><th>Kurztext</th><th>Nummer</th><th class="num">Menge</th>
+    ${masse.map(x=>`<th class="num">${x.t}</th>`).join('')}
+    ${ansicht?'<th>Ansichtsfl.</th>':''}
+    <th class="num">Ergebnis</th>
+  </tr></thead><tbody>
+  ${lvs.map((a,i)=>{
+    const alleNein=lvGroupAlleNein((p.attrs||[]).filter(x=>x.lv===a.lv && imAbschlag(x)));
+    const res=lvCalc(a, alleNein);
+    return `<tr class="${i%2?'zebra':''}"><td>${esc(a.lv)}</td>
+      <td>${esc(kurzDruck(a.kurz||(p.lvTexts||{})[a.lv]||''))}</td>
+      <td>${esc(nummerDruck(a))}</td>
+      <td class="num">${fmt3(a.menge)}</td>
+      ${masse.map(x=>`<td class="num">${x.wert(a)}</td>`).join('')}
+      ${ansicht?`<td>${ansichtTxt(a)}</td>`:''}
+      <td class="num"><b>${fmt3(res.wert)}</b> ${res.sym}</td></tr>`;
+  }).join('')}
+  </tbody></table>`;
+}
 function lvMassSpalten(rows){
   const sp=[];
   LV_MASSE.forEach(([t,k])=>{
@@ -8780,7 +10144,11 @@ function fotosVonRaum(r){
     if(!wandFotoAktiv(r, +i)) return;
     (list||[]).forEach(f=>out.push({f, tags:[r.name, wallNrOf(r,i)?('#'+wallNrOf(r,i)):('Wand '+(+i+1))]}));
   });
-  (r.objects||[]).forEach(g=>{ if(objFotoAktiv(g)) (g.fotos||[]).forEach(f=>
+  /* Fotos eines Fotoaufmaßes bleiben hier draußen: sie haben ihre eigene ganze Seite
+     mit den Markierungen. Auf den Sammelseiten stünden sie ein zweites Mal, ohne Maße.
+     ACHTUNG: nur hier ausnehmen — `fotoListen()` versorgt IndexedDB und Airtable und
+     muss weiterhin ALLE Bilder kennen, sonst verlieren sie beim Laden ihr `src`. */
+  (r.objects||[]).forEach(g=>{ if(objFotoAktiv(g) && !istFotoMass(g)) (g.fotos||[]).forEach(f=>
     out.push({f, tags:[r.name, objAnzeige(g)||g.name||'Objekt']})); });
   (r.openings||[]).forEach(o=>{ if(objFotoAktiv(o)) (o.fotos||[]).forEach(f=>
     out.push({f, tags:[r.name, objAnzeige(o)]})); });
@@ -8892,6 +10260,55 @@ function buildPrint(filter){
    Die ist ohnehin breit, und eine Anmerkung ist meist ein ganzer Satz. Die Anmerkung des
    Raums steht oben, darunter je Zeile die einer LV-Zuordnung mit ihrer Nummer davor.
    Ohne Anmerkung gibt es den Kasten gar nicht — sonst stünde auf jeder Seite ein Rahmen. */
+/* Markierungen eines Fotoaufmaß-Fotos als SVG über dem Bild — für den Druck.
+   Anders als im Editor gibt es hier kein gemessenes Bild: gezeichnet wird in einem
+   viewBox von 0…100 (waagerecht) bzw. 0…100/Seitenverhältnis, und das SVG liegt per
+   CSS deckungsgleich über dem <img>. So stimmt es bei jeder Seitengröße. */
+function fmDruckSvg(g, f, seitenVerh){
+  const sl=fmSlots(g), H=100*seitenVerh;
+  const nrVon={}; fmMarken(g).forEach(e=>{ nrVon[e.m.id]=e.nr; });
+  const belegt=[];
+  const schild=(m, farbe)=>{
+    const txt=String(nrVon[m.id]||''), b=Math.max(4.6, txt.length*1.35);
+    const p=fmFreierOrt(fmSchildKand(m, X, Y, 3.6), belegt, b, 3.6);
+    return fmDruckSchild(p.x, p.y, txt, farbe);
+  };
+  const X=v=>v*100, Y=v=>v*H;
+  let out='';
+  (f.marken||[]).forEach(m=>{
+    const farbe=(sl[m.slot]||{}).farbe||'#e53935';
+    if(m.art==='flaeche'){
+      out+=`<rect x="${X(m.x)}" y="${Y(m.y)}" width="${X(m.w)}" height="${Y(m.h)}"
+        fill="${farbe}" fill-opacity="0.16" stroke="${farbe}" stroke-width="0.5"/>`;
+      out+=schild(m, farbe);
+    } else if(m.art==='linie'){
+      const pts=(m.pts||[]).map(q=>`${X(q.x)},${Y(q.y)}`).join(' ');
+      out+=`<polyline points="${pts}" fill="none" stroke="${farbe}" stroke-width="0.6"
+        stroke-linecap="round" stroke-linejoin="round"
+        marker-start="url(#fmpf)" marker-end="url(#fmpf)"/>`;
+      out+=schild(m, farbe);
+    } else {
+      const x=X(m.x), y=Y(m.y), a=1.6;
+      out+=`<line x1="${x-a}" y1="${y-a}" x2="${x+a}" y2="${y+a}" stroke="${farbe}" stroke-width="0.7"/>`+
+           `<line x1="${x-a}" y1="${y+a}" x2="${x+a}" y2="${y-a}" stroke="${farbe}" stroke-width="0.7"/>`;
+      out+=schild(m, farbe);
+    }
+  });
+  return `<svg viewBox="0 0 100 ${H}" preserveAspectRatio="none"
+    style="position:absolute; inset:0; width:100%; height:100%">
+    <defs><marker id="fmpf" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4"
+      orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke"/></marker></defs>
+    <g opacity="${fmAlpha()}">${out}</g></svg>`;
+}
+function fmDruckSchild(x, y, txt, farbe){
+  const b=Math.max(/^\d+$/.test(txt)?4.6:7, txt.length*1.35);
+  return `<g><rect x="${x-b/2}" y="${y-1.8}" width="${b}" height="3.6" rx="1"
+      fill="#fff" fill-opacity="0.92" stroke="${farbe}" stroke-width="0.25"/>
+    <text x="${x}" y="${y+1.1}" text-anchor="middle" font-size="2.4" font-weight="700"
+      fill="${farbe}">${esc(txt)}</text></g>`;
+}
+// Alle Fotoaufmaß-Objekte eines Raums
+const fmObjekteVon = r => (r.objects||[]).filter(istFotoMass);
 function anmerkungKasten(r, lvs){
   const zeilen=[];
   if(r.anmerkung) zeilen.push({wo:'Raum', txt:r.anmerkung});
@@ -8933,8 +10350,19 @@ function buildPrintIntern(){
       // unter die Mini-Etage — der Mini-Aufruf setzt planRefs sonst wieder zurück.
       const planGross=planSvg([r], {masse:true, objekte:true, boxW:150, boxH:132});
       const verweise=massListe(planRefs);
-      const planMini=planSvg(rooms, {grau:true, highlight:r.id, namen:false, masse:false,
-        objekte:false, boxW:28, boxH:36});
+      /* Die Mini-Etage ist eine ÜBERSICHT — genau der Fall, für den es `plakettenAus`
+         schon gibt: ein ganzes Geschoss auf 28 mm, da ist keine Nummer mehr lesbar und
+         die Plaketten verdecken mehr, als sie zeigen. Ohne das Flag stand die Nummer
+         einer LV-verknüpften Tür/Fensters mitten im Kästchen (Wand- und Objektnummern
+         blieben schon vorher weg, weil `grau` deren Zweig überspringt).
+         `try/finally`, damit ein Fehler beim Zeichnen die Nummern nicht dauerhaft
+         abschaltet — der große Plan darauf ist auf sie angewiesen. */
+      let planMini;
+      plakettenAus=true;
+      try{
+        planMini=planSvg(rooms, {grau:true, highlight:r.id, namen:false, masse:false,
+          objekte:false, boxW:28, boxH:36});
+      } finally { plakettenAus=false; }
       seiten.push(`
         <div style="display:flex; justify-content:space-between; align-items:flex-start">
           <div class="ptitle">▼ ${esc(r.name)}<small>${esc(f.name)}</small></div>
@@ -8950,30 +10378,49 @@ function buildPrintIntern(){
         ${anmerkungKasten(r, lvs)}
         <div style="margin-top:4mm">
           <div style="font-weight:700; font-size:12px; margin-bottom:1.5mm">LV-Positionen in diesem Raum</div>
-          ${lvs.length?(()=>{
-            const masse=lvMassSpalten(lvs);
-            const ansicht=lvs.some(hatAnsicht);      // Spalte nur bei vorhandenem Eintrag
-            return `<table><thead><tr>
-            <th>LV</th><th>Kurztext</th><th>Nummer</th><th class="num">Menge</th>
-            ${masse.map(s=>`<th class="num">${s.t}</th>`).join('')}
-            ${ansicht?'<th>Ansichtsfl.</th>':''}
-            <th class="num">Ergebnis</th>
-          </tr></thead><tbody>
-          ${lvs.map((a,i)=>{
-            const alleNein=lvGroupAlleNein((p.attrs||[]).filter(x=>x.lv===a.lv && imAbschlag(x)));
-            const res=lvCalc(a, alleNein);
-            return `<tr class="${i%2?'zebra':''}"><td>${esc(a.lv)}</td>
-              <td>${esc(kurzDruck(a.kurz||(p.lvTexts||{})[a.lv]||''))}</td>
-              <td>${esc(nummerDruck(a))}</td>
-              <td class="num">${fmt3(a.menge)}</td>
-              ${masse.map(s=>`<td class="num">${s.wert(a)}</td>`).join('')}
-              ${ansicht?`<td>${ansichtTxt(a)}</td>`:''}
-              <td class="num"><b>${fmt3(res.wert)}</b> ${res.sym}</td></tr>`;
-          }).join('')}
-          </tbody></table>`;
-          })():'<div style="color:#888; font-size:11px">Keine LV-Positionen zugeordnet.</div>'}
+          ${lvDruckTabelle(lvs, p)}
         </div>`);
-      // 3) Fotoseiten — je 4 Bilder
+      /* 3) Fotoaufmaß: je Foto EINE ganze Seite. Bewusst nicht vier auf einer Seite wie
+         bei den übrigen Bildern — hier stehen Maße im Bild, und die müssen lesbar sein.
+         Unter dem Bild die Summen je Slot, damit die Seite für sich allein steht. */
+      fmObjekteVon(r).forEach(g=>{
+        const sl=fmSlots(g);
+        (g.fotos||[]).forEach((ff,k)=>{
+          if(!ff.src) return;
+          const zeilen=sl.map((x,i)=>!x.lv?'':`<tr>
+            <td style="width:6mm"><span style="display:inline-block; width:3mm; height:3mm; border-radius:1mm; background:${x.farbe}"></span></td>
+            <td>${esc(x.lv)}</td><td>${esc(x.kurz||'')}</td>
+            <td class="num">${(ff.marken||[]).filter(m=>m.slot===i).length}</td>
+            <td class="num"><b>${fmt(fmSumme(g,i),2)} ${EINH_SYM[x.einheit]||''}</b></td></tr>`).join('');
+          seiten.push(`<div class="ptitle">▼ Fotoaufmaß${g.nr?' #'+g.nr:''}<small>${esc(f.name)} · ${esc(r.name)} · Foto ${k+1} von ${(g.fotos||[]).length}</small></div>
+            <div style="position:relative; margin-top:3mm; height:175mm; display:flex; align-items:center; justify-content:center">
+              <div style="position:relative; display:inline-block; max-width:100%; max-height:175mm">
+                <img src="${ff.src}" style="max-width:100%; max-height:175mm; display:block">
+                ${fmDruckSvg(g, ff, 1)}
+              </div>
+            </div>
+            <table class="ptab" style="margin-top:4mm"><thead><tr>
+              <th></th><th>LV Position</th><th>Kurztext</th><th class="num">auf diesem Foto</th>
+              <th class="num">Summe (alle Fotos)</th></tr></thead>
+              <tbody>${zeilen||'<tr><td colspan="5" style="color:#888">Keine Position zugeordnet.</td></tr>'}</tbody></table>
+            <p style="font-size:9px; color:#666; margin-top:2mm">Die Zahlen im Bild sind die laufenden Nummern
+              der Messungen; die Positionen dazu stehen auf der nächsten Seite. Summen gelten für alle Fotos
+              dieses Fotoaufmaßes.</p>`);
+          /* Und gleich dahinter die Positionen dieses Fotos — in der Reihenfolge der
+             Nummern im Bild, nicht nach LV sortiert: so liest man Bild und Liste
+             nebeneinander. Jede Messung ist eine ganz normale Zuordnung, die Tabelle
+             ist deshalb dieselbe wie unter dem Raum. */
+          const nrVon={}; fmMarken(g).forEach(e=>{ nrVon[e.m.id]=e.nr; });
+          const fotoLvs=(ff.marken||[]).map(m=>(p.attrs||[]).find(a=>a.fmMark===m.id))
+            .filter(a=>a && imAbschlag(a))
+            .sort((a,b)=>(nrVon[a.fmMark]||0)-(nrVon[b.fmMark]||0));
+          seiten.push(`<div class="ptitle">▼ Positionen zum Fotoaufmaß${g.nr?' #'+g.nr:''}<small>${esc(f.name)} · ${esc(r.name)} · Foto ${k+1} von ${(g.fotos||[]).length}</small></div>
+            <div style="margin-top:4mm">${lvDruckTabelle(fotoLvs, p)}</div>
+            <p style="font-size:9px; color:#666; margin-top:2mm">Die Spalte „Nummer" nennt die Zahl,
+              die im Bild auf der vorigen Seite an der Messung steht.</p>`);
+        });
+      });
+      // 4) Fotoseiten — je 4 Bilder
       const fotos=fotosVonRaum(r);
       for(let i=0;i<fotos.length;i+=4){
         const vier=fotos.slice(i,i+4);
@@ -9090,14 +10537,35 @@ async function bilderFertig(root){
   }));
   await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
 }
+/* Dateiname des PDFs. Es gibt keinen, den wir setzen könnten — beim „Als PDF sichern"
+   schlägt der Browser den **Dokumenttitel** vor. Also wird der für die Dauer des Drucks
+   umgesetzt und danach zurückgestellt, sonst stünde er dauerhaft im Browser-Tab.
+   Zeichenauswahl wie in `backupDateiname()`, damit alle Ausgaben gleich heißen. */
+function druckDateiname(f){
+  const p=proj();
+  const wo=(p.adresse || (p.baustelle?p.baustelle.name:'') || p.bauvorhaben || p.name || '')
+    .replace(/[^\wäöüÄÖÜß ()-]/g,' ').replace(/\s+/g,' ').trim();
+  // Ohne Filter geht das ganze Aufmaß raus — dann ist „Abschlag“ die falsche Angabe
+  return [f ? abschlagText(f) : 'Aufmaß', wo].filter(Boolean).join(' ');
+}
 $('#agPrint').onclick=async()=>{
   const b=$('#agPrint'), alt=b.textContent, f=agFilter();
   b.textContent='Bereite vor …'; b.disabled=true;
   // Der Dialog muss zu sein, bevor Chrome das Druckbild aufbaut — ein offener
   // modaler <dialog> läge sonst als eigene Ebene über den Seiten.
   $('#dlgAusgabe').close();
-  try{ buildPrint(f); await bilderFertig($('#printarea')); window.print(); }
-  finally{ b.textContent=alt; b.disabled=false; }
+  const titelAlt=document.title;
+  const titelZurueck=()=>{ document.title=titelAlt; };
+  // `afterprint` ist der verlässliche Zeitpunkt; das `finally` greift zusätzlich, weil
+  // `window.print()` in allen gängigen Browsern erst zurückkehrt, wenn der Dialog zu ist.
+  window.addEventListener('afterprint', titelZurueck, {once:true});
+  try{
+    buildPrint(f);
+    document.title=druckDateiname(f);
+    await bilderFertig($('#printarea'));
+    window.print();
+  }
+  finally{ titelZurueck(); b.textContent=alt; b.disabled=false; }
   abschlagAbschliessen(f);
 };
 
@@ -9150,9 +10618,9 @@ window.addEventListener('resize', ()=>{ if(view==='plan') renderCanvas(); });
 let sperrStand=null;
 setInterval(()=>{
   if(drag || document.querySelector('dialog[open]')) return;
-  const r=focusRoomId?roomById(focusRoomId):(etagenWahl?roomById(etagenWahl):null);
-  const jetzt=r?raumOffen(r):null;
-  if(jetzt!==sperrStand){ sperrStand=jetzt; if(r) renderAll(); }
+  // Die Sperre gilt fürs ganze Aufmaß — es genügt, den einen Zustand zu beobachten
+  const jetzt=sperreOffen();
+  if(jetzt!==sperrStand){ sperrStand=jetzt; renderAll(); }
 }, 15000);
 $('#undobtn').onclick=undoSchritt;
 $('#redobtn').onclick=redoSchritt;
