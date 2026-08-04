@@ -213,7 +213,13 @@
     #blattkurz button b{font-size:16px; font-weight:400; line-height:1;}
     #blattkurz button.gefahr{color:var(--danger); border-color:#f0c9c9;}
     #blattkurz button.an{background:#e8f0fe; border-color:#2f6fed;}
-    #kurzmenu{display:none; position:fixed; z-index:40; background:#fff; border:1px solid var(--line);
+    /* Die Eingabeseite: nichts als das eine Feld, damit die Tastatur nichts verdeckt */
+  #dlgFeld{background:#fff;}
+  #feldBody{padding:16px 14px;}
+  #feldName{font-size:13px; color:var(--muted); margin-bottom:8px;}
+  #feldEin, #feldMehr{width:100%; font-size:20px; padding:12px 14px; border:1px solid var(--line);
+    border-radius:10px; font-family:inherit;}
+  #kurzmenu{display:none; position:fixed; z-index:40; background:#fff; border:1px solid var(--line);
       border-radius:10px; padding:6px; box-shadow:0 6px 22px rgba(0,0,0,.22); min-width:180px;
       max-height:62vh; overflow-y:auto;}   /* die Objektliste ist laenger als der Platz */
     #kurzmenu.auf{display:block;}
@@ -997,6 +1003,19 @@
     <div class="row" id="fmSummen" style="flex-wrap:wrap"></div>
   </div>
   <div class="dfoot"><button class="btn primary" data-close>Fertig</button></div>
+</dialog>
+
+<!-- Eingabe am Handy: leere weisse Seite, ein Feld, Anwenden -->
+<dialog id="dlgFeld" class="vollbild">
+  <div class="dbody" id="feldBody">
+    <div id="feldName"></div>
+    <input type="text" id="feldEin">
+    <textarea id="feldMehr" rows="6"></textarea>
+    <div class="row" style="margin-top:12px">
+      <button class="btn primary" id="feldOk" style="flex:1; padding:12px">✓ Anwenden</button>
+      <button class="btn" id="feldAb" style="flex:0 0 auto; padding:12px 16px">Abbrechen</button>
+    </div>
+  </div>
 </dialog>
 
 <!-- Anmerkung auf dem Foto -->
@@ -5875,6 +5894,7 @@ $('#fsEdit').onclick=()=>{ if(fotoStapel && fotoStapel.length) feStapelEdit(0); 
    überschreiben kann. Grund: ein schräg aufgenommenes Foto ist perspektivisch verzerrt;
    der Vorschlag hilft beim Abschätzen, ersetzt aber kein Maßband. */
 const dlgFotoMass=$('#dlgFotoMass'), dlgFmMass=$('#dlgFmMass'), dlgFmText=$('#dlgFmText');
+const dlgFeld=$('#dlgFeld');
 let fmObj=null, fmIdx=0, fmRoomId=null, fmSlot=0;
 let fmZug=null;              // laufendes Rechteck bzw. laufende Polylinie
 /* Maßstab: {ax,ay} nach dem ersten Punkt, dazu {bx,by} nach dem zweiten. Erst
@@ -11243,6 +11263,52 @@ function handyOrdnung(){
     p.insertBefore(z, p.querySelector('h3') ? p.querySelector('h3').nextSibling : p.firstChild);
   });
 }
+/* ---------- Eingaben am Handy ----------
+   Im Blatt ist jedes Feld schmal, und die Tastatur schiebt sich davor. Ein Tipp auf ein
+   Feld oeffnet deshalb eine leere weisse Seite: Beschriftung, EIN grosses Feld, Anwenden.
+   Der Wert wandert danach zurueck ins Originalfeld und loest dort `input` und `change`
+   aus — alle vorhandenen Handler laufen also unveraendert weiter, es gibt keine zweite
+   Stelle, an der derselbe Wert verarbeitet wird. Am Rechner passiert nichts davon. */
+let feldZiel=null;
+function feldOeffnen(el){
+  feldZiel=el;
+  const mehr = el.tagName==='TEXTAREA';
+  $('#feldEin').style.display = mehr?'none':'';
+  $('#feldMehr').style.display = mehr?'':'none';
+  const f = mehr ? $('#feldMehr') : $('#feldEin');
+  $('#feldName').textContent = feldName(el) || 'Eingabe';
+  f.value = el.value;
+  // Zahlenfelder bekommen dieselbe Tastatur wie im Panel
+  if(!mehr){
+    f.type = el.type==='number' ? 'number' : 'text';
+    // Erst das Original fragen, sonst dieselbe Regel wie dort (`ZAHLFELD`)
+    const im = el.getAttribute('inputmode') || (el.matches(ZAHLFELD) ? 'decimal' : '');
+    if(im) f.setAttribute('inputmode', im); else f.removeAttribute('inputmode');
+  }
+  dlgFeld.showModal();
+  setTimeout(()=>{ f.focus(); try{ f.select(); }catch(_){} }, 40);
+}
+function feldAnwenden(){
+  const el=feldZiel; dlgFeld.close(); feldZiel=null;
+  if(!el || !el.isConnected) return;
+  const mehr = el.tagName==='TEXTAREA';
+  el.value = (mehr ? $('#feldMehr') : $('#feldEin')).value;
+  el.dispatchEvent(new Event('input',  {bubbles:true}));
+  el.dispatchEvent(new Event('change', {bubbles:true}));
+}
+$('#feldOk').onclick=feldAnwenden;
+$('#feldAb').onclick=()=>{ dlgFeld.close(); feldZiel=null; };
+$('#feldEin').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); feldAnwenden(); } });
+/* Abgefangen wird beim Tippen, nicht beim Fokus: so geht die Tastatur gar nicht erst
+   am schmalen Feld auf und klappt gleich darauf fuer die Eingabeseite wieder hoch. */
+$('#sidebar').addEventListener('pointerdown', e=>{
+  if(innerWidth>640) return;
+  const el=e.target.closest('input, textarea');
+  if(!el || el.disabled || el.readOnly) return;
+  if(/^(checkbox|radio|range|color|file|button|submit)$/.test(el.type||'')) return;
+  e.preventDefault(); e.stopPropagation();
+  el.blur(); feldOeffnen(el);
+}, true);
 // Der Griff sagt auch zugeklappt, worum es gerade geht
 function blattTitel(){
   const h=$('#sidebar .panel h3');
