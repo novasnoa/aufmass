@@ -76,6 +76,62 @@
   #tastleiste button{border:none; border-radius:8px; padding:9px 16px; font:inherit; font-weight:600;}
   #tastleiste .ab{background:#2a3345; color:#c9d2e2;}
   #tastleiste .ok{background:var(--accent2); color:#fff;}
+  /* ---------- Maßseite (Ticket „Maßseite" vom 4.8.2026) ----------
+     Jede Maßeingabe bekommt ein eigenes Blatt: oben die Anzeige, darunter ein
+     EIGENER Ziffernblock statt der Systemtastatur. Die Tasten sind absichtlich
+     groß und weit auseinander — gemessen wird auf der Baustelle im Stehen, oft
+     mit Handschuh, und ein Vertipper beim Aufmaß fällt erst in der Rechnung auf. */
+  #dlgMass{background:#fff;}
+  #massBody{padding:0;}
+  #massKopf{display:flex; align-items:center; gap:8px; padding:8px 10px; flex:0 0 auto;
+    border-bottom:1px solid var(--line);}
+  #massAb{border:none; background:none; font-size:20px; line-height:1; padding:4px 8px; color:var(--muted);}
+  #massWas{flex:1; min-width:0;}
+  #massName{display:block; font-size:15px; font-weight:600;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  #massOrt{display:block; font-size:11px; color:var(--muted);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  #massAnzeige{flex:1 1 auto; min-height:70px; display:flex; align-items:center;
+    justify-content:flex-end; gap:6px; padding:10px 16px;}
+  #massWert{font-size:clamp(34px,11vw,56px); font-weight:600; line-height:1.1;
+    font-variant-numeric:tabular-nums;}
+  #massWert.leer{color:#c9ced8;}
+  /* Die Einheit steht direkt neben der Zahl und etwas tiefer — auf Grundlinie
+     gebracht, ohne die Zahl aus der Mitte zu ziehen. */
+  #massEinh{font-size:19px; color:var(--muted); position:relative; top:9px;}
+  /* Zwischenzeile: Laserzustand links, Zurücksetzen rechts — beides gehört zur
+     Eingabe und nicht in die Kopfleiste der App, die hier gar nicht zu sehen ist. */
+  #massZeile{display:flex; align-items:center; gap:8px; flex:0 0 auto;
+    padding:6px 12px; border-top:1px solid var(--line);}
+  #massBt{display:flex; align-items:center; gap:6px; flex:1; min-width:0;
+    font-size:12px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  #massBt i{width:9px; height:9px; border-radius:50%; background:#c2c8d2; flex:none;}
+  #massBt.an{color:var(--accent2);}
+  #massBt.an i{background:#2fd08a;}
+  /* Der Block nimmt den unteren Teil des Schirms ein: gemessen wird im Stehen, mit
+     einer Hand am Laser — die Tasten dürfen ruhig groß sein. Nach oben begrenzt,
+     damit die Anzeige nicht auf einen Streifen zusammenschrumpft. */
+  #massTasten{flex:0 0 auto; display:grid; grid-template-columns:repeat(4,1fr);
+    grid-auto-rows:minmax(50px,15vh); gap:6px; background:#eef1f6;
+    padding:8px 8px calc(8px + env(safe-area-inset-bottom));}
+  #massTasten button{border:1px solid var(--line); border-radius:10px; background:#fff;
+    padding:0; font-size:25px; font-weight:500; color:var(--ink); touch-action:manipulation;}
+  #massTasten button:active{background:#dde3ec;}
+  #massTasten .neben{font-size:19px; color:var(--muted);}
+  #massOk{grid-row:2/5; grid-column:4; font-size:13.5px !important; font-weight:600 !important;
+    line-height:1.5; padding:0 2px !important;
+    background:var(--accent2) !important; border-color:var(--accent2) !important; color:#fff !important;}
+  /* Am Rechner reicht ein Kasten in Bildschirmmitte — dort ist der ganze Schirm
+     dafür herzugeben unnötig, und die echte Tastatur bedient die Seite ohnehin mit. */
+  @media (min-width:641px) and (min-height:560px){
+    /* `fit-content` statt `auto`: ein modaler Dialog steht absolut im Top-Layer und
+       zöge sich bei `auto` über die ganze Höhe. `margin:auto` holt ihn zurück in die
+       Mitte — `.vollbild` hatte ihn oben links festgenagelt. */
+    #dlgMass{width:min(400px,94vw); height:fit-content; max-height:92vh; margin:auto;
+      border-radius:14px; overflow:hidden;}
+    #massAnzeige{min-height:96px;}
+    #massTasten{grid-auto-rows:minmax(50px,68px);}
+  }
   .hint{font-size:11px; color:var(--muted);}
   .btn{border:1px solid var(--line); background:#f6f7f9; border-radius:7px; padding:6px 10px;}
   .btn:hover{background:#eceef2;}
@@ -237,6 +293,14 @@
        „Statistik anzeigen", die wuerden sonst mit verschwinden. */
     #sidebar p.hint{display:none;}
     #lvtip, .lvinfo{display:none !important;}
+    /* Ticket „Popup beim Raum zeichnen": der Modus-Streifen legte sich quer über den
+       320 px schmalen Schirm. Was gerade zu tun ist, sagt am Handy die Kurzbefehlsleiste.
+       Ticket „Pop-ups in der Handy-Ansicht": die Meldungen beschreiben nur, was ohnehin
+       gerade passiert ist — sie bleiben nur noch für FEHLER stehen und sitzen dann über
+       der Leiste statt darauf. */
+    #drawhint{display:none !important;}
+    #toast:not(.fehler){display:none !important;}
+    #toast.fehler{bottom:96px;}
     /* Der Zoomknopf sass unter dem Blatt — er wandert nach oben rechts */
     /* ＋ und − sind am Handy ueberfluessig: zwei Finger zoomen ohnehin. ⌂ bleibt,
        das holt einen zurueck, wenn man sich verzoomt hat. */
@@ -1018,6 +1082,40 @@
   </div>
 </dialog>
 
+<!-- Maßseite: Anzeige, Laserzustand, eigener Ziffernblock. Bewusst OHNE <input> —
+     jedes Eingabefeld hier würde auf dem iPad die Systemtastatur hochziehen, und
+     genau die soll die Seite ja ersetzen. -->
+<dialog id="dlgMass" class="vollbild" tabindex="-1">
+  <div class="dbody" id="massBody">
+    <div id="massKopf">
+      <button id="massAb" tabindex="-1" title="Abbrechen (Esc)">✕</button>
+      <span id="massWas"><b id="massName">Maß</b><span id="massOrt"></span></span>
+    </div>
+    <div id="massAnzeige"><span id="massWert">0</span><span id="massEinh">m</span></div>
+    <div id="massZeile">
+      <span id="massBt"><i></i><span id="massBtTxt">Laser nicht verbunden</span></span>
+      <button class="btn small" id="massStd" tabindex="-1"
+        title="Setzt den Wert auf den Standard zurück">↺</button>
+    </div>
+    <div id="massTasten">
+      <button data-k="7" tabindex="-1">7</button>
+      <button data-k="8" tabindex="-1">8</button>
+      <button data-k="9" tabindex="-1">9</button>
+      <button data-k="zurueck" class="neben" tabindex="-1" title="Rücktaste">⌫</button>
+      <button data-k="4" tabindex="-1">4</button>
+      <button data-k="5" tabindex="-1">5</button>
+      <button data-k="6" tabindex="-1">6</button>
+      <button data-k="1" tabindex="-1">1</button>
+      <button data-k="2" tabindex="-1">2</button>
+      <button data-k="3" tabindex="-1">3</button>
+      <button data-k="," tabindex="-1">,</button>
+      <button data-k="0" tabindex="-1">0</button>
+      <button data-k="leer" class="neben" tabindex="-1" title="Alles löschen">C</button>
+      <button data-k="ok" id="massOk" tabindex="-1">✓<br>Übernehmen</button>
+    </div>
+  </div>
+</dialog>
+
 <!-- Anmerkung auf dem Foto -->
 <dialog id="dlgFmText" style="width:min(420px,94vw)">
   <div class="dhead">Anmerkung <button data-close>✕</button></div>
@@ -1644,7 +1742,7 @@ let messungLaeuft=false;
    Die Stärke wächst nach außen und dient Darstellung, Volumen und Laibungen. */
 /* Datum des letzten Umbaus — geht bei jedem Ticket mit, damit beim Nachstellen klar ist,
    welcher Stand auf dem Gerät lag. Bei größeren Änderungen mit hochziehen. */
-const APP_STAND='2026-08-03';
+const APP_STAND='2026-08-05';
 const WAND_STD=0.24;
 // Spanne des Schiebereglers im Wand-Panel. Von Hand darf man auch daneben liegen —
 // der Regler wird dann rot, damit der Ausreißer nicht unbemerkt bleibt.
@@ -4107,6 +4205,10 @@ function commitPlace(p){
 
 /* ---------- Öffnungen: Platz, Grenzen, Wandwechsel ---------- */
 const OPEN_MINW=0.3;   // kleinste sinnvolle Öffnungsbreite
+/* Maße, mit denen eine neue Tür / ein neues Fenster entsteht. Seit der Maßseite stehen
+   sie hier statt als Zahlen mitten im Code — die „↺"-Taste dort setzt auf genau diese
+   Werte zurück, und zwei Wahrheiten wären eine zu viel. */
+const OEFF_STD={ door:{width:0.885, height:2.0, sill:0}, window:{width:1.01, height:1.25, sill:0.9} };
 // Freie Lücken einer Wand (Öffnung 'skipId' ausgenommen)
 function wallGaps(r, wallIdx, skipId){
   const [a,b]=wallPoints(r,wallIdx); const L=dist(a,b);
@@ -4152,9 +4254,10 @@ function placeOpening(r, wallIdx, type, tWunsch){
     alert(`Auf dieser Wand ist kein Platz mehr für ${type==='door'?'eine Tür':'ein Fenster'}.\n\nTür/Fenster verschmälern oder verschieben — oder eine andere Wand wählen.`);
     return null;
   }
-  const w=mm(Math.min(type==='door'?0.885:1.01, g[1]-g[0]));
+  const std=OEFF_STD[type];
+  const w=mm(Math.min(std.width, g[1]-g[0]));
   const o={id:uid(), wall:wallIdx, offset:mm(Math.max(g[0], Math.min(want-w/2, g[1]-w))),
-    width:w, height:type==='door'?2.0:1.25, sill:type==='door'?0:0.9, type};
+    width:w, height:std.height, sill:std.sill, type};
   if(type==='door'){ o.hinge=0; o.swing=1; }
   r.openings=r.openings||[]; r.openings.push(o);
   pushDoorToPartner(r,o);
@@ -6502,7 +6605,10 @@ function fmMassOeffnen(m){
     : kreuz ? 'Steht die Markierung für mehrere gleiche Stücke, hier die Anzahl eintragen.'
     : 'Kein Maßstab gesetzt: bitte eintippen. Über „⇄ Maßstab" lässt sich einer einmessen.';
   dlgFmMass.showModal();
-  setTimeout(()=>{ const el=$(kreuz?'#fmMassM':'#fmMassL'); el.focus(); try{ el.select(); }catch(_){} }, 30);
+  /* Gleich mit dem ersten Maß aufmachen — das ist der Grund, warum das Fenster da ist.
+     Über die Maßseite statt über `focus()`: ein Fokus zöge auf dem iPad die
+     Systemtastatur hoch, und genau die soll bei Maßen nicht mehr kommen. */
+  setTimeout(()=>massOeffnen($(kreuz?'#fmMassM':'#fmMassL')), 30);
 }
 $('#fmMassOk').onclick=()=>{
   const m=fmMassZiel; if(!m) return;
@@ -9556,6 +9662,8 @@ function hexStr(u8){ return [...u8].map(b=>b.toString(16).padStart(2,'0')).join(
 function setBtStatus(on, txt){
   $('#btchip').classList.toggle('on', on);
   $('#btchiptext').textContent='Laser: '+txt;
+  // Die Maßseite verdeckt die Kopfleiste — sie trägt denselben Zustand ein zweites Mal.
+  if(typeof massBtZeigen==='function') massBtZeigen();
 }
 function requireBt(){
   if(!navigator.bluetooth){
@@ -9735,6 +9843,9 @@ function handleMeasurement(m, src){
 }
 function messwertUebernehmen(m){
   const bv=$('#btvalue'); if(bv) bv.textContent=fmt3(m)+' m';
+  /* Steht die Maßseite offen, gehört der Wert in ihre Anzeige und NICHT ins Feld:
+     dort steht er groß, man kann nachmessen, und erst „Übernehmen" macht ihn gültig. */
+  if(massOffen()){ massMesswert(m); return; }
   if(mode==='draw' && draft.points.length && draft.dir){ addSegment(m); return; }
   const ae=document.activeElement;
   let target=(ae && ae.matches && ae.matches('input.laser')) ? ae : lastLaserInput;
@@ -9906,6 +10017,222 @@ document.addEventListener('focusout', e=>{
     visualViewport.addEventListener('scroll', leisteSetzen);
   }
 }
+
+/* ================= Maßseite (Ticket „Maßseite" vom 4.8.2026) =====================
+   Jede Maßeingabe bekommt ein eigenes Blatt: oben die Anzeige, darunter ein EIGENER
+   Ziffernblock mit Komma, Rücktaste und „Übernehmen".
+
+   Warum nicht die Systemtastatur, die seit Ticket #4 immerhin als Ziffernblock
+   aufgeht: Sie verdeckt die halbe Seite, sie hat kein Enter (darum die Leiste aus
+   Ticket #5 — ein Aufsatz auf einem Behelf), und ob auf ihr ein Komma oder ein Punkt
+   steht, hängt an der Region des Geräts. Ein eigener Block ist von alldem frei und
+   kann Tasten haben, die es dort gar nicht gibt.
+
+   Zwei Dinge kann die Seite zusätzlich:
+   - **Der Laser schreibt in die Anzeige, nicht ins Feld.** Solange die Seite offen ist,
+     landet ein Messwert groß in der Anzeige; man kann nachmessen, und erst „Übernehmen"
+     macht ihn gültig. Darum steht der Verbindungszustand direkt über dem Block — sonst
+     wartet man auf einen Wert von einem Gerät, das gar nicht verbunden ist.
+   - **„↺" setzt auf den Standardwert zurück:** Menge 1, die zuletzt benutzte Raumhöhe,
+     die Standard-Wandstärke, die Maße einer frischen Tür/eines frischen Fensters, bei
+     Objektmaßen die gezeichnete Größe. Wo es keinen Standard gibt, führt die Taste
+     zurück auf den Wert, mit dem die Seite aufging.
+
+   Die Seite gilt laut Ticket in ALLEN Ansichten, also auch am Rechner. Damit dort das
+   Ausfüllen langer LV-Tabellen keine Strafe wird, hört sie zusätzlich auf die echte
+   Tastatur (Ziffern, Komma/Punkt, Rücktaste, Entf, Enter, Esc).
+
+   Aufgemacht wird bei `pointerdown`, nicht bei `focus`: so bekommt das schmale Feld
+   im Panel gar keinen Fokus und die Systemtastatur bleibt unten. Dieselbe Stelle
+   entscheidet auch, dass die weiße Eingabeseite (`#dlgFeld`, für Namen und
+   Anmerkungen) hier nicht drankommt. */
+const MASSFELD=ZAHLFELD;          // dieselben Felder, die schon den Ziffernblock bekamen
+const dlgMass=$('#dlgMass');
+let massZiel=null, massText='', massFrisch=true, massStdText='', massEinheit='m';
+
+// „2,500" → „2,5", „1,000" → „1". In der großen Anzeige zählt Lesbarkeit, nicht Stellenzahl.
+const massKurz = v => Number.isFinite(v) ? (fmt(v,3).replace(/,?0+$/,'') || '0') : '';
+const massTextVon = v => massKurz(parseNum(v));
+const massIstMenge = el => el.matches('#lvMenge, #fmMassM') || el.dataset.lvfeld==='menge';
+const LVNAME={menge:'Menge', laenge:'Länge', breite:'Breite', hoehe:'Höhe',
+              umfang:'Umfang', durchm:'Durchmesser'};
+
+function massObjekt(){
+  const r=roomById(focusRoomId||sel.roomId);
+  return (r && sel.objId) ? (r.objects||[]).find(o=>o.id===sel.objId) : null;
+}
+function massOeffnung(el){
+  const id=el.dataset.op; if(!id) return null;
+  const r=roomById(sel.roomId)||roomById(focusRoomId);
+  return r ? (r.openings||[]).find(o=>o.id===id) : null;
+}
+/* Der Standardwert hinter „↺". `null` heißt: für dieses Feld gibt es keinen — dann
+   führt die Taste auf den Wert zurück, mit dem die Seite aufging. */
+function massStandard(el){
+  if(massIstMenge(el)) return 1;
+  const id=el.id||'';
+  if(id==='rheight' || id==='tplHeight') return lastHeight;
+  if(id==='wdicke'){
+    const r=roomById(sel.roomId);
+    return (r && Number.isFinite(r.wandStd) && r.wandStd>0) ? r.wandStd : WAND_STD;
+  }
+  if(el.classList.contains('opfld')){
+    const o=massOeffnung(el), s=o && OEFF_STD[o.type];
+    const v=s && s[el.dataset.f];
+    return v==null ? null : v;                 // „Abstand" hat keinen Standard
+  }
+  if(el.classList.contains('objdim')){
+    const g=massObjekt(); if(!g) return null;
+    if(el.dataset.f==='L') return objFormL(g); // zurück auf die gezeichnete Größe
+    if(el.dataset.f==='B') return objFormB(g);
+  }
+  return null;
+}
+/* Die Einheit steht in der Beschriftung — und zwar in zwei Schreibweisen, die beide
+   im Bestand vorkommen: „Länge (m)" in den Panels, „Länge in m" im LV-Dialog. Beide
+   werden abgetrennt: oben in der Anzeige steht die Einheit ohnehin neben der Zahl,
+   und „Länge in m m" hätte niemandem geholfen. */
+function massLabelTeile(el){
+  const t=(feldName(el)||'Maß').trim();
+  let m=t.match(/^(.*?)\s*\(([^)]{1,4})\)$/) || t.match(/^(.*?)\s+in\s+([a-zA-Z°²³]{1,3})$/);
+  return m ? {name:m[1], einh:m[2]} : {name:t, einh:''};
+}
+function massNameVon(el){
+  if(el.dataset.lvfeld) return LVNAME[el.dataset.lvfeld] || 'Maß';
+  return massLabelTeile(el).name;
+}
+function massEinhVon(el){
+  if(massIstMenge(el)) return '';
+  if(el.dataset.lvfeld) return 'm';
+  if(el.id==='plandreh') return '°';
+  return massLabelTeile(el).einh || 'm';
+}
+// Woher stammt das Maß? Auf einem leeren Blatt weiß man das sonst nach zwei Tipps nicht mehr.
+function massOrtVon(el){
+  const d=el.closest('dialog');
+  if(d && d.id!=='dlgMass'){
+    const h=d.querySelector('.dhead');
+    if(h) return h.textContent.replace('✕','').replace(/\s+/g,' ').trim();
+  }
+  const p=el.closest('.panel'), h3=p && p.querySelector('h3');
+  if(h3) return h3.textContent.replace(/\s+/g,' ').trim();
+  if(el.dataset.lvid){
+    const a=(proj().attrs||[]).find(x=>x.id===el.dataset.lvid);
+    if(a) return [a.lv, lvZielText(a)].filter(Boolean).join(' · ');
+  }
+  return '';
+}
+
+function massOffen(){ return !!(dlgMass && dlgMass.open && massZiel); }
+function massBtZeigen(){
+  const chip=$('#massBt'); if(!chip) return;
+  const an=$('#btchip').classList.contains('on');
+  const name=(bt.device && bt.device.name) || '';
+  chip.classList.toggle('an', an);
+  $('#massBtTxt').textContent = an
+    ? 'Laser verbunden'+(name?' · '+name:'')
+    : (name ? 'Laser getrennt · '+name : 'Kein Laser verbunden');
+}
+function massZeigen(){
+  const w=$('#massWert');
+  w.textContent = massText || '0';
+  w.classList.toggle('leer', !massText);
+  $('#massEinh').textContent = massEinheit;
+  const s=$('#massStd');
+  s.textContent = '↺ '+massStdText;
+  s.style.visibility = massStdText==='' ? 'hidden' : '';
+}
+function massOeffnen(el){
+  massZiel=el;
+  massText=massTextVon(el.value);
+  massFrisch=true;                       // die erste Ziffer ersetzt den alten Wert
+  const std=massStandard(el);
+  massStdText = std==null ? massText : massKurz(std);
+  massEinheit = massEinhVon(el);
+  $('#massName').textContent=massNameVon(el);
+  $('#massOrt').textContent=massOrtVon(el);
+  massBtZeigen(); massZeigen();
+  if(!dlgMass.open) dlgMass.showModal();
+  dlgMass.focus();                       // damit die echte Tastatur ankommt, ohne Knopf zu treffen
+}
+function massSchliessen(){
+  massZiel=null;
+  if(dlgMass.open) dlgMass.close();
+}
+function massTaste(k){
+  if(k==='ok'){ massAnwenden(); return; }
+  if(k==='leer'){ massText=''; massFrisch=false; }
+  else if(k==='zurueck'){ massText=massText.slice(0,-1); massFrisch=false; }
+  /* Vorzeichen: auf dem Block gibt es keine Taste dafür — gebraucht wird es einzig bei
+     „Drehung °" am Hintergrundplan, und dort tut 345 dasselbe wie −15. Über die echte
+     Tastatur geht es trotzdem, das kostet eine Zeile. */
+  else if(k==='-'){ massText = massText.startsWith('-') ? massText.slice(1) : '-'+massText; massFrisch=false; }
+  else if(k===','){
+    if(massFrisch){ massText='0,'; massFrisch=false; }
+    else if(!massText.includes(',')) massText=(massText||'0')+',';
+  }
+  else if(/^[0-9]$/.test(k)){
+    if(massFrisch){ massText=k; massFrisch=false; }
+    else {
+      const nk=massText.split(',')[1];
+      if(nk!=null && nk.length>=3) return;              // feiner als Millimeter misst niemand
+      if(nk==null && massText.length>=6) return;
+      massText = (massText==='0' ? '' : massText) + k;  // führende Null nicht mitschleppen
+    }
+  }
+  massZeigen();
+}
+/* Ein Messwert, während die Seite offen ist: er geht in die ANZEIGE. Danach steht die
+   Seite wieder auf „frisch", eine getippte Ziffer ersetzt ihn also — genau wie bei einem
+   Wert, der beim Aufmachen schon im Feld stand. */
+function massMesswert(m){
+  massText=massKurz(m); massFrisch=true; massZeigen();
+  const a=$('#massAnzeige'); if(!a) return;
+  a.style.background='#e7f7f0';
+  setTimeout(()=>{ a.style.background=''; }, 600);
+}
+function massAnwenden(){
+  const el=massZiel;
+  massSchliessen();
+  if(!el || !document.body.contains(el)) return;
+  el.value=massText;
+  el.dispatchEvent(new Event('input', {bubbles:true}));
+  /* Enter zuerst: „Manuell (m)" im Laser-Panel und „Maßstab setzen" hören
+     ausschließlich darauf (dieselbe Not wie bei der Leiste über der Tastatur). */
+  el.dispatchEvent(new KeyboardEvent('keydown',
+    {key:'Enter', code:'Enter', keyCode:13, which:13, bubbles:true, cancelable:true}));
+  if(!document.body.contains(el)) return;      // Enter hat die Seitenleiste neu gebaut
+  el.dispatchEvent(new Event('change', {bubbles:true}));
+}
+$('#massTasten').addEventListener('click', e=>{
+  const b=e.target.closest('button[data-k]');
+  if(b) massTaste(b.dataset.k);
+});
+$('#massAb').onclick=massSchliessen;
+$('#massStd').onclick=()=>{
+  if(!massStdText) return;
+  massText=massStdText; massFrisch=true; massZeigen();
+};
+dlgMass.addEventListener('close', ()=>{ massZiel=null; });
+dlgMass.addEventListener('keydown', e=>{
+  const k=e.key;
+  if(k==='Enter'){ e.preventDefault(); massAnwenden(); return; }
+  if(k==='Backspace'){ e.preventDefault(); massTaste('zurueck'); return; }
+  if(k==='Delete'){ e.preventDefault(); massTaste('leer'); return; }
+  if(k===',' || k==='.'){ e.preventDefault(); massTaste(','); return; }
+  if(k==='-'){ e.preventDefault(); massTaste('-'); return; }
+  if(/^[0-9]$/.test(k)){ e.preventDefault(); massTaste(k); }
+  // Esc schließt den Dialog von selbst; `close` räumt das Ziel weg.
+});
+document.addEventListener('pointerdown', e=>{
+  const t=e.target;
+  if(!t || !t.closest || t.closest('#dlgMass')) return;
+  const el=t.closest(MASSFELD);
+  if(!el || el.disabled || el.readOnly) return;
+  e.preventDefault(); e.stopPropagation();     // kein Fokus → keine Systemtastatur
+  if(document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  massOeffnen(el);
+}, true);
 
 /* ================= CSV-Export (magicplan-Format) ================= */
 function csvField(v){
@@ -11039,7 +11366,11 @@ function renderCrumb(){
   const p=proj();
   // Im Farbzonen-Modus führt auch die Brotkrume nicht aus dem Raum heraus
   if(fr && zoneEdit===fr.id){
-    $('#crumb').innerHTML=`<b>${esc(fr.name)}</b><span>▸</span><span>Sanierungsbereich festlegen</span>`;
+    // Ausgang auch hier oben — am Handy war „Fertig" im Blatt zu weit weg
+    $('#crumb').innerHTML=`<b>${esc(fr.name)}</b><span>▸</span><span>Sanierungsbereich</span>`+
+      `<button id="crumbzone" title="Farbbereich fertig festlegen">✓ Fertig</button>`;
+    const zb=$('#crumbzone');
+    if(zb) zb.onclick=()=>{ zoneEdit=null; save(); renderAll(); };
     return;
   }
   /* Die Etage ist hier eine Auswahl statt einer Beschriftung — umschalten war sonst nur
@@ -11234,7 +11565,11 @@ document.addEventListener('pointerdown', e=>{
 const HANDY={
   etage:   {panels:[/^Plan als Hintergrund/, /^R.ume/]},
   raum:    {panels:[/^Raum/, /^Fotos/],
-            behalte:['#rname','#rheight','#ranm','.farbrow','#rfoto','.fotos']},
+            /* Die Zeile des Sanierungsbereichs MUSS mit durch: sonst ist „Fertig"
+               versteckt und man kommt aus dem Farbmodus nicht mehr heraus (gemeldet
+               als „Festgefahren bei Raumfarbe editieren"). */
+            behalte:['#rname','#rheight','#ranm','.farbrow','#rzadd','#rzdel','#rzreset',
+                     '#rzfertig','#rfoto','.fotos']},
   wand:    {panels:[/^Wand/, /^Fotos/],
             // Die Wandlaenge gehoert dazu — sie ist das Mass, das man am haeufigsten
             // eintraegt; sie steht gleich hinter dem Staerke-Regler.
