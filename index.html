@@ -291,7 +291,6 @@
   /* LV-Nummer bleibt einzeilig, Kurztext bricht mehrzeilig um statt abgeschnitten zu werden */
   .sugbox .it .num{white-space:nowrap; flex:0 0 auto; font-variant-numeric:tabular-nums;}
   .sugbox .it .txt{white-space:normal; overflow-wrap:anywhere; min-width:0;}
-  .sugbox .empty{padding:6px 9px; font-size:12px; color:var(--muted);}
   /* Langtext antippen (Touch) — am Rechner geht weiterhin auch Verweilen */
   .sugbox .it .lvinfo{flex:0 0 auto; align-self:center; width:26px; height:26px; padding:0; line-height:1;
     border:1px solid var(--line); border-radius:50%; background:#fff; color:var(--accent);
@@ -477,6 +476,47 @@
   .grid2{display:grid; grid-template-columns:1fr 1fr; gap:6px 14px;}
   .checks{display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin:4px 0;}
   .checks label{font-size:13px; display:flex; gap:5px; align-items:center;}
+  /* ---------- LV-Zuordnung: Drehräder und große Schalter (seit 2026-08-05) ----------
+     Das Panel war eine Liste schmaler Felder mit 13-px-Kästchen. Auf der Baustelle,
+     mit Handschuh und im Stehen, trifft man das nicht. Zwei Werte, die man ständig
+     stellt (Abschlag, Einheit), bekommen ein Rad zum Wischen; aus jedem Häkchen wird
+     eine Fläche von 46 px. */
+  .raeder{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:10px 0 4px;}
+  .radfeld{display:flex; flex-direction:column; gap:3px; min-width:0;}
+  .radtitel{font-size:12px; color:var(--muted);}
+  /* Das Band markiert die Mitte — ohne es sähe das Rad aus wie eine Liste. */
+  .radbox{position:relative;}
+  /* 104 = 3 × 34 Zeilen + die beiden 1-px-Rahmen. Das Band sitzt darum bei 35, nicht
+     bei 34 — der obere Rahmen schiebt den Inhalt um ein Pixel nach unten. */
+  .radband{position:absolute; left:0; right:0; top:35px; height:34px; pointer-events:none;
+    border-top:1px solid var(--accent); border-bottom:1px solid var(--accent);}
+  .rad{height:104px; border:1px solid var(--line); border-radius:9px; background:#f7f8fa;
+    overflow-y:auto; scroll-snap-type:y mandatory; overscroll-behavior:contain;
+    scrollbar-width:none; -webkit-overflow-scrolling:touch;}
+  .rad::-webkit-scrollbar{display:none;}
+  .rad div{height:34px; display:flex; align-items:center; justify-content:center;
+    scroll-snap-align:center; font-size:15px; color:var(--muted); white-space:nowrap;}
+  .rad div.an{color:var(--ink); font-weight:600; font-size:16px;}
+  .rad div.leer{scroll-snap-align:none;}
+  /* Große Schalter statt Kontrollkästchen. `:has()` allein wäre knapp — Bluefy hängt
+     an der iPadOS-Version des Geräts —, darum setzt das Skript zusätzlich `.an`. */
+  .schalter{display:grid; grid-template-columns:1fr; gap:6px;}
+  .schalter.zwei{grid-template-columns:1fr 1fr;}
+  .schalter.drei{grid-template-columns:repeat(3,1fr);}
+  .schalter label{display:flex; align-items:center; justify-content:center; text-align:center;
+    min-height:46px; padding:4px 6px; border:1px solid var(--line); border-radius:9px;
+    background:#fff; font-size:13px; line-height:1.25; cursor:pointer;}
+  .schalter label.an, .schalter label:has(input:checked){
+    border-color:var(--accent); background:#eef4ff; color:var(--accent); font-weight:600;}
+  .schalter input{position:absolute; opacity:0; width:0; height:0; pointer-events:none;}
+  /* Der kleine Knopf hinter Länge und Höhe — quadratisch, damit die Zeile nicht bricht */
+  .mini{flex:0 0 40px; padding:0; font-size:15px;}
+  #dlgLv .grid2 .row{flex-wrap:nowrap; margin-bottom:0;}
+  #dlgLv .grid2 .row input{min-width:0;}
+  /* Am Telefon ist eine Spalte des Zweispalters rund 160 px breit — Beschriftung,
+     Feld und der kleine Knopf passen dort nicht nebeneinander, der Knopf rutschte in
+     die nächste Zeile. Untereinander hat jede Zeile die volle Breite. */
+  @media (max-width:640px){ #dlgLv .grid2{grid-template-columns:1fr;} }
   fieldset{border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin:8px 0;}
   legend{font-size:12px; color:var(--muted); padding:0 4px;}
 
@@ -499,7 +539,6 @@
   .ptitle{font-size:11pt; font-weight:700; margin-bottom:1mm;}
   .ptitle small{display:block; font-size:9pt; font-weight:400; color:#555; margin-top:0.5mm;}
   .pstats{font-size:9pt; color:#6b6b6b; text-align:right; letter-spacing:.2px;}
-  .phead2{font-size:11pt; font-weight:700; margin-bottom:1.5mm;}
   .pcols{display:flex; gap:6mm; align-items:flex-start;}
   .psheet svg{width:100%; height:auto; display:block;}
   .psheet table{border-collapse:collapse; width:100%; font-size:9pt;}
@@ -717,57 +756,72 @@
     <!-- Am Telefon führt ein Tipp hierauf in die Vollbild-Auswahl -->
     <div class="row" id="lvPosZeile"><label>Position</label>
       <button class="btn small" id="lvWahlBtn" style="flex:1; text-align:left">— noch keine gewählt —</button></div>
-    <div class="row"><label>Zuordnung</label><span class="hint" id="lvZiel" style="flex:1"></span></div>
-    <div class="row"><label>Abschlag</label>
-      <input id="lvAbschlag" type="number" min="1" step="1" style="width:70px; flex:0 0 auto">
-      <span class="hint" id="lvAbschlagHint"></span></div>
-    <div class="grid2">
-      <div class="row"><label>Menge/Faktor</label><input id="lvMenge" class="laser" value="1"></div>
-      <div class="row"><label>Einheit</label>
-        <select id="lvEinheit">
-          <option value="Flache">Fläche (m²)</option>
-          <option value="Lange">Länge (m)</option>
-          <option value="Stuck">Stück (Stück/h)</option>
-          <option value="Volumen">Volumen (m³)</option>
-        </select>
+
+    <!-- Abschlag und Einheit als Drehrad. Die echten Felder stehen versteckt darunter
+         und bleiben die Quelle der Wahrheit — jeder vorhandene Handler liest weiter
+         `#lvAbschlag` bzw. `#lvEinheit`, das Rad schreibt nur hinein. -->
+    <div class="raeder">
+      <div class="radfeld">
+        <span class="radtitel">Abschlag</span>
+        <div class="radbox"><div class="rad" id="radAbschlag"></div><div class="radband"></div></div>
+        <span class="hint" id="lvAbschlagHint"></span>
       </div>
-      <div class="row"><label>Länge in m</label><input id="lvL" class="laser"></div>
-      <div class="row"><label>Breite in m</label><input id="lvB" class="laser"></div>
-      <div class="row"><label>Höhe in m</label><input id="lvH" class="laser"></div>
+      <div class="radfeld">
+        <span class="radtitel">Einheit</span>
+        <div class="radbox"><div class="rad" id="radEinheit"></div><div class="radband"></div></div>
+      </div>
+    </div>
+    <input id="lvAbschlag" type="number" min="1" step="1" hidden>
+    <select id="lvEinheit" hidden>
+      <option value="Flache">Fläche (m²)</option>
+      <option value="Lange">Länge (m)</option>
+      <option value="Stuck">Stück (Stück/h)</option>
+      <option value="Volumen">Volumen (m³)</option>
+    </select>
+
+    <!-- „in m" stand hinter jedem Feld und sagte nichts: die Einheit steht im Rad
+         darüber, und gemessen wird in dieser App ausschließlich in Metern. -->
+    <div class="grid2">
+      <div class="row"><label>Menge</label><input id="lvMenge" class="laser" value="1"></div>
+      <div class="row"><label>Durchmesser</label><input id="lvD" class="laser"></div>
+      <!-- Die beiden Raum-Knöpfe stehen jetzt an dem Feld, das sie füllen. -->
+      <div class="row"><label>Länge</label><input id="lvL" class="laser">
+        <button class="btn small mini" id="lvUmfangRaum" title="Deckenumfang des Raums in dieses Feld">⭘</button></div>
+      <div class="row"><label>Höhe</label><input id="lvH" class="laser">
+        <button class="btn small mini" id="lvHoeheRaum" title="Deckenhöhe des Raums in dieses Feld">↕</button></div>
+      <div class="row"><label>Breite</label><input id="lvB" class="laser"></div>
       <!-- „Umfang in m" gab es hier bis 2026-08-05. Es war ein totes Feld: keine
            einzige Einheit hat je damit gerechnet (siehe `lvCalc`), der Umfang gehört
-           über „Umfang aus Raum → Länge" in die LÄNGE. -->
-      <div class="row"><label>Durchmesser</label><input id="lvD" class="laser"></div>
+           über den Knopf an der Länge in die LÄNGE. -->
     </div>
-    <div class="row" style="margin-top:6px">
-      <button class="btn small" id="lvHoeheRaum" title="Deckenhöhe des Raums ins Feld „Höhe“">Höhe aus Raum</button>
-      <button class="btn small" id="lvUmfangRaum" title="Deckenumfang des Raums ins Feld „Länge“">Umfang aus Raum → Länge</button>
-      <button class="btn small" id="lvKopieren" title="Diese Position in weitere Räume kopieren">⧉ Position kopieren</button>
-    </div>
-    <fieldset><legend>Flächenrichtungen (bei Einheit „Fläche“)</legend>
-      <div class="checks">
-        <label><input type="checkbox" id="lvVorn">Vorn</label>
-        <label><input type="checkbox" id="lvOben">Oben</label>
-        <label><input type="checkbox" id="lvLinks">Links</label>
-        <label><input type="checkbox" id="lvRechts">Rechts</label>
-        <label><input type="checkbox" id="lvHinten">Hinten</label>
-        <label><input type="checkbox" id="lvUnten">Unten</label>
+    <div class="row"><button class="btn small" id="lvKopieren" style="flex:1">⧉ In Räume kopieren</button></div>
+
+    <fieldset id="lvRichtFeld"><legend>Flächenrichtungen</legend>
+      <div class="schalter drei">
+        <label><input type="checkbox" id="lvVorn"><span>Vorn</span></label>
+        <label><input type="checkbox" id="lvOben"><span>Oben</span></label>
+        <label><input type="checkbox" id="lvLinks"><span>Links</span></label>
+        <label><input type="checkbox" id="lvRechts"><span>Rechts</span></label>
+        <label><input type="checkbox" id="lvHinten"><span>Hinten</span></label>
+        <label><input type="checkbox" id="lvUnten"><span>Unten</span></label>
       </div>
     </fieldset>
-    <fieldset><legend>Automatik-Flags</legend>
-      <div class="checks" style="grid-template-columns:1fr">
-        <label><input type="checkbox" id="lvNutzGrund">Nutze Grundfläche als Fläche</label>
-        <label><input type="checkbox" id="lvNutzAnsicht" title="Alle Wände + Decke + Boden: 2 × Grundfläche + Umfang × Raumhöhe">Nutze Ansichtsfläche als Fläche</label>
-        <label id="lvAutoLZeile" title="Wird die Wand gezogen oder ihre Länge getippt, zieht dieses Maß mit"><input type="checkbox" id="lvAutoL">Länge folgt der Wandlänge</label>
-        <label id="lvAutoHZeile" title="Wird die Raumhöhe geändert, zieht dieses Maß mit"><input type="checkbox" id="lvAutoH">Höhe folgt der Raumhöhe</label>
-        <label id="lvAutoObjZeile" title="Länge und Breite kommen aus den Maßen der Fläche bzw. Linie — und damit aus der Zeichnung, solange die dort gekoppelt sind"><input type="checkbox" id="lvAutoObj">Folge Objekt (Länge und Breite)</label>
+    <fieldset><legend>Automatik</legend>
+      <div class="schalter zwei">
+        <label><input type="checkbox" id="lvNutzGrund"><span>Grundfläche</span></label>
+        <label title="Alle Wände + Decke + Boden: 2 × Grundfläche + Umfang × Raumhöhe"><input type="checkbox" id="lvNutzAnsicht"><span>Ansichtsfläche</span></label>
+      </div>
+      <div class="schalter zwei" style="margin-top:6px">
+        <label id="lvAutoLZeile" title="Wird die Wand gezogen oder ihre Länge getippt, zieht dieses Maß mit"><input type="checkbox" id="lvAutoL"><span>Länge folgt der Wand</span></label>
+        <label id="lvAutoHZeile" title="Wird die Raumhöhe geändert, zieht dieses Maß mit"><input type="checkbox" id="lvAutoH"><span>Höhe folgt dem Raum</span></label>
+      </div>
+      <div class="schalter" style="margin-top:6px">
+        <label id="lvAutoObjZeile" title="Länge und Breite kommen aus den Maßen der Fläche bzw. Linie — und damit aus der Zeichnung, solange die dort gekoppelt sind"><input type="checkbox" id="lvAutoObj"><span>Folge Objekt (Länge und Breite)</span></label>
       </div>
     </fieldset>
     <fieldset><legend>Anmerkung</legend>
       <textarea id="lvAnm" rows="2" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:6px"
         placeholder="z. B. Besonderheit, Erschwernis, Absprache vor Ort"></textarea>
-      <p class="hint">Erscheint im Ausdruck <b>unter dem Raumplan</b> in einem eigenen Kasten — nicht
-        in der Positionstabelle.</p>
     </fieldset>
     <div class="row" style="margin-top:8px"><button class="btn small" id="lvFotoAdd">📷 ＋ Fotos</button>
       <span class="hint" id="lvFotoInfo"></span></div>
@@ -2007,8 +2061,6 @@ const etageOffen = fid => {
 // Raumbezogene Form: die Aufrufer prüfen damit weiterhin „gibt es den Raum überhaupt"
 // mit ab (ein fehlender Raum gilt als gesperrt).
 const raumOffen = r => !!r && etageOffen(r.floorId);
-// „Ist hier gerade etwas offen?" — für Stellen ohne Raum in der Hand (Kurzbefehle).
-const sperreOffen = () => etageOffen(focusRoomId ? (roomById(focusRoomId)||{}).floorId : activeFloorId);
 /* Altbestand: Bis zum 5.8.2026 steckte die Sperre in Zeitstempeln (`r.aufAt`, später
    `p.aufAt`). Die fliegen raus — **alle Etagen kommen offen herein**. Sie stattdessen
    zuzumachen wäre die unangenehmere Überraschung: Wer eine ältere Datei öffnet, stünde
@@ -5089,27 +5141,25 @@ function farbReihen(r, ohneZone){
     <p class="hint">Ecke antippen wählt sie aus, noch einmal anfassen zieht sie. „＋ Ecke" teilt die
       längste Kante. Die Farbe endet immer an den Raumwänden.</p>` : '');
 }
-function renderSidebar(){
-  const p=proj();
-  const fr=focusRoomId?roomById(focusRoomId):null;
+/* ================= Seitenleiste: je Ort ein Panel ==================
+   Frueher baute `renderSidebar` alle Faelle in einer Funktion von 348 Zeilen
+   zusammen -- Etage, Raum, Wand, Ecke, Objekt, Tuer/Fenster. Zum Nachschlagen
+   musste man durch die fremden Faelle scrollen, und beim Aendern eines Falls
+   standen die anderen im Weg.
+
+   Jetzt baut je Ort eine eigene Funktion ihren HTML-Text und gibt ihn zurueck;
+   `renderSidebar` entscheidet nur noch, welche davon dran ist. Die Namen sind
+   dieselben wie bei den Verdrahtern (`panelWand` <-> der Wand-Teil in
+   `wireSidebar`), damit Aufbau und Verhalten zusammenfindbar bleiben.
+
+   **Der Text der Panels ist unveraendert uebernommen**, bis auf die Zeile.
+   Das erzeugte HTML ist byteweise dasselbe wie vorher -- nachgemessen ueber
+   alle dreizehn Faelle (Etage, Etagen-Anwahl, Zone, Raum, Wand, Ecke, die fuenf
+   Objektarten, Tuer, Fenster). */
+
+// Etagenansicht: Anwahl, Etagenwahl, neuer Raum, Hintergrundplan, Raumliste.
+function panelEtage(p){
   let html='';
-
-  /* Läuft die Sperre ab, während eine **Ecke** angewählt ist, fällt deren Auswahl weg —
-     an der Ecke gibt es nichts auszufüllen, ihr Panel böte nur „Ecke löschen".
-     Wand und Öffnung bleiben angewählt: Dort hängen LV-Positionen und Fotos, und genau
-     dafür soll die Auswahl im gesperrten Raum ja weiter gehen. Ihre Maßfelder sind im
-     Panel abgeschaltet. */
-  if(fr && !raumOffen(fr) && sel.vertex!=null) sel={roomId:fr.id, wall:null, vertex:null};
-
-  /* Maßstab setzen ist ein ausschließlicher Modus — wie beim Sanierungsbereich zeigt die
-     Leiste dann nur dieses eine Panel. Raus geht es über „Übernehmen", „Abbrechen" oder Esc. */
-  if(mode==='kalib' && planVon()){
-    $('#sidebar').innerHTML=kalibPanel();
-    wireSidebar(null);
-    return;
-  }
-
-  if(!fr){
     /* ---------- Etagenansicht ---------- */
     /* Anwahlmodus (Raum 1 s halten): der gewählte Raum lässt sich bearbeiten, ohne
        hineinzuzoomen — deshalb ganz oben. Bewusst dieselben Felder wie in der
@@ -5159,7 +5209,12 @@ function renderSidebar(){
         Zum <b>Verschieben</b> den Raum erst <b>1 s halten</b> (Anwahl), dann ziehen.</p>
     </div>`;
 
-  } else if(zoneEdit===fr.id){
+  return html;
+}
+
+// Sanierungsbereich festlegen -- ausschliesslicher Modus, nur dieses eine Panel.
+function panelZone(fr){
+  let html='';
     /* ---------- Sanierungsbereich festlegen: ausschließlicher Modus ----------
        Es gibt nur dieses eine Panel — kein Zurück, kein Löschen, keine Objekte.
        Raus geht es allein über „Fertig" oder „Ganzer Raum". */
@@ -5167,14 +5222,12 @@ function renderSidebar(){
       <p class="hint" style="margin-bottom:6px">Alles andere ist so lange gesperrt.
         Schieben und Zoomen des Plans geht weiter.</p>
       ${farbReihen(fr)}</div>`;
-  } else {
-    /* ---------- Raumansicht: je nach Fokus genau EIN Inhalt ---------- */
-    const r=fr;
-    const objs=r.objects||[], ops=r.openings||[];
-    const selObj=sel.objId?objs.find(o=>o.id===sel.objId):null;
-    const selOp=sel.openId?ops.find(o=>o.id===sel.openId):null;
+  return html;
+}
 
-    if(selObj){
+// Objekt im Fokus: Flaeche, Linie, Symbol, 360-Aufnahme oder Fotoaufmass.
+function panelObjekt(p, selObj){
+  let html='';
       /* Objekt im Fokus */
       const nrTxt=selObj.nr?` #${selObj.nr}`:'';
       const btns=`<div class="row">
@@ -5278,7 +5331,12 @@ function renderSidebar(){
           <p class="hint">Ziehen auf der Linie verschiebt sie. Ecken ziehen rastet auf 45°, die Längeneingabe skaliert die ganze Linie. Entf = Objekt löschen, Esc = abwählen.</p></div>`;
       }
       html+=fotoPanel(selObj.fotos, 'objfoto', p.attrs.filter(a=>a.objId===selObj.id));
-    } else if(selOp){
+  return html;
+}
+
+// Tuer oder Fenster im Fokus.
+function panelOeffnung(p, r, selOp){
+  let html='';
       /* Tür/Fenster im Fokus (sind Objekte) */
       const nrTxt=selOp.nr?` #${selOp.nr}`:'';
       // Raum gesperrt: Maße festgesetzt, LV-Position und Fotos bleiben bedienbar
@@ -5311,7 +5369,12 @@ function renderSidebar(){
           (wie bei Flächen und Linien). Esc = abwählen.</p>
       </div>`;
       html+=fotoPanel(selOp.fotos, 'opfoto', p.attrs.filter(a=>a.objId===selOp.id));
-    } else if(sel.vertex!=null){
+  return html;
+}
+
+// Ecke im Fokus -- das kuerzeste Panel, es gibt dort nur Loeschen und Abwaehlen.
+function panelEcke(r){
+  let html='';
       /* Ecke im Fokus */
       const pt=r.points[sel.vertex]||{x:0,y:0};
       html+=`<div class="panel"><h3>Ecke ${sel.vertex+1} von ${r.points.length}</h3>
@@ -5322,7 +5385,12 @@ function renderSidebar(){
         </div>
         <p class="hint">Die Ecke ist ausgewählt — zum Verschieben noch einmal anfassen und ziehen.
           Beim Löschen verschmelzen die beiden angrenzenden Wände.</p></div>`;
-    } else if(sel.wall!=null){
+  return html;
+}
+
+// Wand im Fokus: Laenge, Staerke, Oeffnungen, Magnet, LV.
+function panelWand(p, r){
+  let html='';
       /* Wand im Fokus */
       const [a,b]=wallPoints(r,sel.wall);
       const gesperrt=wandGesperrt(r, sel.wall);
@@ -5378,7 +5446,12 @@ function renderSidebar(){
         <p class="hint">Nochmal anfassen und ziehen verschiebt die Wand parallel — die Nachbarwände behalten ihre Richtung und werden nur länger oder kürzer. <b>„＋ Ecke einfügen“ und dann eine Hälfte ziehen ergibt einen rechtwinkligen Vor- oder Rücksprung.</b> Wandlänge ändern verschiebt die nachfolgenden Ecken mit. „Entfernen“ schließt nur diese Ansicht (Esc geht auch).</p></div>`;
       html+=fotoPanel((r.wallFotos||{})[sel.wall], 'wfoto',
         p.attrs.filter(a=>a.roomId===r.id && a.wall===sel.wall));
-    } else {
+  return html;
+}
+
+// Raum im Fokus -- der Normalfall ohne weitere Auswahl.
+function panelRaum(p, r, objs, ops){
+  let html='';
       /* Raum im Fokus */
       const st=roomStats(r);
       html+=`<div class="panel"><h3>Raum — ${esc(floorName(r.floorId))}</h3>
@@ -5429,7 +5502,43 @@ function renderSidebar(){
       </div>`;
 
       html+=fotoPanel(r.fotos, 'rfoto', p.attrs.filter(a=>a.roomId===r.id));
-    }
+  return html;
+}
+
+/* Der Verteiler. Er raeumt zwei Sonderfaelle vorweg ab (abgelaufene Ecken-Auswahl,
+   Massstab-Modus) und waehlt dann genau EIN Panel -- die Reihenfolge der Abfragen
+   ist die Rangfolge der Auswahl: Objekt vor Oeffnung vor Ecke vor Wand vor Raum. */
+function renderSidebar(){
+  const p=proj();
+  const fr=focusRoomId?roomById(focusRoomId):null;
+
+  /* Laeuft die Sperre ab, waehrend eine **Ecke** angewaehlt ist, faellt deren Auswahl weg --
+     an der Ecke gibt es nichts auszufuellen, ihr Panel boete nur „Ecke loeschen".
+     Wand und Oeffnung bleiben angewaehlt: Dort haengen LV-Positionen und Fotos, und genau
+     dafuer soll die Auswahl im gesperrten Raum ja weiter gehen. Ihre Massfelder sind im
+     Panel abgeschaltet. */
+  if(fr && !raumOffen(fr) && sel.vertex!=null) sel={roomId:fr.id, wall:null, vertex:null};
+
+  /* Massstab setzen ist ein ausschliesslicher Modus -- wie beim Sanierungsbereich zeigt die
+     Leiste dann nur dieses eine Panel. Raus geht es ueber „Uebernehmen", „Abbrechen" oder Esc. */
+  if(mode==='kalib' && planVon()){
+    $('#sidebar').innerHTML=kalibPanel();
+    wireSidebar(null);
+    return;
+  }
+
+  let html;
+  if(!fr)                    html=panelEtage(p);
+  else if(zoneEdit===fr.id)  html=panelZone(fr);
+  else {
+    const r=fr, objs=r.objects||[], ops=r.openings||[];
+    const selObj=sel.objId?objs.find(o=>o.id===sel.objId):null;
+    const selOp =sel.openId?ops.find(o=>o.id===sel.openId):null;
+    html = selObj            ? panelObjekt(p, selObj)
+         : selOp             ? panelOeffnung(p, r, selOp)
+         : sel.vertex!=null  ? panelEcke(r)
+         : sel.wall!=null    ? panelWand(p, r)
+         :                     panelRaum(p, r, objs, ops);
   }
 
   $('#sidebar').innerHTML=html;
@@ -5438,9 +5547,25 @@ function renderSidebar(){
   wireSidebar(fr || (etagenWahl?roomById(etagenWahl):null));
 }
 
-function wireSidebar(r){
-  // Panels erscheinen je nach Fokus — jedes Element nur verdrahten, wenn es existiert
-  const on=(s,ev,fn)=>{ const el=$(s); if(el) el[ev]=fn; };
+/* ================= Seitenleiste: je Ort ein Verdrahter =================
+   Gegenstueck zu den `panel*`-Funktionen: dort entsteht der HTML-Text, hier
+   bekommt er sein Verhalten. `wireSidebar` war 494 Zeilen lang und mischte
+   alle Orte; wer den Wand-Teil suchte, scrollte an Raumfarben, LV-Listen und
+   dem Fotoaufmass vorbei.
+
+   Zwei Dinge halten das zusammen und sind beim Aendern zu beachten:
+
+   - **`on(...)` verdrahtet nur, was da ist.** Deshalb duerfen alle Verdrahter
+     immer laufen -- fehlt das Element, passiert nichts. Kein Verdrahter muss
+     wissen, welches Panel gerade gebaut wurde.
+   - **Die Reihenfolge zaehlt an genau einer Stelle.** `#objlv` gibt es im
+     Objekt- wie im Oeffnungs-Panel. Sind (durch einen Fehler anderswo) beide
+     Auswahlen gesetzt, gewinnt der zuletzt gesetzte Handler. `wireObjekt`
+     laeuft darum vor `wireOeffnung` -- so wie frueher im langen Block. */
+
+// Etagenansicht, Hintergrundplan, Massstab und die Raumliste. Laeuft immer:
+// einiges davon (Raumliste, Plan) steht auch in der Raumansicht.
+function wireEtage(on, r){
 
   /* Etagenansicht */
   on('#floorsel','onchange',e=>{ activeFloorId=e.target.value; focusRoomId=null; sel={roomId:null,wall:null,vertex:null}; renderAll(); zoomFit(); });
@@ -5553,7 +5678,11 @@ function wireSidebar(r){
   });
   on('#backfloor','onclick',exitRoom);
 
-  if(r){
+}
+
+// Raum-Panel: Name, Hoehe, Anmerkung, Sperre, Raumfarben -- und die Knoepfe
+// des Objekte-Panels, die im Raum-Panel darunter stehen.
+function wireRaum(on, r){
     /* Raum-Panel */
     on('#rsperr','onclick',()=>etageSperreUmschalten(r.floorId, r.id));
     on('#rname','onchange',e=>{ r.name=e.target.value||r.name; save(); renderAll(); });
@@ -5623,6 +5752,28 @@ function wireSidebar(r){
     });
     on('#rstats','ontoggle',e=>{ statsOpen=e.target.open; });
     wireFotos('rfoto', r, 'fotos');                       // Fotos am Raum
+    /* Objekte: Modus-Buttons, Liste, Auswahl-Panel */
+    on('#objrectbtn','onclick',()=>{ mode=(mode==='objrect')?'select':'objrect'; pendingSym=null; pendingOpenType=null; sel.objId=null; renderAll(); updateDrawHint(); });
+    on('#objlinebtn','onclick',()=>{ mode=(mode==='objline')?'select':'objline'; pendingSym=null; pendingOpenType=null; sel.objId=null; renderAll(); updateDrawHint(); });
+    document.querySelectorAll('.symbtn').forEach(btn=>{
+      btn.onclick=()=>{
+        if(mode==='objsym' && pendingSym===btn.dataset.sym){ mode='select'; pendingSym=null; }
+        else { mode='objsym'; pendingSym=btn.dataset.sym; pendingOpenType=null; sel.objId=null; }
+        renderAll(); updateDrawHint();
+      };
+    });
+    const toggleAddOpen=type=>{
+      if(mode==='addopen' && pendingOpenType===type){ mode='select'; pendingOpenType=null; }
+      else { mode='addopen'; pendingOpenType=type; pendingSym=null; sel.objId=null; }
+      renderAll(); updateDrawHint();
+    };
+    on('#opdoorbtn','onclick',()=>toggleAddOpen('door'));
+    on('#opwinbtn','onclick',()=>toggleAddOpen('window'));
+}
+
+// Wand-Panel: Laenge, Staerke samt Regler, Nachbar-Uebernahme, Magnet,
+// Teilen, Tuer/Fenster auf der Wand, Fotos an der Wand.
+function wireWand(on, r){
     if(sel.wall!=null){                                    // Fotos an der gewählten Wand
       r.wallFotos=r.wallFotos||{};
       wireFotos('wfoto', r.wallFotos, String(sel.wall));
@@ -5692,9 +5843,6 @@ function wireSidebar(r){
       const [a,b]=wallPoints(r,sel.wall);
       openLvDialog(null, r.id, null, {laenge:dist(a,b), hoehe:r.height, wall:sel.wall});
     });
-    document.querySelectorAll('[data-lvopen]').forEach(el=>{
-      el.onclick=()=>openLvDialog(el.dataset.lvopen);
-    });
     on('#walldesel','onclick',()=>{ sel={roomId:focusRoomId, wall:null, vertex:null}; renderAll(); });
     on('#wallsplit','onclick',()=>{                       // Wand teilen → neue Ecke
       if(eckeEinfuegen(r, sel.wall, merkFuerWand(r, sel.wall))){
@@ -5703,16 +5851,6 @@ function wireSidebar(r){
         syncSharedDoors(); save(); renderAll();
       }
     });
-    on('#eckedel','onclick',()=>{                          // Ecke entfernen — nur nach Rückfrage
-      const nE=r.points.length, vorE=(sel.vertex-1+nE)%nE;
-      const sperre=wandGesperrt(r,vorE)||wandGesperrt(r,sel.vertex);   // dann lehnt eckeLoeschen gleich selbst ab
-      if(!sperre && !confirm(`Ecke ${sel.vertex+1} löschen?\n\nDie beiden angrenzenden Wände verschmelzen zu einer.`)) return;
-      if(eckeLoeschen(r, sel.vertex)){
-        sel={roomId:r.id, wall:null, vertex:null};
-        syncSharedDoors(); save(); renderAll();
-      }
-    });
-    on('#eckedesel','onclick',()=>{ sel={roomId:focusRoomId, wall:null, vertex:null}; renderAll(); });
     /* Tür/Fenster direkt auf der gewählten Wand anlegen. Der Merkpunkt gibt die Mitte
        vor — wer die Wand dort angetippt hat, wo die Tür hin soll, bekommt sie dort.
        Ohne Merkpunkt bleibt es beim bisherigen Verhalten: größte freie Lücke.
@@ -5724,48 +5862,32 @@ function wireSidebar(r){
     };
     on('#wopdoor','onclick',()=>addOnWall('door'));
     on('#wopwin','onclick',()=>addOnWall('window'));
+}
 
-    /* Öffnungs-Editoren (Tür/Fenster-Panel) */
-    document.querySelectorAll('.opfld').forEach(inp=>{
-      inp.onchange=()=>{
-        const o=r.openings.find(o=>o.id===inp.dataset.op); if(!o) return;
-        oeffnungSetzen(r, o, inp.dataset.f, parseNum(inp.value));
-      };
+// Ecken-Panel -- loeschen (mit Rueckfrage) und abwaehlen, mehr gibt es dort nicht.
+function wireEcke(on, r){
+    on('#eckedel','onclick',()=>{                          // Ecke entfernen — nur nach Rückfrage
+      const nE=r.points.length, vorE=(sel.vertex-1+nE)%nE;
+      const sperre=wandGesperrt(r,vorE)||wandGesperrt(r,sel.vertex);   // dann lehnt eckeLoeschen gleich selbst ab
+      if(!sperre && !confirm(`Ecke ${sel.vertex+1} löschen?\n\nDie beiden angrenzenden Wände verschmelzen zu einer.`)) return;
+      if(eckeLoeschen(r, sel.vertex)){
+        sel={roomId:r.id, wall:null, vertex:null};
+        syncSharedDoors(); save(); renderAll();
+      }
     });
-    document.querySelectorAll('.opdel').forEach(btn=>{
-      btn.onclick=()=>{
-        const o=r.openings.find(x=>x.id===btn.dataset.op);
-        if(!objLoeschenOk(opName(o), openingIds(r, btn.dataset.op))) return;
-        deleteOpeningEverywhere(r, btn.dataset.op); sel.openId=null; save(); renderAll();
-      };
-    });
-    document.querySelectorAll('.ophinge').forEach(btn=>{
-      btn.onclick=()=>{ const o=r.openings.find(x=>x.id===btn.dataset.op); if(!o) return;
-        o.hinge=o.hinge?0:1; pushDoorToPartner(r,o); save(); renderAll(); };
-    });
-    document.querySelectorAll('.opswing').forEach(btn=>{
-      btn.onclick=()=>{ const o=r.openings.find(x=>x.id===btn.dataset.op); if(!o) return;
-        o.swing=-(o.swing||1); pushDoorToPartner(r,o); save(); renderAll(); };
-    });
+    on('#eckedesel','onclick',()=>{ sel={roomId:focusRoomId, wall:null, vertex:null}; renderAll(); });
+}
 
-    /* Objekte: Modus-Buttons, Liste, Auswahl-Panel */
-    on('#objrectbtn','onclick',()=>{ mode=(mode==='objrect')?'select':'objrect'; pendingSym=null; pendingOpenType=null; sel.objId=null; renderAll(); updateDrawHint(); });
-    on('#objlinebtn','onclick',()=>{ mode=(mode==='objline')?'select':'objline'; pendingSym=null; pendingOpenType=null; sel.objId=null; renderAll(); updateDrawHint(); });
-    document.querySelectorAll('.symbtn').forEach(btn=>{
-      btn.onclick=()=>{
-        if(mode==='objsym' && pendingSym===btn.dataset.sym){ mode='select'; pendingSym=null; }
-        else { mode='objsym'; pendingSym=btn.dataset.sym; pendingOpenType=null; sel.objId=null; }
-        renderAll(); updateDrawHint();
-      };
+// Die Liste verknuepfter LV-Positionen. Steht in mehreren Panels (Raum, Wand,
+// Objekt, Tuer/Fenster) und hat darum keinen eigenen Ort.
+function wireLvListe(){
+    document.querySelectorAll('[data-lvopen]').forEach(el=>{
+      el.onclick=()=>openLvDialog(el.dataset.lvopen);
     });
-    const toggleAddOpen=type=>{
-      if(mode==='addopen' && pendingOpenType===type){ mode='select'; pendingOpenType=null; }
-      else { mode='addopen'; pendingOpenType=type; pendingSym=null; sel.objId=null; }
-      renderAll(); updateDrawHint();
-    };
-    on('#opdoorbtn','onclick',()=>toggleAddOpen('door'));
-    on('#opwinbtn','onclick',()=>toggleAddOpen('window'));
+}
 
+// Objekt-Panel: Flaeche, Linie, Symbol, 360-Aufnahme, Fotoaufmass.
+function wireObjekt(on, r){
     const selObj = sel.objId ? (r.objects||[]).find(o=>o.id===sel.objId) : null;
     if(selObj){
       on('#objname','onchange',e=>{ selObj.name=e.target.value; save(); renderAll(); });
@@ -5896,6 +6018,32 @@ function wireSidebar(r){
       });
       wireFotos('objfoto', selObj, 'fotos');              // Fotos am Objekt
     }
+}
+
+// Tuer/Fenster: die Massfelder an der Wand und das eigene Panel.
+function wireOeffnung(on, r){
+    /* Öffnungs-Editoren (Tür/Fenster-Panel) */
+    document.querySelectorAll('.opfld').forEach(inp=>{
+      inp.onchange=()=>{
+        const o=r.openings.find(o=>o.id===inp.dataset.op); if(!o) return;
+        oeffnungSetzen(r, o, inp.dataset.f, parseNum(inp.value));
+      };
+    });
+    document.querySelectorAll('.opdel').forEach(btn=>{
+      btn.onclick=()=>{
+        const o=r.openings.find(x=>x.id===btn.dataset.op);
+        if(!objLoeschenOk(opName(o), openingIds(r, btn.dataset.op))) return;
+        deleteOpeningEverywhere(r, btn.dataset.op); sel.openId=null; save(); renderAll();
+      };
+    });
+    document.querySelectorAll('.ophinge').forEach(btn=>{
+      btn.onclick=()=>{ const o=r.openings.find(x=>x.id===btn.dataset.op); if(!o) return;
+        o.hinge=o.hinge?0:1; pushDoorToPartner(r,o); save(); renderAll(); };
+    });
+    document.querySelectorAll('.opswing').forEach(btn=>{
+      btn.onclick=()=>{ const o=r.openings.find(x=>x.id===btn.dataset.op); if(!o) return;
+        o.swing=-(o.swing||1); pushDoorToPartner(r,o); save(); renderAll(); };
+    });
     const selOp = sel.openId ? (r.openings||[]).find(o=>o.id===sel.openId) : null;
     if(selOp){
       wireFotos('opfoto', selOp, 'fotos');                // Fotos an Tür/Fenster
@@ -5929,6 +6077,19 @@ function wireSidebar(r){
         save(); renderAll();
       });
     }
+}
+
+function wireSidebar(r){
+  // Panels erscheinen je nach Fokus -- jedes Element nur verdrahten, wenn es existiert
+  const on=(s,ev,fn)=>{ const el=$(s); if(el) el[ev]=fn; };
+  wireEtage(on, r);
+  if(r){
+    wireRaum(on, r);
+    wireWand(on, r);
+    wireEcke(on, r);
+    wireLvListe();
+    wireObjekt(on, r);      // muss vor wireOeffnung stehen, siehe oben (#objlv)
+    wireOeffnung(on, r);
   }
   laserZielSetzen();
 }
@@ -6004,26 +6165,14 @@ let lvRoomId=null, lvObjId=null;
    braucht ihn für Grundfläche und Umfang) — angezeigt wird aber „Projekt". */
 let lvProjektEbene=false;
 function lvZielAnzeige(){
-  const r=roomById(lvRoomId);
-  /* Kopieren gibt es nur für Positionen am Raum (und auf Projektebene) — die Kopien
-     hängen immer am Raum. An einer Wand oder einem Objekt wäre der Knopf sinnlos:
-     das Gegenstück gibt es im Zielraum gar nicht. */
   /* Kopieren gibt es am Raum und (seit 2026-08-04) an der Wand. An Objekten, Türen und
      Fenstern nicht: dort hinge die Kopie an einem Bauteil, das es anderswo nicht gibt. */
   $('#lvKopieren').style.display = lvObjId ? 'none' : '';
   $('#lvKopieren').textContent = lvPresetWall!=null ? '⧉ Auf Wände kopieren' : '⧉ In Räume kopieren';
-  if(lvProjektEbene){
-    $('#lvZiel').textContent = r ? `Projekt  (abgelegt in ${r.name})` : 'Projekt';
-    return;
-  }
-  const teile=[r ? `${floorName(r.floorId)} · ${r.name}` : '– kein Raum –'];
-  if(lvObjId && r){
-    const g=(r.objects||[]).find(x=>x.id===lvObjId)||(r.openings||[]).find(x=>x.id===lvObjId);
-    if(g) teile.push(objAnzeige(g)||g.name||'Objekt');
-  } else if(lvPresetWall!=null && r){
-    teile.push(wallNrOf(r, lvPresetWall) ? '#'+wallNrOf(r, lvPresetWall) : 'Wand '+(lvPresetWall+1));
-  }
-  $('#lvZiel').textContent=teile.join('  ›  ');
+  /* Die Zeile „Zuordnung: Erdgeschoss › Raum 2" gibt es seit 2026-08-05 nicht mehr
+     (Nutzerwunsch). Sie stand nur da: auswählen ließ sie sich ohnehin nie, sie ergibt
+     sich daraus, WO der Dialog geöffnet wurde. Was bleibt, ist die Beschriftung des
+     Kopieren-Knopfes oben — die hängt an derselben Frage. */
 }
 function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
   const p=proj();
@@ -6110,9 +6259,86 @@ function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
   lvFotos = a ? (a.fotos||[]).map(f=>({...f})) : [];
   renderLvFotos();
   lvKatKnoepfe(); lvWahlAnzeigen();
+  lvRaederStellen(p, a);    // Drehräder auf die versteckten Felder einstellen
+  lvSchalterAuffrischen();
   dlgLv.showModal();
   autoGrow($('#lvKurz'));   // erst im geöffneten Dialog messbar
+  lvRaederNachstellen();    // Rollhöhe geht erst im offenen Dialog zu setzen
 }
+/* ---------- Drehräder für Abschlag und Einheit ----------
+   Beides sind Werte aus einer kurzen, festen Liste — zum Tippen zu schade und mit
+   einem `<select>` auf dem iPad ein Systemfenster zu viel. Das Rad ist ein **Aufsatz**:
+   `#lvAbschlag` und `#lvEinheit` bleiben als versteckte Felder die Quelle der Wahrheit,
+   jeder vorhandene Handler liest weiter dort. Das Rad schreibt nur hinein und löst
+   `change` aus — es gibt also keine zweite Stelle, an der derselbe Wert verwaltet wird. */
+const RAD_H=34;                                  // muss zu `.rad div` im CSS passen
+function radFuellen(box, werte){
+  // Leerzeilen oben und unten, damit auch der erste und letzte Wert in die Mitte rollen
+  box.innerHTML='<div class="leer"></div>'
+    + werte.map(w=>`<div data-w="${esc(String(w.wert))}">${esc(w.text)}</div>`).join('')
+    + '<div class="leer"></div>';
+}
+function radAufWert(box, wert){
+  const d=[...box.children].filter(x=>!x.classList.contains('leer'));
+  const i=Math.max(0, d.findIndex(x=>x.dataset.w===String(wert)));
+  box.scrollTop=i*RAD_H;
+  d.forEach((x,k)=>x.classList.toggle('an', k===i));
+}
+function radWert(box){
+  const d=[...box.children].filter(x=>!x.classList.contains('leer'));
+  const i=Math.max(0, Math.min(d.length-1, Math.round(box.scrollTop/RAD_H)));
+  return d[i] ? d[i].dataset.w : null;
+}
+/* Beim Rollen wird nicht sofort geschrieben: erst wenn die Bewegung 90 ms steht, ist
+   der Wert gemeint. Sonst liefe bei jedem Zwischenschritt ein `change` los — und daran
+   hängen `lvGrundAuto` und das Ein-/Ausblenden der Flächenrichtungen. */
+function radKoppeln(box, feldSel){
+  let ruht=null;
+  box.addEventListener('scroll', ()=>{
+    clearTimeout(ruht);
+    ruht=setTimeout(()=>{
+      const w=radWert(box); if(w==null) return;
+      [...box.children].forEach(x=>x.classList.toggle('an', x.dataset.w===w));
+      const feld=$(feldSel);
+      if(feld && feld.value!==w){ feld.value=w; feld.dispatchEvent(new Event('change',{bubbles:true})); }
+    }, 90);
+  });
+}
+radKoppeln($('#radAbschlag'), '#lvAbschlag');
+radKoppeln($('#radEinheit'),  '#lvEinheit');
+function lvRaederStellen(p, a){
+  /* Wie weit soll das Abschlagsrad reichen? Bis zwei über den laufenden hinaus —
+     mehr wäre Vorrat, weniger ließe die bestehende Zuordnung aus dem Rad fallen. */
+  const jetzt=Math.max(1, Math.round(parseNum($('#lvAbschlag').value)||1));
+  const bis=Math.max(6, (p.abschlag||1)+2, jetzt+2);
+  radFuellen($('#radAbschlag'), Array.from({length:bis}, (_,i)=>({wert:i+1, text:'AZ '+(i+1)})));
+  radFuellen($('#radEinheit'), [...$('#lvEinheit').options].map(o=>({wert:o.value, text:o.textContent})));
+  lvRaederNachstellen();
+}
+function lvRaederNachstellen(){
+  /* Kommt aus dem Katalog eine Einheit, die es im Menü nicht gibt (Altbestand oder ein
+     Import, der die Schreibweise nicht getroffen hat), steht das `<select>` auf -1 und
+     liefert einen leeren Wert — dann verschwänden stillschweigend die Flächenrichtungen.
+     Lieber auf die erste Einheit zurückfallen als auf nichts. */
+  const e=$('#lvEinheit');
+  if(e.selectedIndex<0) e.selectedIndex=0;
+  radAufWert($('#radAbschlag'), Math.max(1, Math.round(parseNum($('#lvAbschlag').value)||1)));
+  radAufWert($('#radEinheit'), e.value);
+}
+/* Die großen Schalter tragen ihren Zustand als Klasse — `:has(input:checked)` täte es
+   auch, aber nur ab iPadOS 15.4, und welche Fassung auf dem Gerät läuft, wissen wir
+   nicht. Die Klasse kostet nichts und gilt überall. */
+function lvSchalterAuffrischen(){
+  dlgLv.querySelectorAll('.schalter label').forEach(l=>{
+    const c=l.querySelector('input[type=checkbox]');
+    if(c) l.classList.toggle('an', c.checked);
+  });
+  // Richtungen zählen nur bei Flächen — bei Länge oder Stück stünden sie nur im Weg
+  $('#lvRichtFeld').style.display = $('#lvEinheit').value==='Flache' ? '' : 'none';
+}
+dlgLv.addEventListener('change', e=>{
+  if(e.target.matches('.schalter input, #lvEinheit')) lvSchalterAuffrischen();
+});
 /* Hängt die Position am RAUM selbst (kein Objekt, keine Wand) und wird eine Fläche
    abgerechnet, ist fast immer die Bodenfläche gemeint — dann setzt sich das Häkchen
    von allein. Bei Objekten, Wänden und anderen Einheiten bleibt es unberührt. */
@@ -8342,7 +8568,6 @@ function bauteilAktiv(list){
   return !list.length || list.some(a=>abschlagVon(a)===proj().abschlag);
 }
 const objAktiv  = g => bauteilAktiv(attrsFuer(a=>a.objId===g.id));
-const wandAktiv = (r,i) => bauteilAktiv(attrsFuer(a=>a.roomId===r.id && a.wall===i));
 /* Für FOTOS gilt eine mildere Regel als fürs Ausgrauen. `bauteilAktiv` liefert im
    Druck `[].some(…)` = falsch, sobald ein Bauteil GAR KEINE LV-Zuordnung hat — damit
    verschwanden Wandfotos ohne LV-Position vollständig aus dem Bericht, während
