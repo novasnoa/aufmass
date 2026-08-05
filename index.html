@@ -151,6 +151,39 @@
     #massAnzeige{min-height:96px;}
     #massTasten{grid-auto-rows:minmax(42px,58px);}
   }
+  /* ---------- LV-Auswahl: Kapitel als Schalter, Positionen als Kacheln ----------
+     Die LV-Nummer ist eindeutig, aber niemand sucht danach. Gesucht wird über das
+     Kapitel (in Airtable „Kategorie") und den Kurztext. */
+  .katwahl{display:flex; flex-wrap:wrap; gap:5px; flex:1; min-width:0;}
+  .katwahl button{border:1px solid var(--line); background:#fff; border-radius:14px;
+    padding:3px 10px; font-size:12px; color:var(--muted); white-space:nowrap;}
+  .katwahl button.an{background:var(--accent); border-color:var(--accent); color:#fff;}
+  .katwahl .leer{font-size:11px; color:var(--muted); padding:3px 0;}
+  /* Vollbild-Auswahl (Telefon): Suchleiste oben, darunter Kacheln */
+  #dlgLvWahl, #dlgLvLang{background:#fff;}
+  #lwSuchzeile{display:flex; gap:8px; align-items:center; padding:8px 10px;
+    border-bottom:1px solid var(--line); flex:0 0 auto;}
+  #lwSuche{flex:1; min-width:0; border:1px solid var(--line); border-radius:9px;
+    padding:9px 11px; font-size:16px;}
+  #lwKat{display:flex; gap:5px; overflow-x:auto; padding:6px 10px; flex:0 0 auto;
+    border-bottom:1px solid var(--line); scrollbar-width:none;}
+  #lwKat::-webkit-scrollbar{display:none;}
+  #lwListe{flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
+    padding:8px 10px calc(10px + env(safe-area-inset-bottom)); display:flex;
+    flex-direction:column; gap:6px;}
+  .lwkachel{display:flex; align-items:stretch; gap:0; border:1px solid var(--line);
+    border-radius:11px; overflow:hidden; background:#fff;}
+  .lwkachel .haupt{flex:1; min-width:0; text-align:left; border:none; background:none;
+    padding:10px 12px;}
+  .lwkachel .haupt b{display:block; font-size:15px; line-height:1.25;}
+  .lwkachel .haupt span{display:block; font-size:11px; color:var(--muted); margin-top:2px;}
+  .lwkachel .lang{flex:0 0 46px; border:none; border-left:1px solid var(--line);
+    background:#f6f7f9; font-size:16px; color:var(--muted);}
+  .lwkachel.an{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent);}
+  .lwkachel:active{background:#eef1f6;}
+  #lwLeer{padding:20px 12px; text-align:center; color:var(--muted); font-size:13px;}
+  #llText{white-space:pre-wrap; font-size:14px; line-height:1.55; padding:12px 14px;
+    overflow-y:auto; flex:1 1 auto; min-height:0;}
   .hint{font-size:11px; color:var(--muted);}
   .btn{border:1px solid var(--line); background:#f6f7f9; border-radius:7px; padding:6px 10px;}
   .btn:hover{background:#eceef2;}
@@ -586,6 +619,23 @@
 
 <div id="printarea"></div>
 
+<!-- LV-Position wählen: Vollbild, Suche oben, Kacheln darunter (vor allem fürs Telefon) -->
+<dialog id="dlgLvWahl" class="vollbild" tabindex="-1">
+  <div id="lwSuchzeile">
+    <input id="lwSuche" type="search" placeholder="Im Kurztext suchen …" autocomplete="off">
+    <button class="btn" id="lwZu">Abbrechen</button>
+  </div>
+  <div id="lwKat" class="katwahl"></div>
+  <div id="lwListe"></div>
+</dialog>
+
+<!-- Langtext einer Position: eigene Seite mit „← Zurück" -->
+<dialog id="dlgLvLang" class="vollbild" tabindex="-1">
+  <div class="dhead"><button class="btn small" id="llZurueck">← Zurück</button>
+    <span id="llTitel" style="flex:1; margin-left:8px"></span></div>
+  <div id="llText"></div>
+</dialog>
+
 <!-- Vorlagen-Dialog -->
 <dialog id="dlgTemplate">
   <div class="dhead">Raum aus Vorlage <button data-close>✕</button></div>
@@ -611,12 +661,19 @@
 <dialog id="dlgLv">
   <div class="dhead"><span id="lvDlgTitle">LV-Position</span> <button data-close>✕</button></div>
   <div class="dbody">
-    <div class="row"><label>LV Position</label>
-      <span class="sugwrap"><input id="lvPos" type="text" autocomplete="off" placeholder="z. B. 01.02.0030"><div class="sugbox" id="lvPosSug"></div></span>
+    <!-- Die LV-Nummer wird nicht mehr getippt: sie ist eindeutig, aber niemand sucht
+         danach. Gesucht wird über Kapitel (in Airtable „Kategorie") und Kurztext; die
+         Nummer kommt mit der Auswahl und steht sichtbar in der Kopfzeile. -->
+    <input id="lvPos" type="hidden">
+    <div class="row"><label>Kapitel</label>
+      <div id="lvKatWahl" class="katwahl"></div>
     </div>
     <div class="row"><label>Kurztext</label>
-      <span class="sugwrap"><textarea id="lvKurz" rows="2" autocomplete="off" placeholder="z. B. Wände spachteln"></textarea><div class="sugbox" id="lvKurzSug"></div></span>
+      <span class="sugwrap"><textarea id="lvKurz" rows="2" autocomplete="off" placeholder="Suchen: z. B. spachteln"></textarea><div class="sugbox" id="lvKurzSug"></div></span>
     </div>
+    <!-- Am Telefon führt ein Tipp hierauf in die Vollbild-Auswahl -->
+    <div class="row"><label>Position</label>
+      <button class="btn small" id="lvWahlBtn" style="flex:1; text-align:left">— noch keine gewählt —</button></div>
     <div class="row"><label>Zuordnung</label><span class="hint" id="lvZiel" style="flex:1"></span></div>
     <div class="row"><label>Abschlag</label>
       <input id="lvAbschlag" type="number" min="1" step="1" style="width:70px; flex:0 0 auto">
@@ -6009,6 +6066,7 @@ function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
   if(!a) lvGrundAuto();     // neue Raum-Position mit Flächeneinheit → Grundfläche anhaken
   lvFotos = a ? (a.fotos||[]).map(f=>({...f})) : [];
   renderLvFotos();
+  lvKatSchalter('#lvKatWahl'); lvWahlAnzeigen();
   dlgLv.showModal();
   autoGrow($('#lvKurz'));   // erst im geöffneten Dialog messbar
 }
@@ -7593,20 +7651,114 @@ function makeSuggest(inp, box, match, row, onInput, onChoose){
     }
   });
 }
-// LV-Nummer: Treffer ab der ersten Stelle (Präfix) · Kurztext: Suche im ganzen Text
-makeSuggest($('#lvPos'), $('#lvPosSug'),
-  (it,q)=>!q || it.lv.toLowerCase().startsWith(q),
-  it=>({a:it.lv, b:it.kurz, num:'a'}),
-  ()=>{ lvApplyKnown($('#lvPos').value.trim()); autoGrow($('#lvKurz')); });   // exakte Nummer → Kurztext + Einheit
+/* ================= Position suchen: Kapitel + Kurztext (seit 2026-08-05) ============
+   Die LV-Nummer wird nicht mehr getippt. Sie bleibt der eindeutige Schlüssel — in den
+   Zuordnungen, im Druck, in der CSV —, aber **hier sucht niemand nach ihr**: Auf der
+   Baustelle weiß man, in welchem Kapitel man ist („Abschottungen") und wonach der Text
+   klingt („Brandschutz-Manschette"), nicht wie die Ordnungszahl lautet.
+
+   Zwei Filter, die zusammenwirken: **Kapitel** (Mehrfachauswahl, „Alle" ganz vorn) legt
+   fest, welche Positionen überhaupt in Frage kommen, der **Kurztext** sucht darin.
+   Das Kapitel kommt aus dem Airtable-Feld „Kategorie" (`p.lvKat`). Positionen ohne
+   Kapitel laufen unter „Ohne Kapitel" — sie verschwinden also nicht. */
+const lvKatVon = lv => (proj().lvKat||{})[lv] || '';
+const KAT_OHNE='Ohne Kapitel';
+function lvKategorien(){
+  const zahl=new Map();
+  lvPairs().forEach(it=>{ const k=lvKatVon(it.lv)||KAT_OHNE; zahl.set(k, (zahl.get(k)||0)+1); });
+  return [...zahl.entries()].sort((a,b)=>a[0].localeCompare(b[0],'de'))
+    .map(([name, n])=>({name, n}));
+}
+let lvKatAktiv=new Set();                       // leer = alle Kapitel
+const lvImKapitel = it => !lvKatAktiv.size || lvKatAktiv.has(lvKatVon(it.lv)||KAT_OHNE);
+const lvAuswahl = () => lvPairs().filter(lvImKapitel);
+/* Die Kapitel-Schalter — dieselben in beiden Ansichten, darum eine Funktion mit Ziel. */
+function lvKatSchalter(ziel){
+  const box=$(ziel); if(!box) return;
+  const kats=lvKategorien();
+  if(kats.length<=1 && !lvKatAktiv.size){       // ein einziges Kapitel: die Reihe hilft nicht
+    box.innerHTML=`<span class="leer">${kats.length?esc(kats[0].name):'Noch keine Positionen geladen'}</span>`;
+    return;
+  }
+  box.innerHTML=`<button type="button" data-kat="" class="${lvKatAktiv.size?'':'an'}">Alle</button>`+
+    kats.map(k=>`<button type="button" data-kat="${esc(k.name)}"
+      class="${lvKatAktiv.has(k.name)?'an':''}">${esc(k.name)} <b>${k.n}</b></button>`).join('');
+  box.querySelectorAll('[data-kat]').forEach(b=>b.onclick=()=>{
+    const k=b.dataset.kat;
+    if(!k) lvKatAktiv.clear();                  // „Alle" hebt die Auswahl auf
+    else if(lvKatAktiv.has(k)) lvKatAktiv.delete(k); else lvKatAktiv.add(k);
+    lvKatSchalter(ziel);
+    if(ziel==='#lwKat') lvWahlListe();
+  });
+}
+// Kurztext: Suche im ganzen Text, begrenzt auf die gewählten Kapitel
 makeSuggest($('#lvKurz'), $('#lvKurzSug'),
-  (it,q)=>it.kurz && (!q || it.kurz.toLowerCase().includes(q)),
+  (it,q)=>it.kurz && lvImKapitel(it) && (!q || it.kurz.toLowerCase().includes(q)),
   it=>({a:it.kurz, b:it.lv, num:'b'}),
   ()=>{                                                  // exakter Kurztext → Nummer + Einheit
     autoGrow($('#lvKurz'));
     const t=$('#lvKurz').value.trim(); if(!t) return;
     const hit=lvPairs().find(x=>x.kurz===t);
     if(hit){ $('#lvPos').value=hit.lv; lvApplyKnown(hit.lv); }
+    lvWahlAnzeigen();
   });
+/* ---------- Vollbild-Auswahl ----------
+   Am Telefon ist die Vorschlagsliste unter einem Feld zu klein und die Tastatur davor.
+   Ein Tipp auf die Positionszeile öffnet deshalb eine ganze Seite: Suchleiste oben,
+   Kapitel darunter, dann die Positionen als Kacheln zum Wischen. Rechts an jeder Kachel
+   der Knopf für den Langtext — der bekommt seine eigene Seite mit „← Zurück", weil er
+   oft eine halbe Seite lang ist. */
+const dlgLvWahl=$('#dlgLvWahl'), dlgLvLang=$('#dlgLvLang');
+function lvWahlAnzeigen(){
+  const b=$('#lvWahlBtn'); if(!b) return;
+  const lv=$('#lvPos').value.trim(), kurz=$('#lvKurz').value.trim();
+  b.textContent = lv||kurz ? `${lv||'—'}${kurz?' · '+kurz:''}` : '— noch keine gewählt —';
+  b.title = lv ? 'Andere Position wählen' : 'Position wählen';
+}
+function lvWahlListe(){
+  const q=($('#lwSuche').value||'').trim().toLowerCase();
+  const jetzt=$('#lvPos').value.trim();
+  const treffer=lvAuswahl().filter(it=>!q || (it.kurz||'').toLowerCase().includes(q)
+    || it.lv.toLowerCase().includes(q));
+  const box=$('#lwListe');
+  if(!treffer.length){
+    box.innerHTML=`<div id="lwLeer">Nichts gefunden.${
+      lvKatAktiv.size?'<br>Vielleicht steht die Position in einem anderen Kapitel — „Alle" antippen.':''}</div>`;
+    return;
+  }
+  box.innerHTML=treffer.map((it,i)=>`<div class="lwkachel${it.lv===jetzt?' an':''}">
+      <button type="button" class="haupt" data-wahl="${i}">
+        <b>${esc(it.kurz||it.lv)}</b>
+        <span>${esc(it.lv)}${lvKatVon(it.lv)?' · '+esc(lvKatVon(it.lv)):''}</span></button>
+      ${lvLangtext(it.lv)?`<button type="button" class="lang" data-lang="${i}"
+        title="Langtext lesen">ℹ</button>`:''}
+    </div>`).join('');
+  box.querySelectorAll('[data-wahl]').forEach(el=>el.onclick=()=>{
+    const it=treffer[+el.dataset.wahl];
+    $('#lvPos').value=it.lv; $('#lvKurz').value=it.kurz||''; lvApplyKnown(it.lv);
+    autoGrow($('#lvKurz')); lvWahlAnzeigen();
+    dlgLvWahl.close();
+  });
+  box.querySelectorAll('[data-lang]').forEach(el=>el.onclick=()=>{
+    const it=treffer[+el.dataset.lang];
+    $('#llTitel').textContent=`${it.lv}${it.kurz?' · '+it.kurz:''}`;
+    $('#llText').textContent=lvLangtext(it.lv);
+    dlgLvLang.showModal();
+  });
+}
+function lvWahlOeffnen(){
+  $('#lwSuche').value='';
+  lvKatSchalter('#lwKat'); lvWahlListe();
+  if(!dlgLvWahl.open) dlgLvWahl.showModal();
+  // Auf dem Telefon NICHT von selbst in die Suche springen: sonst verdeckt die Tastatur
+  // sofort die halbe Kachelliste, obwohl man meist nur scrollen will.
+  if(innerWidth>640) setTimeout(()=>$('#lwSuche').focus(), 40);
+}
+$('#lvWahlBtn').onclick=lvWahlOeffnen;
+$('#lwZu').onclick=()=>dlgLvWahl.close();
+$('#lwSuche').addEventListener('input', lvWahlListe);
+$('#lwSuche').addEventListener('keydown', e=>{ if(e.key==='Enter') e.preventDefault(); });
+$('#llZurueck').onclick=()=>dlgLvLang.close();
 // Kein Zeilenumbruch im Kurztext — auch wenn gerade keine Vorschlagsliste offen ist
 $('#lvKurz').addEventListener('keydown', e=>{ if(e.key==='Enter') e.preventDefault(); });
 /* Beide Knöpfe tragen einen Wert von Hand ein und lösen darum die Wand-Kopplung —
@@ -9018,7 +9170,7 @@ async function atAll(base, table, token, fields, onProgress){
    Mobilfunk). Gefiltert wird über das Verknüpfungsfeld „Baustelle" im Datensatz. */
 async function atLvZeilen(siteId, melde){
   const recs=await atAll(atBase(), AT_T_LV, atToken(),
-    ['LV-Nummer','Kurzbeschreibung','Einheit','Menge','Langtext','Baustelle','Einheitspreis'],
+    ['LV-Nummer','Kurzbeschreibung','Einheit','Menge','Langtext','Baustelle','Einheitspreis','Kategorie'],
     n=>melde && melde(`Lade LV-Positionen … ${n}`));
   const out=[];
   recs.forEach(r=>{
@@ -9027,7 +9179,7 @@ async function atLvZeilen(siteId, melde){
     const row={lv:String(f['LV-Nummer']||'').trim(), kurz:String(f['Kurzbeschreibung']||'').trim(),
       einheit:mapEinheit(f['Einheit']), roh:String(f['Einheit']||'').trim(),
       menge:Number(f['Menge']), lang:String(f['Langtext']||'').trim(),
-      preis:Number(f['Einheitspreis'])};
+      preis:Number(f['Einheitspreis']), kat:String(f['Kategorie']||'').trim()};
     if(row.lv || row.kurz) out.push(row);
   });
   return out;
@@ -9053,6 +9205,7 @@ function importLvRows(rows){
   const p=proj();
   p.lvTexts=p.lvTexts||{}; p.lvUnits=p.lvUnits||{}; p.lvLong=p.lvLong||{}; p.lvSoll=p.lvSoll||{};
   p.lvPreis=p.lvPreis||{};                    // Einheitspreis je LV-Nummer
+  p.lvKat=p.lvKat||{};                        // Kapitel je LV-Nummer
   const bekannt=new Set(Object.keys(p.lvTexts));
   (p.attrs||[]).forEach(a=>{ if(a.lv) bekannt.add(a.lv); });   // auch von Hand angelegte
   let neu=0, upd=0;
@@ -9069,6 +9222,7 @@ function importLvRows(rows){
     if(r.lang) p.lvLong[r.lv]=r.lang;
     if(Number.isFinite(r.menge)) p.lvSoll[r.lv]=r.menge;
     if(Number.isFinite(r.preis)) p.lvPreis[r.lv]=r.preis;
+    if(r.kat) p.lvKat[r.lv]=r.kat;          // Kapitel des LV (Airtable-Feld „Kategorie“)
   });
   assignLvColors(p);
   save(); renderAll();
