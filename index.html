@@ -178,6 +178,14 @@
   .katzeile.an{background:#eaf1ff;}
   .katzeile:active{background:#e2e9f5;}
   .katzeile.leer{color:var(--muted); font-size:13px; justify-content:center;}
+  /* Am Rechner dieselbe Seite, aber als Spalte in der Mitte statt über 1200 px breit
+     gezogene Zeilen. Wie beim Maßblatt gilt: die Höhe des Dialogs bleibt unangetastet —
+     ein `height:fit-content` hat ihn in Bluefy schon einmal unsichtbar gemacht. */
+  @media (min-width:641px){
+    #dlgKat{background:#eef1f6;}
+    #dlgKat .dhead, #katListe{max-width:520px; width:100%; margin:0 auto;}
+    #katListe{background:#fff; border-left:1px solid var(--line); border-right:1px solid var(--line);}
+  }
   /* Vollbild-Auswahl (Telefon): Suchleiste oben, darunter Kacheln */
   #dlgLvWahl, #dlgLvLang{background:#fff;}
   #lwSuchzeile{display:flex; gap:8px; align-items:center; padding:8px 10px;
@@ -7771,6 +7779,8 @@ function katOeffnen(){ katMenue(); if(!dlgKat.open) dlgKat.showModal(); }
 $('#lvKatBtn').onclick=katOeffnen;
 $('#lwKatBtn').onclick=katOeffnen;
 $('#katFertig').onclick=()=>dlgKat.close();
+// Danebentippen schließt auch — am Rechner ist links und rechts der Spalte viel Platz
+dlgKat.addEventListener('click', e=>{ if(e.target===dlgKat) dlgKat.close(); });
 // Kurztext: Suche im ganzen Text, begrenzt auf die gewählten Kapitel
 makeSuggest($('#lvKurz'), $('#lvKurzSug'),
   (it,q)=>it.kurz && lvImKapitel(it) && (!q || it.kurz.toLowerCase().includes(q)),
