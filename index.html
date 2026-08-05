@@ -134,16 +134,22 @@
   #massOk{grid-row:2/5; grid-column:4; font-size:13.5px !important; font-weight:600 !important;
     line-height:1.5; padding:0 2px !important;
     background:var(--accent2) !important; border-color:var(--accent2) !important; color:#fff !important;}
-  /* Am Rechner reicht ein Kasten in Bildschirmmitte — dort ist der ganze Schirm
-     dafür herzugeben unnötig, und die echte Tastatur bedient die Seite ohnehin mit. */
-  @media (min-width:641px) and (min-height:560px){
-    /* `fit-content` statt `auto`: ein modaler Dialog steht absolut im Top-Layer und
-       zöge sich bei `auto` über die ganze Höhe. `margin:auto` holt ihn zurück in die
-       Mitte — `.vollbild` hatte ihn oben links festgenagelt. */
-    #dlgMass{width:min(400px,94vw); height:fit-content; max-height:92vh; margin:auto;
-      border-radius:14px; overflow:hidden;}
+  /* Auf breiten Schirmen bleibt das Blatt bildschirmfüllend, aber der INHALT steht als
+     Spalte in der Mitte — den ganzen Schirm mit Tasten zu pflastern wäre unsinnig.
+
+     Wichtig: Die Größe des Dialogs selbst wird NICHT angefasst. Ein Versuch mit
+     `height:fit-content` (2026-08-05) sah am Rechner gut aus, kam auf dem iPad in Bluefy
+     aber als **unsichtbares Fenster** heraus: der Dialog hatte dort keine Höhe, während
+     sein Backdrop weiter jeden Klick schluckte — die App war damit nicht mehr bedienbar
+     (Fehlermeldung „das Maßfenster öffnet sich auf dem iPad nicht"). Am schmalen Fenster
+     lief es, weil die Regel dort gar nicht greift. Seitdem gilt: an einem modalen
+     Vollbild-Dialog wird die Höhe in Ruhe gelassen, gestaltet wird nur innen. */
+  @media (min-width:641px){
+    #dlgMass{background:#eef1f6;}
+    #massBody{max-width:430px; width:100%; margin:0 auto; background:#fff;
+      border-left:1px solid var(--line); border-right:1px solid var(--line);}
     #massAnzeige{min-height:96px;}
-    #massTasten{grid-auto-rows:minmax(42px,51px);}
+    #massTasten{grid-auto-rows:minmax(42px,58px);}
   }
   .hint{font-size:11px; color:var(--muted);}
   .btn{border:1px solid var(--line); background:#f6f7f9; border-radius:7px; padding:6px 10px;}
@@ -10553,6 +10559,10 @@ $('#massStd').onclick=()=>{
   if(!j || !j.std) return;
   j.text=j.std; massFrisch=true; massZeigen();
 };
+/* Tipp neben die Spalte schließt. Auf breiten Schirmen ist das der natürliche Weg
+   hinaus — und zugleich der Notausgang, falls die Seite einmal nicht so aussteht, wie
+   sie soll: ein modaler Dialog schluckt sonst jeden Klick und die App steht. */
+dlgMass.addEventListener('click', e=>{ if(e.target===dlgMass) massSchliessen(); });
 dlgMass.addEventListener('close', ()=>{ massFelder=[]; massAktiv=0; });
 dlgMass.addEventListener('keydown', e=>{
   const k=e.key;
