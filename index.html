@@ -344,6 +344,29 @@
   .fotos .fw button:hover{background:var(--danger);}
   .fotos.small{gap:6px;}
   .fotos.small .fw{width:58px; height:58px;}
+  /* ---------- Fester Rahmen für Fotos (Ticket vom 4.8.2026) ----------
+     Vier Spalten, höchstens zwei Reihen. Vorher wuchs die Leiste mit jedem Foto
+     weiter und schob im Panel alles nach unten weg; bei zwanzig Fotos war die
+     Seitenleiste eine Rolltour. Die letzte Kachel trägt „+x", wenn mehr da sind. */
+  .fotos.raster{display:grid; grid-template-columns:repeat(4,1fr); gap:6px;}
+  .fotos.raster .fw{width:auto; height:auto; aspect-ratio:1/1;}
+  .fotos.raster .mehr{position:absolute; inset:0; display:flex; align-items:center;
+    justify-content:center; background:rgba(20,25,35,.55); color:#fff;
+    font-size:15px; font-weight:600; pointer-events:none;}
+  /* ---------- Foto-Rolle: ein Bild groß, wischen blättert ---------- */
+  #dlgFotoRolle{background:#14181f; color:#e8ecf3;}
+  #dlgFotoRolle .dhead{border-bottom-color:#2a3345; color:#e8ecf3;}
+  #dlgFotoRolle .dhead button{color:#aab4c8;}
+  #frBody{position:relative; display:flex; align-items:center; justify-content:center;
+    padding:0; background:#14181f; touch-action:pan-y; overflow:hidden;}
+  #frBild{max-width:100%; max-height:100%; object-fit:contain; display:block;
+    user-select:none; -webkit-user-drag:none;}
+  .frpfeil{position:absolute; top:50%; transform:translateY(-50%); z-index:2;
+    width:44px; height:64px; border:none; border-radius:8px; font-size:30px; line-height:1;
+    background:rgba(20,25,35,.5); color:#fff;}
+  #frZur{left:6px;} #frVor{right:6px;}
+  .frpfeil:disabled{opacity:.25;}
+  #dlgFotoRolle .dfoot{border-top-color:#2a3345;}
   /* Foto-Fenster (Kamera + Editor) füllen den Bildschirm — beim Aufmessen zählt
      jedes Pixel Vorschau, und auf dem iPhone ist ein 520-px-Kasten winzig.
      dvh statt vh: iOS rechnet vh mit eingeblendeter Adressleiste. */
@@ -642,7 +665,7 @@
     </fieldset>
     <div class="row" style="margin-top:8px"><button class="btn small" id="lvFotoAdd">📷 ＋ Fotos</button>
       <span class="hint" id="lvFotoInfo"></span></div>
-    <div class="fotos" id="lvFotos"></div>
+    <div class="fotos raster" id="lvFotos"></div>
   </div>
   <div class="dfoot">
     <button class="btn" data-close>Abbrechen</button>
@@ -1163,6 +1186,22 @@
   <div class="dfoot">
     <button class="btn danger" id="fmMassWeg">Markierung löschen</button>
     <button class="btn primary" id="fmMassOk">Übernehmen</button>
+  </div>
+</dialog>
+
+<!-- Foto-Rolle: ein Bild groß, wischen blättert, unten Bearbeiten und Löschen.
+     Der Weg zu allem, was mit einem einzelnen Foto zu tun ist. -->
+<dialog id="dlgFotoRolle" class="vollbild" tabindex="-1">
+  <div class="dhead"><span id="frZahl">Foto</span> <button data-close>✕</button></div>
+  <div class="dbody" id="frBody">
+    <button class="frpfeil" id="frZur" title="Vorheriges Foto (←)">‹</button>
+    <img id="frBild" alt="Foto">
+    <button class="frpfeil" id="frVor" title="Nächstes Foto (→)">›</button>
+  </div>
+  <div class="dfoot">
+    <button class="btn danger" id="frWeg">🗑 Löschen</button>
+    <span style="flex:1"></span>
+    <button class="btn primary" id="frBearb">✎ Bearbeiten</button>
   </div>
 </dialog>
 
@@ -3111,7 +3150,12 @@ function kandidatenUnter(e){
   roh.forEach(el=>{
     const ds=el.dataset; if(!ds) return;
     let art=null, schl=null;
-    if(ds.objh!==undefined) return;                      // Griffe bleiben draußen
+    /* Griffe bleiben draußen — sie sind kein „Bauteil darunter", sondern gehören zu
+       dem, was schon gewählt ist. Das gilt für die Eckgriffe der Objekte (`objh`) wie
+       für die Breiten-Griffe von Tür und Fenster (`openend`): Letztere trugen bisher
+       nur `data-open`, landeten damit als Öffnung im Zyklus, und der zweite Tipp — der,
+       mit dem gezogen wird — schaltete auf Ecke oder Wand weiter. */
+    if(ds.objh!==undefined || ds.openend!==undefined) return;
     if(ds.obj!==undefined){ art='obj'; schl='obj:'+ds.obj; }
     else if(ds.open!==undefined){ art='open'; schl='open:'+ds.open; }
     else if(ds.vertex!==undefined){ art='vertex'; schl='vertex:'+(ds.roomid||'')+':'+ds.vertex; }
@@ -3531,8 +3575,15 @@ svg.addEventListener('pointerdown', e=>{
        unter der Wand-Trefferfläche — ohne diesen Vorzug war er kaum zu greifen. Der
        Vorzug gilt aber nur beim FRISCHEN Tipp: Wer schon durchtippt, will nach unten,
        nicht auf einen Griff des Objekts, das er gerade übersprungen hat. */
-    const griff = selbeStelle ? null : document.elementsFromPoint(e.clientX, e.clientY)
-      .find(el=>el.dataset && el.dataset.objh!==undefined);
+    const unter = document.elementsFromPoint(e.clientX, e.clientY);
+    /* Der Breiten-Griff einer Tür/eines Fensters hat IMMER Vorrang, auch beim zweiten
+       Tipp auf dieselbe Stelle: Er gehört zur bereits gewählten Öffnung, und genau der
+       zweite Tipp ist der, mit dem gezogen wird. Bei einem schmalen Fenster liegt er
+       fast auf der Stelle des ersten Tipps — ohne diesen Vorrang sprang das Durchtippen
+       dazwischen und die Öffnung war die Auswahl los. Weg kommt man trotzdem: der Griff
+       ist winzig, daneben tippen führt wie gehabt weiter. */
+    const griff = unter.find(el=>el.dataset && el.dataset.openend!==undefined)
+      || (selbeStelle ? null : unter.find(el=>el.dataset && el.dataset.objh!==undefined));
     if(griff){ t=griff; zyklus=null; }
     else {
       const kand=kandidatenUnter(e);
@@ -4710,12 +4761,18 @@ function deleteRoom(id){
    der Positionstabelle, so war es gewünscht). Dieselbe Eingabe in beiden Raum-Panels. */
 /* Schloss-Zeile im Raum-Panel. Sie ist die einzige Stelle, an der sich die Sperre von
    Hand umschalten lässt — offen zeigt sie außerdem, wie lange es noch dauert. */
+/* Aufbau der Beschriftung: **links der Zustand, rechts die Tat.** Vorher stand in
+   beiden Fassungen sowohl „offen" als auch „sperren" — auf dem Telefon war nicht zu
+   sehen, was der Knopf gerade tut. `data-kurzsym`/`data-kurztxt` geben dem Kurzbefehl
+   unten dieselbe Auskunft; so gibt es nur EINE Stelle, die den Zustand kennt. */
 const sperrZeile = r => raumOffen(r)
   ? `<div class="row" style="margin-top:6px"><button class="btn small" id="rsperr" style="flex:1"
-      title="Wände, Ecken, Türen und Fenster in ALLEN Räumen sofort festsetzen">🔓 Alle offen — schließt in ${
-        Math.max(1, Math.ceil(restSekunden()/60))} min · jetzt sperren</button></div>`
+      data-kurzsym="🔓" data-kurztxt="Sperren"
+      title="Wände, Ecken, Türen und Fenster in ALLEN Räumen sofort festsetzen">🔓 Offen (noch ${
+        Math.max(1, Math.ceil(restSekunden()/60))} min) · Sperren</button></div>`
   : `<div class="row" style="margin-top:6px"><button class="btn small active" id="rsperr" style="flex:1"
-      title="Wände, Ecken, Türen und Fenster in ALLEN Räumen wieder freigeben">🔒 Alle gesperrt — zum Bearbeiten öffnen</button></div>`;
+      data-kurzsym="🔒" data-kurztxt="Öffnen"
+      title="Wände, Ecken, Türen und Fenster in ALLEN Räumen wieder freigeben">🔒 Gesperrt · Öffnen</button></div>`;
 const anmerkungFeld = r => `<div style="margin-top:6px">
   <label class="hint" style="display:block; margin-bottom:2px">Anmerkung — erscheint im Druck unter dem Plan</label>
   <textarea id="ranm" rows="2" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:6px"
@@ -5056,9 +5113,10 @@ function renderSidebar(){
       html+=`<div class="panel"><h3>Wand ${sel.wall+1}${gesperrt?' 🔒':''}</h3>
         <div class="row"><label>Länge (m)</label><input class="laser" id="wlen" value="${fmt(dist(a,b),3)}"${zu}>
           <button class="btn small ${gesperrt?'active':''}" id="wlock"
+            data-kurzsym="${gesperrt?'🔒':'🔓'}" data-kurztxt="${gesperrt?'Länge frei':'Länge fest'}"
             title="${gesperrt?'Gesperrt — die Länge ändert sich nicht mehr nebenbei. Klicken zum Freigeben.'
                              :'Länge sperren: andere Wände können sie dann nicht mehr mitverschieben.'}"
-            >${gesperrt?'🔒':'🔓'}</button></div>
+            >${gesperrt?'🔒 fest':'🔓 frei'}</button></div>
         <div class="row"><label>Stärke (m)</label><input id="wdicke" type="text" inputmode="decimal" value="${fmt(wandDicke(r,sel.wall),3)}"${zu}>
           <button class="btn small" id="wdickeall"${zu} title="Diese Stärke auf alle Wände des Raums übertragen">alle</button></div>
         <div class="row"><label></label><input id="wdickereg" type="range" min="8" max="100" step="0.5"
@@ -7011,12 +7069,87 @@ dlgFotoEdit.querySelectorAll('[data-close]').forEach(b=>
 })();
 feFarbeSetzen(FE_FARBEN[0]);
 
-/* Thumbnail-Leiste für die Seitenleiste */
+/* ================= Fotos in festem Rahmen + Foto-Rolle (Ticket vom 4.8.2026) ========
+   Die Kacheln in der Seitenleiste zeigen **höchstens acht** Fotos in vier Spalten;
+   sind es mehr, trägt die letzte Kachel „+x". Vorher wuchs die Leiste mit jedem Foto
+   und schob im Panel alles nach unten weg.
+
+   **Ohne Lösch-Kreuz.** Ein Tipp auf eine Kachel führt in die Foto-Rolle: ein Bild
+   groß, wischen blättert, unten „✎ Bearbeiten" und „🗑 Löschen". Das kleine ✕ neben
+   einem großen Bild war am Telefon ein Fehlgriff, der ein Foto von der Baustelle
+   kostet — und ein zweiter Weg zum Löschen ist ohnehin einer zu viel. */
+const FOTO_RASTER=8;
+function fotoKacheln(list){
+  const l=list||[];
+  return l.slice(0, FOTO_RASTER).map((f,i)=>{
+    const rest = (i===FOTO_RASTER-1) ? l.length-FOTO_RASTER : 0;   // was nicht mehr zu sehen ist
+    return `<div class="fw"><img src="${f.src}" data-fview="${f.id}" alt="Foto"
+        title="Anklicken: groß ansehen, bearbeiten, löschen">${
+      rest>0 ? `<span class="mehr">+${rest}</span>` : ''}</div>`;
+  }).join('');
+}
 function fotoStrip(list){
-  return `<div class="fotos small">${(list||[]).map(f=>`<div class="fw">
-      <img src="${f.src}" data-fview="${f.id}" alt="Foto" title="Anklicken: groß ansehen und bearbeiten">
-      <button data-fdel="${f.id}" title="Foto entfernen">✕</button>
-    </div>`).join('')}</div>`;
+  return (list||[]).length ? `<div class="fotos raster">${fotoKacheln(list)}</div>` : '';
+}
+/* Die Rolle kennt ihren Träger nicht, sie bekommt drei Handgriffe:
+   `holen()` liefert die aktuelle Liste (nach dem Löschen eine andere — darum eine
+   Funktion und keine Kopie), `bearb(f)` öffnet den vorhandenen Foto-Editor,
+   `weg(f)` entfernt das Foto dort, wo es hängt. */
+const dlgFotoRolle=$('#dlgFotoRolle');
+let rolle=null;
+function rolleOeffnen(holen, i, bearb, weg){
+  const l=holen(); if(!l.length) return;
+  rolle={holen, i:Math.max(0, Math.min(i, l.length-1)), bearb, weg};
+  rolleZeigen();
+  if(!dlgFotoRolle.open) dlgFotoRolle.showModal();
+  dlgFotoRolle.focus();
+}
+function rolleZeigen(){
+  if(!rolle) return;
+  const l=rolle.holen();
+  if(!l.length){ dlgFotoRolle.close(); return; }        // letztes Foto gelöscht
+  rolle.i=Math.max(0, Math.min(rolle.i, l.length-1));
+  const f=l[rolle.i];
+  $('#frBild').src=f.src;
+  $('#frZahl').textContent=`Foto ${rolle.i+1} von ${l.length}`;
+  $('#frZur').disabled = rolle.i===0;
+  $('#frVor').disabled = rolle.i>=l.length-1;
+}
+function rolleBlaettern(d){
+  if(!rolle) return;
+  const l=rolle.holen(), n=rolle.i+d;
+  if(n<0 || n>=l.length) return;
+  rolle.i=n; rolleZeigen();
+}
+$('#frZur').onclick=()=>rolleBlaettern(-1);
+$('#frVor').onclick=()=>rolleBlaettern(1);
+$('#frBearb').onclick=()=>{
+  if(!rolle) return;
+  const f=rolle.holen()[rolle.i]; if(f) rolle.bearb(f);
+};
+$('#frWeg').onclick=()=>{
+  if(!rolle) return;
+  const f=rolle.holen()[rolle.i]; if(!f) return;
+  if(!confirm('Foto löschen?')) return;
+  rolle.weg(f);
+  rolleZeigen();
+};
+dlgFotoRolle.addEventListener('close', ()=>{ rolle=null; $('#frBild').removeAttribute('src'); });
+dlgFotoRolle.addEventListener('keydown', e=>{
+  if(e.key==='ArrowLeft'){ e.preventDefault(); rolleBlaettern(-1); }
+  else if(e.key==='ArrowRight'){ e.preventDefault(); rolleBlaettern(1); }
+});
+/* Wischen: waagerecht blättert, senkrecht bleibt dem Browser überlassen (`pan-y`).
+   40 px Schwelle — darunter ist es ein Tipp und kein Zug. */
+{
+  const b=$('#frBody'); let zug=null;
+  b.addEventListener('pointerdown', e=>{ zug={x:e.clientX, y:e.clientY}; });
+  b.addEventListener('pointerup', e=>{
+    if(!zug) return;
+    const dx=e.clientX-zug.x, dy=e.clientY-zug.y; zug=null;
+    if(Math.abs(dx)>40 && Math.abs(dx)>Math.abs(dy)) rolleBlaettern(dx<0 ? 1 : -1);
+  });
+  b.addEventListener('pointercancel', ()=>{ zug=null; });
 }
 function fotoBtn(list, id){
   const n=(list||[]).length;
@@ -7028,39 +7161,31 @@ function wireFotos(btnId, ent, key){
   b.onclick=()=>fotoOeffnen({add:neu=>{ ent[key]=[...(ent[key]||[]), ...neu]; save(); renderAll(); }});
   const box=b.closest('.panel');
   if(!box) return;
-  box.querySelectorAll('[data-fview]').forEach(im=>{
-    im.onclick=()=>{
-      const f=(ent[key]||[]).find(x=>x.id===im.dataset.fview); if(!f) return;
-      fotoBearbeiten(f.src, neu=>{ f.src=neu; bildGeaendert(f.id); save(); renderAll(); });
-    };
+  /* Jede Kachel führt in die Rolle — auch die mit „+x", dort geht es dann weiter.
+     `renderAll()` nach dem Ändern baut die Seitenleiste neu auf; die Rolle lebt im
+     Dialog weiter und liest die Liste über `holen()` frisch. */
+  const holen=()=>ent[key]||[];
+  const bearb=f=>fotoBearbeiten(f.src, neu=>{
+    f.src=neu; bildGeaendert(f.id); save(); renderAll(); rolleZeigen();
   });
-  box.querySelectorAll('[data-fdel]').forEach(x=>{
-    x.onclick=()=>{
-      if(!confirm('Foto löschen?')) return;
-      ent[key]=(ent[key]||[]).filter(f=>f.id!==x.dataset.fdel); save(); renderAll();
-    };
+  const weg=f=>{ ent[key]=(ent[key]||[]).filter(x=>x.id!==f.id); save(); renderAll(); };
+  box.querySelectorAll('[data-fview]').forEach(im=>{
+    im.onclick=()=>rolleOeffnen(holen, holen().findIndex(x=>x.id===im.dataset.fview), bearb, weg);
   });
 }
 function renderLvFotos(){
   const box=$('#lvFotos'); if(!box) return;
-  box.innerHTML=lvFotos.map(f=>`<div class="fw">
-      <img src="${f.src}" data-fotobig="${f.id}" alt="Foto" title="Anklicken: groß ansehen und bearbeiten">
-      <button data-fotodel="${f.id}" title="Foto entfernen">✕</button>
-    </div>`).join('');
+  box.innerHTML=fotoKacheln(lvFotos);
   const kb=Math.round(lvFotos.reduce((s,f)=>s+f.src.length*0.75, 0)/1024);
   $('#lvFotoInfo').textContent=lvFotos.length?`${lvFotos.length} Foto(s) · ca. ${kb} KB`:'';
-  box.querySelectorAll('[data-fotobig]').forEach(im=>{
-    im.onclick=()=>{
-      const f=lvFotos.find(x=>x.id===im.dataset.fotobig); if(!f) return;
-      // Ins Projekt geschrieben wird erst mit „Speichern" im LV-Dialog
-      fotoBearbeiten(f.src, neu=>{ f.src=neu; bildGeaendert(f.id); renderLvFotos(); });
-    };
-  });
-  box.querySelectorAll('[data-fotodel]').forEach(b=>{
-    b.onclick=()=>{
-      if(!confirm('Foto löschen?')) return;   // wirksam wird es erst mit „Speichern"
-      lvFotos=lvFotos.filter(f=>f.id!==b.dataset.fotodel); renderLvFotos();
-    };
+  /* `lvFotos` wird beim Löschen NEU zugewiesen — darum `()=>lvFotos` statt einer Kopie,
+     sonst zeigte die Rolle auf die alte Liste. Ins Projekt geschrieben wird das alles
+     erst mit „Speichern" im LV-Dialog. */
+  const holen=()=>lvFotos;
+  const bearb=f=>fotoBearbeiten(f.src, s=>{ f.src=s; bildGeaendert(f.id); renderLvFotos(); rolleZeigen(); });
+  const weg=f=>{ lvFotos=lvFotos.filter(x=>x.id!==f.id); renderLvFotos(); };
+  box.querySelectorAll('[data-fview]').forEach(im=>{
+    im.onclick=()=>rolleOeffnen(holen, lvFotos.findIndex(x=>x.id===im.dataset.fview), bearb, weg);
   });
 }
 $('#lvFotoAdd').onclick=()=>fotoOeffnen({imDialog:true, add:neu=>{ lvFotos.push(...neu); renderLvFotos(); }});
@@ -11538,7 +11663,8 @@ const KURZ={
   // Kein „Schließen": daneben tippen wählt die Wand ohnehin ab
   wand:    [['🏷','LV','#walllv'], ['📷','Foto','#wfoto'], ['⌐','Ecke','#wallsplit'],
             ['🚪','Tür','#wopdoor'], ['🪟','Fenster','#wopwin']],
-  raum:    [['＋','Einfügen','menu'], ['🔒','Sperren','#rsperr'], ['⧉','Kopie','#rdup'], ['🗑','Löschen','#rdel','gefahr']],
+  // Das Schloss traegt seine Beschriftung selbst (siehe `sperrZeile`) — hier steht nur der Rueckfall
+  raum:    [['＋','Einfügen','menu'], ['🔓','Sperren','#rsperr'], ['⧉','Kopie','#rdup'], ['🗑','Löschen','#rdel','gefahr']],
   /* Auf der Etage geht es ausser dem Einfuegen um die Etage selbst — welche gemeint ist,
      steht direkt darueber in der Brotkrume. Der Foto-Knopf faellt hier weg: ohne
      angewaehlten Raum gibt es nichts, woran ein Foto haengen koennte. */
@@ -11564,9 +11690,14 @@ function blattKurz(){
   const kasten=$('#blattkurz'); if(!kasten) return;
   const ort=kurzOrt();
   kasten.innerHTML=(KURZ[ort]||[]).map(([sym,txt,ziel,art])=>{
-    if(ziel!=='menu' && !$(ziel)) return '';          // gibt es hier nicht
-    if(ziel!=='menu' && $(ziel).disabled) return '';
-    return `<button data-kurz="${esc(ziel)}" class="${art||''}"><b>${sym}</b>${esc(txt)}</button>`;
+    const el = ziel==='menu' ? null : $(ziel);
+    if(ziel!=='menu' && (!el || el.disabled)) return '';   // gibt es hier nicht
+    /* Umschalter sagen selbst, wie sie gerade heißen (`data-kurzsym`/`data-kurztxt`) —
+       sonst stünde am Schloss ewig „🔒 Sperren", auch wenn es öffnen würde. Der Zustand
+       bleibt damit an EINER Stelle, nämlich am Knopf im Panel. */
+    const s=(el && el.dataset.kurzsym) || sym;
+    const t=(el && el.dataset.kurztxt) || txt;
+    return `<button data-kurz="${esc(ziel)}" class="${art||''}"><b>${esc(s)}</b>${esc(t)}</button>`;
   }).join('');
   kasten.querySelectorAll('[data-kurz]').forEach(b=>b.onclick=e=>{
     e.stopPropagation();
