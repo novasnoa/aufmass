@@ -3534,6 +3534,20 @@ function updatePinch(){
   vb={x:wx-s1.x*w, y:wy-s1.y*h, w, h};
   renderCanvas();
 }
+/* Einen Finger aus der Buchführung nehmen, OHNE auf sein `pointerup` zu warten.
+   Gebraucht, sobald aus `pointerdown` heraus ein modaler Dialog aufgeht (die Maßseite
+   an einer Maßzahl): Ab dann liegt alles darunter `inert`, und das `pointerup` zu
+   diesem Finger kommt beim SVG nie an. Der Finger bliebe in `zeiger` stehen, der
+   nächste Tipp gälte als ZWEITER — die Zwei-Finger-Geste übernähme, und im Plan ließe
+   sich nichts mehr anwählen. Genau so gemeldet vom iPad („die Wand bleibt angewählt,
+   ich kann keine andere anwählen"); am Rechner mit der Maus fiel es nicht auf, dort
+   stellt der Browser das `pointerup` trotz Dialog noch zu. */
+function fingerLoesen(e){
+  zeiger.delete(e.pointerId);
+  if(zeiger.size<2) pinch=null;
+  drag=null;
+  try{ if(svg.hasPointerCapture(e.pointerId)) svg.releasePointerCapture(e.pointerId); }catch(_){}
+}
 svg.addEventListener('pointerdown', e=>{
   zeiger.set(e.pointerId, {x:e.clientX, y:e.clientY});
   if(zeiger.size===2){ startPinch(); return; }
@@ -3613,6 +3627,7 @@ svg.addEventListener('pointerdown', e=>{
      anderen: die Maßlinie liegt außerhalb des Raums, ohne diesen Zweig fiele der Tipp
      in den Schiebe-Zweig. */
   if(!zoneEdit && t.dataset && (t.dataset.massw!==undefined || t.dataset.massseg!==undefined)){
+    fingerLoesen(e);            // MUSS vor dem Dialog stehen — siehe dort
     zyklus=null; massVomPlan(t); return;
   }
   /* Unter dem Finger liegen oft mehrere Bauteile übereinander — Objektgriff auf einer
@@ -10603,7 +10618,13 @@ $('#massStd').onclick=()=>{
    hinaus — und zugleich der Notausgang, falls die Seite einmal nicht so aussteht, wie
    sie soll: ein modaler Dialog schluckt sonst jeden Klick und die App steht. */
 dlgMass.addEventListener('click', e=>{ if(e.target===dlgMass) massSchliessen(); });
-dlgMass.addEventListener('close', ()=>{ massFelder=[]; massAktiv=0; });
+/* Sicherheitsnetz zum selben Thema: Solange die Seite offen war, konnte im Plan kein
+   Finger unterwegs sein. Beim Schließen die Buchführung leeren — dann startet der
+   nächste Tipp in jedem Fall sauber, auch wenn ein `pointerup` unterwegs verloren ging. */
+dlgMass.addEventListener('close', ()=>{
+  massFelder=[]; massAktiv=0;
+  if(typeof zeiger!=='undefined'){ zeiger.clear(); pinch=null; drag=null; }
+});
 dlgMass.addEventListener('keydown', e=>{
   const k=e.key;
   if(k==='Enter'){ e.preventDefault(); massAnwenden(); return; }
