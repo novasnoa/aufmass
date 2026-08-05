@@ -772,7 +772,7 @@
     </div>
     <div id="tplFields"></div>
     <div class="row"><label>Raumname</label><input id="tplName" type="text" placeholder="z. B. Wohnzimmer"></div>
-    <div class="row"><label>Raumhöhe (m)</label><input id="tplHeight" class="laser" value="2,50"></div>
+    <div class="row"><label>Raumhöhe (m)</label><input id="tplHeight" class="laser" value="2,500"></div>
     <p class="hint">Tipp: Feld anklicken und Messung am Laser auslösen — der Wert wird direkt eingetragen.</p>
   </div>
   <div class="dfoot">
@@ -5218,7 +5218,7 @@ function panelEtage(p){
     if(wr){
       html+=`<div class="panel"><h3>Raum angewählt — ${esc(wr.name)}</h3>
         <div class="row"><label>Name</label><input type="text" id="rname" value="${esc(wr.name)}"></div>
-        <div class="row"><label>Raumhöhe (m)</label><input class="laser" id="rheight" value="${fmt(wr.height,2)}"></div>
+        <div class="row"><label>Raumhöhe (m)</label><input class="laser" id="rheight" value="${fmt3(wr.height)}"></div>
         <div class="row" style="margin-top:4px">
           <button class="btn green small" id="rlv">＋ LV-Position</button>
           <button class="btn small" id="rdup">Duplizieren</button>
@@ -5507,7 +5507,7 @@ function panelRaum(p, r, objs, ops){
       html+=`<div class="panel"><h3>Raum — ${esc(floorName(r.floorId))}</h3>
         <div class="row"><button class="btn small" id="backfloor" style="flex:1">← Zurück zur Etage</button></div>
         <div class="row"><label>Name</label><input type="text" id="rname" value="${esc(r.name)}"></div>
-        <div class="row"><label>Raumhöhe (m)</label><input class="laser" id="rheight" value="${fmt(r.height,2)}"></div>
+        <div class="row"><label>Raumhöhe (m)</label><input class="laser" id="rheight" value="${fmt3(r.height)}"></div>
         <div class="row" style="margin-top:4px">
           <button class="btn green small" id="rlv">＋ LV-Position</button>
           <button class="btn small" id="rdup">Duplizieren</button>
@@ -6181,7 +6181,7 @@ function openTemplateDialog(){
   cancelModes();
   if(focusRoomId){ focusRoomId=null; sel={roomId:null,wall:null,vertex:null}; renderAll(); zoomFit(); }
   $('#tplName').value='Raum '+(proj().rooms.length+1);
-  $('#tplHeight').value=fmt(lastHeight,2);
+  $('#tplHeight').value=fmt3(lastHeight);
   tplFieldHtml();
   dlgTpl.showModal();
 }
@@ -6240,7 +6240,7 @@ function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
   $('#lvKurz').value=a?(a.kurz||''):'';
   // Neue Zuordnungen fallen in den laufenden Abschlag; bestehende lassen sich umhängen
   $('#lvAbschlag').value=a?abschlagVon(a):p.abschlag;
-  $('#lvMenge').value=a?fmt3(a.menge):'1';
+  $('#lvMenge').value=fmt3(a?a.menge:1);
   $('#lvEinheit').value=a?a.einheit:'Flache';
   $('#lvL').value=a&&isFinite(a.laenge)?fmt3(a.laenge):'';
   $('#lvB').value=a&&isFinite(a.breite)?fmt3(a.breite):'';
@@ -8124,8 +8124,15 @@ function lvWahlOeffnen(){
      hoch und verdeckt die halbe Kachelliste, obwohl man meist nur wischen will.
      Die Fensterbreite taugt als Unterscheidung nicht: das iPad ist breiter als 640.
      `fingerGeraet` ist dieselbe Abfrage, die schon über die Tastenleiste entscheidet —
-     eine Stelle, an der wir „Bildschirm zum Anfassen" bestimmen, nicht zwei. */
-  if(!fingerGeraet) setTimeout(()=>$('#lwSuche').focus(), 40);
+     eine Stelle, an der wir „Bildschirm zum Anfassen" bestimmen, nicht zwei.
+
+     **Den Fokus wegzunehmen genügt nicht, man muss ihn woandershin legen:**
+     `showModal()` setzt ihn von sich aus auf das erste bedienbare Element im Dialog —
+     und das ist die Suchzeile. Genau deshalb ging auf dem iPhone trotz der Abfrage oben
+     weiter die Tastatur auf. Der Dialog selbst trägt `tabindex="-1"` und kann den Fokus
+     halten, also bekommt er ihn. */
+  if(fingerGeraet) dlgLvWahl.focus();
+  else setTimeout(()=>$('#lwSuche').focus(), 40);
 }
 $('#lvWahlBtn').onclick=lvWahlOeffnen;
 $('#lwZu').onclick=()=>dlgLvWahl.close();
@@ -10675,6 +10682,22 @@ document.addEventListener('focusin', e=>{
    Die Leiste erscheint nur auf Geräten mit Fingerbedienung. Am Rechner hat die Tastatur
    eine Eingabetaste und die Leiste wäre nur im Weg. */
 const ZAHLFELD='input.laser, input.lvz:not([type=number]), #wdicke, #planbreite, #plandreh, #kalibMass, #btmanual';
+/* ---------- Maßzahlen haben immer drei Nachkommastellen ----------
+   Auch die Stückzahl. Sonst steht „1" neben „4,000", und beim Abgleich mit dem
+   Aufmaßblatt zählt man Stellen, statt zu lesen. Die meisten Felder werden nach jeder
+   Änderung ohnehin aus den Daten neu gezeichnet und kommen darum schon mit drei
+   Stellen zurück — im LV-Dialog aber nicht, der bleibt zwischen zwei Eingaben stehen.
+   Deshalb hier eine Stelle für alle: **`#plandreh` ist ausgenommen**, das sind Grad
+   und keine Meter. Gehorcht wird in der Blasenphase, also NACH den Handlern am Feld
+   selbst — die rechnen unverändert mit dem, was getippt wurde. */
+const MASSZAHL = ZAHLFELD.split(',').map(s=>s.trim()).filter(s=>s!=='#plandreh').join(', ');
+document.addEventListener('change', e=>{
+  const el=e.target;
+  if(!el || !el.matches || !el.matches(MASSZAHL)) return;
+  if(!el.value.trim()) return;                  // leer bleibt leer, nicht „0,000"
+  const v=parseNum(el.value);
+  if(Number.isFinite(v)) el.value=fmt3(v);
+});
 /* Felder, deren Inhalt beim Antippen komplett ausgewählt wird, obwohl sie keine Zahlen
    sind: LV-Nummer und Kurztext im LV-Dialog. Beide sind mit der zuletzt gesetzten
    Position vorbelegt — gemeint ist fast immer „dieselbe wieder" oder „ganz neu",
@@ -10781,9 +10804,14 @@ document.addEventListener('focusin', e=>{
     const alles=()=>{ try{ el.select(); }catch(_){} };
     alles(); setTimeout(alles, 0);   // iOS hebt die Auswahl direkt nach dem Fokus wieder auf
   }
-  // Auf der Eingabeseite nicht: die hat ihr eigenes „✓ Anwenden" gleich unter dem Feld,
-  // die Leiste stuende nur ein zweites Mal darunter.
-  if(fingerGeraet && el.matches(TASTFELD) && !el.closest('#dlgFeld')) leisteZeigen(el);
+  /* Zwei Stellen bekommen die Leiste NICHT:
+     - Die Eingabeseite hat ihr eigenes „✓ Anwenden" gleich unter dem Feld, die Leiste
+       stuende nur ein zweites Mal darunter.
+     - Die Positionssuche filtert schon beim Tippen, es gibt dort nichts zu übernehmen.
+       iOS blendet über der Tastatur ohnehin seine eigene Zeile mit Pfeilen und Haken
+       ein — daneben lag die schwarzgrüne Leiste doppelt. */
+  if(fingerGeraet && el.matches(TASTFELD)
+     && !el.closest('#dlgFeld') && el.id!=='lwSuche') leisteZeigen(el);
 });
 document.addEventListener('focusout', e=>{
   const weg=e.target;
@@ -12605,6 +12633,17 @@ $('#sidebar').addEventListener('pointerdown', e=>{
   if(/^(checkbox|radio|range|color|file|button|submit)$/.test(el.type||'')) return;
   e.preventDefault(); e.stopPropagation();
   el.blur(); feldOeffnen(el);
+}, true);
+/* Die Anmerkung im LV-Dialog geht denselben Weg. Sie steht ganz unten im Panel, und
+   sobald die Tastatur hochkam, schob sie den Dialog so weit nach oben, dass das Feld
+   über den Bildrand verschwand — man tippte blind. Ein Tipp öffnet deshalb dieselbe
+   weiße Seite wie im Blatt: Beschriftung, ein großes Feld, „✓ Anwenden".
+   Nur die Anmerkung, nicht der ganze Dialog: die Maßfelder haben ihren Ziffernblock,
+   und der Kurztext steht am Handy gar nicht erst da. */
+$('#lvAnm').addEventListener('pointerdown', e=>{
+  if(innerWidth>640) return;
+  e.preventDefault(); e.stopPropagation();
+  e.target.blur(); feldOeffnen(e.target);
 }, true);
 // Der Griff sagt auch zugeklappt, worum es gerade geht
 function blattTitel(){
