@@ -6241,7 +6241,7 @@ function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
   // Neue Zuordnungen fallen in den laufenden Abschlag; bestehende lassen sich umhängen
   $('#lvAbschlag').value=a?abschlagVon(a):p.abschlag;
   $('#lvMenge').value=fmt3(a?a.menge:1);
-  $('#lvEinheit').value=a?a.einheit:'Flache';
+  lvEinheitSetzen(a?a.einheit:'Flache');
   $('#lvL').value=a&&isFinite(a.laenge)?fmt3(a.laenge):'';
   $('#lvB').value=a&&isFinite(a.breite)?fmt3(a.breite):'';
   $('#lvH').value=a&&isFinite(a.hoehe)?fmt3(a.hoehe):'';
@@ -6370,6 +6370,21 @@ function lvRaederNachstellen(){
   radAufWert($('#radAbschlag'), Math.max(1, Math.round(parseNum($('#lvAbschlag').value)||1)));
   radAufWert($('#radEinheit'), e.value);
 }
+/* Der EINZIGE Weg, die Einheit zu setzen.
+   Das Rad ist nur ein Aufsatz auf dem versteckten `<select>`. Wer daran vorbei `value`
+   zuweist, dreht das Rad nicht mit — im Dialog stünde dann eine andere Einheit als die,
+   die tatsächlich gilt, und die nächste Radbewegung schriebe die angezeigte zurück.
+   Genau das ist beim Übernehmen aus dem Katalog passiert (`lvApplyKnown`).
+   Am Ende wird `change` ausgelöst, damit alles läuft, was auch beim Drehen läuft:
+   `lvGrundAuto` und `lvSchalterAuffrischen`. */
+function lvEinheitSetzen(e){
+  if(!e) return;
+  const s=$('#lvEinheit');
+  s.value=e;
+  if(s.selectedIndex<0) s.selectedIndex=0;   // Schreibweise aus dem Katalog unbekannt
+  radAufWert($('#radEinheit'), s.value);
+  s.dispatchEvent(new Event('change',{bubbles:true}));
+}
 /* Die großen Schalter tragen ihren Zustand als Klasse — `:has(input:checked)` täte es
    auch, aber nur ab iPadOS 15.4, und welche Fassung auf dem Gerät läuft, wissen wir
    nicht. Die Klasse kostet nichts und gilt überall. */
@@ -6440,7 +6455,7 @@ function lvApplyKnown(lv){
   // Einheit folgt der gewählten Position — auch beim Bearbeiten.
   // Fällt sie in lvUnits aus (Import vor der Alias-Erweiterung), aus der Mengenklammer ableiten.
   const e=(p.lvUnits||{})[lv] || einheitAusKurz(k);
-  if(e) $('#lvEinheit').value=e;
+  lvEinheitSetzen(e);      // NICHT `value=` — sonst bleibt das Rad stehen
 }
 /* Zuletzt gesetzte LV-Position — Voreingabe für die nächste neue Zuordnung.
    Nach einem Neuladen ist die Variable leer; dann zählt der **jüngste Eintrag im
