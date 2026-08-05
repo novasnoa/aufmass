@@ -769,6 +769,19 @@
       <button class="btn small" id="setPasteOk" style="margin-top:6px">Einfügen übernehmen</button>
       <p class="hint" id="setPasteStatus"></p>
     </fieldset>
+    <!-- Welche Fassung liegt auf DIESEM Gerät? Ohne das war nach einem Hochladen nicht
+         zu erkennen, ob das iPad schon die neue Datei hat oder noch die alte aus dem
+         Zwischenspeicher. -->
+    <fieldset><legend>Diese Fassung</legend>
+      <div class="stat"><span>App-Stand</span><b id="setStand">—</b></div>
+      <div class="stat"><span>Datei vom</span><b id="setDatei">—</b></div>
+      <p class="hint">„App-Stand" ist das Datum des letzten Umbaus. <b>„Datei vom" ist die
+        verlässlichere Angabe:</b> Der Browser meldet dort, wann die geladene Datei zuletzt
+        geändert wurde — bei GitHub Pages also der Zeitpunkt des Hochladens. Liegt der
+        deutlich vor dem letzten Hochladen, steckt hier noch die alte Fassung im
+        Zwischenspeicher; dann die Seite neu laden (in Bluefy die Adresse noch einmal
+        öffnen). Manche Server melden gar nichts — dann steht dort der Ladezeitpunkt.</p>
+    </fieldset>
   </div>
   <div class="dfoot"><button class="btn primary" data-close>Fertig</button></div>
 </dialog>
@@ -852,8 +865,8 @@
     <textarea id="tkText" rows="6" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:6px"
       placeholder="Was hast du gemacht, was hast du erwartet, was ist stattdessen passiert? Je genauer, desto schneller ist es behoben."></textarea>
     <p class="hint" style="margin-top:6px">Mitgeschickt wird automatisch, <b>wo</b> du gerade warst (Ansicht, Baustelle,
-      Etage/Raum), welcher Browser und welcher App-Stand — sonst muss man beim Nachstellen raten.
-      <b>Keine Aufmaßdaten und keine Fotos.</b></p>
+      Etage/Raum), welcher Browser und welcher App-Stand (<b id="tkStand"></b>) — sonst muss man
+      beim Nachstellen raten. <b>Keine Aufmaßdaten und keine Fotos.</b></p>
     <p class="hint" id="tkStatus" style="margin-top:6px"></p>
     <div id="tkOffen"></div>
   </div>
@@ -1872,37 +1885,53 @@ function roomStats(r){
    **Objekte, Fotos und LV-Zuordnungen bleiben frei** — genau darum geht es ja: weiter
    aufmessen und zuordnen, ohne die Geometrie zu gefährden.
 
-   Der ganze Zustand steckt in EINER Zahl: `p.aufAt` = Zeitpunkt der letzten Berührung.
-   Gesperrt = fehlt sie oder liegt sie länger als zwei Minuten zurück. „Öffnen" setzt sie
-   auf jetzt, „Sperren" löscht sie. Damit ist nichts zu synchronisieren, und ein Aufmaß
-   aus einer alten Fassung (ohne das Feld) ist von Haus aus gesperrt — es ist ja fertig.
+   **Gesperrt wird von Hand, je Etage** (`f.gesperrt`, seit 2026-08-05 auf Nutzerwunsch).
+   Ein Stockwerk ist fertig aufgemessen — dann macht man es zu, und es bleibt zu, bis man
+   es wieder öffnet. Nichts läuft mehr von selbst.
 
-   **Die Sperre gilt für ALLE Räume zugleich** (seit 2026-08-04, auf Nutzerwunsch).
-   Vorher hing sie an jedem Raum einzeln (`r.aufAt`); wer über mehrere Räume hinweg
-   arbeitete, musste jeden einzeln aufschließen und hatte gleichzeitig offene und
-   gesperrte. Jetzt öffnet und schließt ein Griff das ganze Aufmaß, und jede Änderung
-   an irgendeinem Raum hält die Zeit für alle am Laufen. */
-const SPERRE_MS=2*60*1000;
-const sperreOffen = () => {
-  const p=proj();
-  return !!p && Number.isFinite(p.aufAt) && (Date.now()-p.aufAt) < SPERRE_MS;
+   **Was vorher da war und warum es weg ist:** Die Sperre schloss sich nach zwei Minuten
+   ohne Änderung von selbst (`p.aufAt` = Zeitpunkt der letzten Berührung). Das war als
+   Schutz gedacht, wurde auf der Baustelle aber zur Falle: Wer zwischendurch etwas
+   anderes machte, kam zurück in ein Aufmaß, das ohne Vorwarnung zu war — Maße ließen
+   sich nicht mehr eintragen, und weil ein gesperrter Plan viele Bedienelemente still
+   abschaltet, wirkte die App schlicht hängengeblieben (Meldung „jetzt ist das Tablett
+   hängen geblieben", 2026-08-05). Eine Sperre, die von selbst zuschnappt, muss man
+   erklären; eine, die man selbst zumacht, nicht.
+
+   **Objekte, Fotos und LV-Zuordnungen bleiben auch im gesperrten Stockwerk frei** —
+   daran ändert sich nichts. */
+const etageOffen = fid => {
+  const f=(proj().floors||[]).find(f=>f.id===fid);
+  return !!f && !f.gesperrt;
 };
-// Raumbezogene Form beibehalten: die Aufrufer prüfen damit weiterhin „gibt es den Raum
-// überhaupt" mit ab (ein fehlender Raum gilt als gesperrt).
-const raumOffen = r => !!r && sperreOffen();
-const raumBeruehrt = r => { if(r && sperreOffen()) proj().aufAt=Date.now(); };
-const restSekunden = () => sperreOffen() ? Math.ceil((SPERRE_MS-(Date.now()-proj().aufAt))/1000) : 0;
-/* Altbestand: Bis zum 4.8.2026 hing die Sperre an den Räumen. Den jüngsten Zeitpunkt
-   übernehmen, damit ein gerade offener Raum nach dem Laden nicht plötzlich zu ist —
-   und die alten Felder wegräumen, sonst blieben zwei Wahrheiten nebeneinander. */
+// Raumbezogene Form: die Aufrufer prüfen damit weiterhin „gibt es den Raum überhaupt"
+// mit ab (ein fehlender Raum gilt als gesperrt).
+const raumOffen = r => !!r && etageOffen(r.floorId);
+// „Ist hier gerade etwas offen?" — für Stellen ohne Raum in der Hand (Kurzbefehle).
+const sperreOffen = () => etageOffen(focusRoomId ? (roomById(focusRoomId)||{}).floorId : activeFloorId);
+/* Altbestand: Bis zum 5.8.2026 steckte die Sperre in Zeitstempeln (`r.aufAt`, später
+   `p.aufAt`). Die fliegen raus — **alle Etagen kommen offen herein**. Sie stattdessen
+   zuzumachen wäre die unangenehmere Überraschung: Wer eine ältere Datei öffnet, stünde
+   ohne Vorwarnung vor einem Plan, an dem sich nichts bewegen lässt. Zumachen ist ein
+   Handgriff, das Suchen nach dem Grund nicht. */
 function sperreVereinheitlichen(){
   (db.projects||[]).forEach(p=>{
-    let neu=null;
-    (p.rooms||[]).forEach(r=>{
-      if(Number.isFinite(r.aufAt)){ neu=Math.max(neu||0, r.aufAt); delete r.aufAt; }
-    });
-    if(neu!=null && !Number.isFinite(p.aufAt)) p.aufAt=neu;
+    delete p.aufAt;
+    (p.rooms||[]).forEach(r=>{ delete r.aufAt; });
   });
+}
+/* Der eine Griff, der sperrt und öffnet — von der Etagenansicht wie aus dem Raum.
+   Die Auswahl wird zurückgesetzt: eine gewählte Ecke etwa hat im gesperrten Stockwerk
+   keine Bedeutung mehr, und ihre Bedienelemente wären ausgegraut. */
+function etageSperreUmschalten(fid, raumId){
+  const f=(proj().floors||[]).find(f=>f.id===fid); if(!f) return;
+  if(f.gesperrt) delete f.gesperrt; else f.gesperrt=true;
+  sel={roomId:raumId||null, wall:null, vertex:null};
+  save(); renderAll();
+  const n=(proj().rooms||[]).filter(r=>r.floorId===fid).length;
+  melde(f.gesperrt
+    ? `${floorName(fid)} gesperrt — Wände, Ecken, Türen und Fenster in ${n} Räumen sind festgesetzt.`
+    : `${floorName(fid)} offen — die Geometrie lässt sich wieder ändern.`);
 }
 const floorRooms = () => proj().rooms.filter(r=>r.floorId===activeFloorId);
 const roomById = id => proj().rooms.find(r=>r.id===id);
@@ -2677,17 +2706,22 @@ function renderCanvas(){
           ` L ${a.x+anQ.x*dQ} ${a.y+anQ.y*dQ} Z" fill="transparent" data-roomid="${r.id}" data-wall="${i}" style="cursor:pointer"/>`;
         /* Maßzahlen sind anfassbar: Ein Tipp öffnet die Maßseite mit der Maßkette dieser
            Wand (`massVomPlan`). Vorher wählte er nur die Wand aus — dasselbe, was ein
-           Tipp auf die Wand selbst tut, also ein Weg umsonst. */
-        const dbasis = offen ? ` data-roomid="${r.id}" style="cursor:pointer"` : '';
+           Tipp auf die Wand selbst tut, also ein Weg umsonst.
+
+           **Auch im gesperrten Aufmaß.** Zuerst hingen die Kennungen an `offen`; nach der
+           Selbstsperre (2 min ohne Änderung) lief der Tipp dann ins Leere — ohne ein Wort,
+           und das Tablett wirkte hängengeblieben (Meldung vom 2026-08-05). Die Maßseite
+           geht jetzt trotzdem auf und trägt das Schloss samt „Öffnen" bei sich. */
+        const dbasis = ` data-roomid="${r.id}" style="cursor:pointer"`;
         const dopts={color:isSelW?'#2f6fed':'#8a93a5', tcol:isSelW?'#2f6fed':'#4a5468', bold:isSelW, fs:lbl*0.9,
           wand:wandDicke(r,i),
           lock:!imDruck && wandGesperrt(r,i),   // Schloss vor der Maßzahl — nur Bildschirm
-          data: offen ? ` data-massw="${i}"`+dbasis : ''};
+          data: ` data-massw="${i}"`+dbasis};
         const segs=wallChainCuts(r,i);
         if(segs.length>1){
           // Wand mit Türen/Fenstern: Maßkette (Abstand – Öffnung – Abstand) + Gesamtmaß in zweiter Reihe
           segs.forEach(([p,q],k)=>{ out+=dimSvg(p, q, nx, ny, lbl, {...dopts, fs:lbl*0.8, lock:false,
-            data: offen ? ` data-massseg="${i}:${k}"`+dbasis : ''}); });
+            data: ` data-massseg="${i}:${k}"`+dbasis}); });
           out+=dimSvg(a, b, nx, ny, lbl, {...dopts, off:lbl*3.4});
         } else {
           out+=dimSvg(a, b, nx, ny, lbl, dopts);
@@ -3679,7 +3713,6 @@ svg.addEventListener('pointerdown', e=>{
     const r=roomById(focusRoomId);
     const o=(r.openings||[]).find(x=>x.id===t.dataset.open);
     if(o){
-      raumBeruehrt(r);
       const neueOeffnung = sel.openId!==o.id;
       if(neueOeffnung) sel={roomId:focusRoomId, wall:null, vertex:null, openId:o.id};
       const [a,b]=wallPoints(r,o.wall); const L=dist(a,b);
@@ -3706,7 +3739,6 @@ svg.addEventListener('pointerdown', e=>{
     const schon = sel.roomId===t.dataset.roomid && sel.vertex===i;
     sel={roomId:t.dataset.roomid, wall:null, vertex:i};
     const r=roomById(sel.roomId);
-    raumBeruehrt(r);
     if(schon) drag={kind:'vertex', room:r, idx:i, start:p, orig:{...r.points[i]}, moved:false,
       lockSnap:lockAbbild(r)};
     renderAll(); return;
@@ -3717,7 +3749,6 @@ svg.addEventListener('pointerdown', e=>{
     const schon = sel.roomId===t.dataset.roomid && sel.wall===i;
     sel={roomId:t.dataset.roomid, wall:i, vertex:null};
     const r=roomById(sel.roomId);
-    raumBeruehrt(r);
     // Angetippte Stelle merken — „＋ Ecke einfügen", „+ Tür" und „+ Fenster" arbeiten
     // danach genau dort statt in der Wandmitte
     {
@@ -4184,7 +4215,6 @@ function closeDraft(){
   if(draft.points.length<3){ cancelModes(); return; }
   const r={id:uid(), floorId:activeFloorId, name:'Raum '+(proj().rooms.length+1), height:lastHeight,
     points:draft.points, openings:[]};
-  proj().aufAt=Date.now();               // frisch gezeichnet = alles offen
   proj().rooms.push(r); save();
   cancelModes(); focusRoom(r.id);
 }
@@ -4283,7 +4313,6 @@ function commitPlace(p){
   const pts=placing.points.map(q=>({x:mm(q.x-c.x+p.x), y:mm(q.y-c.y+p.y)}));
   const r={id:uid(), floorId:activeFloorId, name:placing.name||('Raum '+(proj().rooms.length+1)),
     height:placing.height||2.5, points:pts, openings:[]};
-  proj().aufAt=Date.now();               // frisch platziert = alles offen
   proj().rooms.push(r); save();
   lastHeight=r.height;
   cancelModes(); focusRoom(r.id);
@@ -4407,8 +4436,7 @@ const wandGesperrt = (r,i) => !!(r.wallLock||{})[i];
    bzw. direkt setzen und an einem `disabled` vorbeigingen. */
 function oeffnungSetzen(r, o, feld, v){
   if(!r || !o || !isFinite(v) || v<0) return false;
-  if(!raumOffen(r)){ melde('Das Aufmaß ist gesperrt — Maß nicht geändert.', true); renderAll(); return false; }
-  raumBeruehrt(r);
+  if(!raumOffen(r)){ melde(floorName(r.floorId)+' ist gesperrt — Maß nicht geändert.', true); renderAll(); return false; }
   o[feld]=mm(v);
   pushDoorToPartner(r,o); save(); renderAll();
   return true;
@@ -4839,14 +4867,15 @@ function deleteRoom(id){
    beiden Fassungen sowohl „offen" als auch „sperren" — auf dem Telefon war nicht zu
    sehen, was der Knopf gerade tut. `data-kurzsym`/`data-kurztxt` geben dem Kurzbefehl
    unten dieselbe Auskunft; so gibt es nur EINE Stelle, die den Zustand kennt. */
-const sperrZeile = r => raumOffen(r)
+const sperrZeile = fid => etageOffen(fid)
   ? `<div class="row" style="margin-top:6px"><button class="btn small" id="rsperr" style="flex:1"
       data-kurzsym="🔓" data-kurztxt="Sperren"
-      title="Wände, Ecken, Türen und Fenster in ALLEN Räumen sofort festsetzen">🔓 Offen (noch ${
-        Math.max(1, Math.ceil(restSekunden()/60))} min) · Sperren</button></div>`
+      title="Wände, Ecken, Türen und Fenster dieser Etage festsetzen">🔓 ${
+        esc(floorName(fid))} offen · Sperren</button></div>`
   : `<div class="row" style="margin-top:6px"><button class="btn small active" id="rsperr" style="flex:1"
       data-kurzsym="🔒" data-kurztxt="Öffnen"
-      title="Wände, Ecken, Türen und Fenster in ALLEN Räumen wieder freigeben">🔒 Gesperrt · Öffnen</button></div>`;
+      title="Wände, Ecken, Türen und Fenster dieser Etage wieder freigeben">🔒 ${
+        esc(floorName(fid))} gesperrt · Öffnen</button></div>`;
 const anmerkungFeld = r => `<div style="margin-top:6px">
   <label class="hint" style="display:block; margin-bottom:2px">Anmerkung — erscheint im Druck unter dem Plan</label>
   <textarea id="ranm" rows="2" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:6px"
@@ -4980,7 +5009,7 @@ function renderSidebar(){
           <button class="btn small" id="rdup">Duplizieren</button>
           <button class="btn danger small" id="rdel">Löschen</button>
         </div>
-        ${sperrZeile(wr)}
+        ${sperrZeile(wr.floorId)}
         ${anmerkungFeld(wr)}
         ${farbReihen(wr, true)}
         ${lvListHtml(p.attrs.filter(a=>a.roomId===wr.id && !a.objId && a.wall==null))}
@@ -4997,7 +5026,8 @@ function renderSidebar(){
         <button class="btn small" id="floorren" title="Umbenennen">✎</button>
         <button class="btn small" id="floordup" title="Etage duplizieren">⧉</button>
         <button class="btn small danger" id="floordel" title="Etage löschen">🗑</button>
-      </div></div>`;
+      </div>
+      ${sperrZeile(activeFloorId)}</div>`;
 
     html+=`<div class="panel"><h3>Neuer Raum</h3>
       <div class="row">
@@ -5245,7 +5275,7 @@ function renderSidebar(){
           <button class="btn small" id="rdup">Duplizieren</button>
           <button class="btn danger small" id="rdel">Löschen</button>
         </div>
-        ${sperrZeile(r)}
+        ${sperrZeile(r.floorId)}
         ${anmerkungFeld(r)}
         ${farbReihen(r)}
         <details id="rstats"${statsOpen?' open':''}><summary class="hint" style="cursor:pointer">Statistik anzeigen</summary>
@@ -5299,6 +5329,8 @@ function wireSidebar(r){
 
   /* Etagenansicht */
   on('#floorsel','onchange',e=>{ activeFloorId=e.target.value; focusRoomId=null; sel={roomId:null,wall:null,vertex:null}; renderAll(); zoomFit(); });
+  // Schloss der Etage — in der Etagenansicht dieselbe Zeile wie im Raum-Panel
+  if(!r) on('#rsperr','onclick',()=>etageSperreUmschalten(activeFloorId, null));
   on('#flooradd','onclick',()=>{
     const name=prompt('Name der neuen Etage:', proj().floors.length===1?'1. Obergeschoss':'Etage '+(proj().floors.length+1));
     if(!name) return;
@@ -5408,17 +5440,7 @@ function wireSidebar(r){
 
   if(r){
     /* Raum-Panel */
-    on('#rsperr','onclick',()=>{
-      // Gilt fürs ganze Aufmaß, nicht nur für diesen Raum
-      const p0=proj();
-      if(sperreOffen()) delete p0.aufAt; else p0.aufAt=Date.now();
-      sel={roomId:r.id, wall:null, vertex:null};   // Auswahl passt zum neuen Zustand nicht mehr
-      save(); renderAll();
-      const n=(p0.rooms||[]).length;
-      melde(sperreOffen()
-        ? `Alle ${n} Räume sind offen — schließen nach 2 Minuten ohne Änderung von selbst.`
-        : `Alle ${n} Räume sind gesperrt: Wände, Ecken, Türen und Fenster sind festgesetzt.`);
-    });
+    on('#rsperr','onclick',()=>etageSperreUmschalten(r.floorId, r.id));
     on('#rname','onchange',e=>{ r.name=e.target.value||r.name; save(); renderAll(); });
     // Anmerkung: nur speichern, kein renderAll — der Text steht schon im Feld
     on('#ranm','onchange',e=>{
@@ -5497,8 +5519,7 @@ function wireSidebar(r){
       if(!isFinite(v)||v<=0){ renderAll(); return; }
       /* Der Laser schreibt über `dispatchEvent` direkt hierher und geht damit an einem
          `disabled` vorbei — die Sperre muss deshalb AUCH hier stehen, nicht nur im HTML. */
-      if(!raumOffen(r)){ melde('Das Aufmaß ist gesperrt — Länge nicht geändert.', true); renderAll(); return; }
-      raumBeruehrt(r);                      // Tippen zählt als Arbeit am Raum
+      if(!raumOffen(r)){ melde(floorName(r.floorId)+' ist gesperrt — Länge nicht geändert.', true); renderAll(); return; }
       // Direkte Änderung einer gesperrten Wand geht — aber nur nach Rückfrage
       if(wandGesperrt(r,i) && Math.abs(v-dist(...wallPoints(r,i)))>0.0005
         && !confirm(`Wand ${i+1} ist gesperrt.\n\nLänge trotzdem auf ${fmt3(v)} m ändern?`)){
@@ -5525,7 +5546,6 @@ function wireSidebar(r){
        stünde nach einem Zug ein Dutzend Schritte im Rückgängig-Verlauf. renderAll()
        verbietet sich hier, es baute die Leiste (und damit den Regler) mitten im Zug neu. */
     const dickeSetzen=v=>{
-      raumBeruehrt(r);
       r.wallDicke=r.wallDicke||{}; r.wallDicke[sel.wall]=mm(v);
       const feld=$('#wdicke'); if(feld) feld.value=fmt(mm(v),3);
       const reg=$('#wdickereg'); if(reg) reg.style.accentColor = dickeImBereich(mm(v)) ? '' : 'var(--danger)';
@@ -9208,9 +9228,22 @@ $('#settingsbtn').onclick=()=>{
   $('#setDeckInfo').textContent=deckInfoText();
   $('#setAbschlag').value=p.abschlag;
   $('#setAbschlagInfo').textContent=abschlagInfo();
+  $('#setStand').textContent=APP_STAND;
+  $('#setDatei').textContent=dateiStand();
   setStatus('');
   dlgSettings.showModal();
 };
+/* Wann wurde die geladene Datei zuletzt geändert? `document.lastModified` gibt das
+   `Last-Modified` des Servers zurück (bei GitHub Pages der Zeitpunkt des Hochladens).
+   **Ohne Warnhinweis, wenn der Wert frisch ist:** Ein erster Versuch schrieb bei unter
+   einer Minute „meldet der Server nicht — Ladezeit" dazu. Das schlug ausgerechnet dann
+   an, wenn gerade hochgeladen und sofort geöffnet wurde — also im Normalfall. */
+function dateiStand(){
+  const d=new Date(document.lastModified);
+  if(!isFinite(d)) return 'unbekannt';
+  return d.toLocaleString('de-DE', {day:'2-digit', month:'2-digit', year:'numeric',
+    hour:'2-digit', minute:'2-digit'});
+}
 // Deckblattangaben: beim Verlassen des Feldes sichern
 [['#setGebaeude','gebaeude'],['#setBereich','bereich'],['#setArt','artBauvorhaben']]
   .forEach(([sel,feld])=>{
@@ -10423,6 +10456,13 @@ function massVomPlan(el){
   const seg = ds.massseg!==undefined ? ds.massseg.split(':').map(Number) : null;
   const i = seg ? seg[0] : +ds.massw;
   if(!(i>=0 && i<r.points.length)) return;
+  /* Gesperrtes Stockwerk: sagen, warum nichts passiert. Der Tipp lief früher stumm ins
+     Leere, und das wirkte, als hinge die App (Meldung vom 2026-08-05). Als Fehler
+     gemeldet, weil nur die am Telefon stehen bleiben. */
+  if(!raumOffen(r)){
+    melde(`${floorName(r.floorId)} ist gesperrt — zum Ändern erst das Schloss öffnen.`, true);
+    return;
+  }
   sel={roomId:r.id, wall:i, vertex:null};
   renderAll();                                   // erst jetzt gibt es `#wlen`
   const liste=wandMassKette(r, i);
@@ -10903,6 +10943,7 @@ function tkArtSetzen(a){
 }
 $('#ticketbtn').onclick=async()=>{
   $('#tkTitel').value=''; $('#tkText').value='';
+  $('#tkStand').textContent=APP_STAND;
   tkArtSetzen('Fehler'); tkStatus(''); renderTkOffen();
   $('#dlgTicket').showModal();
   if(tkOffene().length && atToken()){        // beim Öffnen still nachreichen
@@ -11893,7 +11934,7 @@ function objSofort(art){
   }
   r.objects.push(g);
   sel={roomId:r.id, wall:null, vertex:null, objId:g.id};
-  raumBeruehrt(r); save(); renderAll();
+  save(); renderAll();
   melde(`${objLabel(g)||'Objekt'} in der Raummitte gesetzt — ziehen verschiebt es.`);
 }
 function kurzMenuAuf(knopf, punkte){
@@ -11929,7 +11970,8 @@ document.addEventListener('pointerdown', e=>{
    alles andere wird **versteckt, nicht entfernt** — die Leiste drueckt ja genau diese
    Knoepfe, sie muessen im Dokument bleiben. Am Rechner passiert hier nichts. */
 const HANDY={
-  etage:   {panels:[/^Plan als Hintergrund/, /^R.ume/]},
+  // „Etage" ist seit dem 5.8.2026 dabei: dort sitzt das Schloss des Stockwerks
+  etage:   {panels:[/^Etage$/, /^Plan als Hintergrund/, /^R.ume/]},
   raum:    {panels:[/^Raum/, /^Fotos/],
             /* Die Zeile des Sanierungsbereichs MUSS mit durch: sonst ist „Fertig"
                versteckt und man kommt aus dem Farbmodus nicht mehr heraus (gemeldet
@@ -12029,16 +12071,9 @@ document.addEventListener('pointerdown', e=>{
     m.classList.remove('auf');
 }, true);
 window.addEventListener('resize', ()=>{ if(view==='plan') renderCanvas(); });
-/* Die Raumsperre läuft nach Zeit ab — ohne Nachsehen fiele der Wechsel erst beim nächsten
-   Klick auf. Alle 15 s prüfen und nur bei echtem Wechsel neu zeichnen; während eines
-   Ziehvorgangs bleibt alles, wie es ist. */
-let sperrStand=null;
-setInterval(()=>{
-  if(drag || document.querySelector('dialog[open]')) return;
-  // Die Sperre gilt fürs ganze Aufmaß — es genügt, den einen Zustand zu beobachten
-  const jetzt=sperreOffen();
-  if(jetzt!==sperrStand){ sperrStand=jetzt; renderAll(); }
-}, 15000);
+/* Hier lief bis zum 5.8.2026 ein 15-Sekunden-Tick, der das Ablaufen der Selbstsperre
+   nachzog. Die Sperre wird jetzt von Hand gesetzt — es ändert sich also nichts mehr
+   von allein, und der Tick hatte nichts mehr zu tun. */
 $('#undobtn').onclick=undoSchritt;
 $('#redobtn').onclick=redoSchritt;
 syncSharedDoors(); save();   // Altbestand: Türpaare in geteilten Wänden lagerichtig angleichen
