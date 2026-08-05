@@ -171,7 +171,10 @@
   #lwListe{flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
     padding:8px 10px calc(10px + env(safe-area-inset-bottom)); display:flex;
     flex-direction:column; gap:6px;}
-  .lwkachel{display:flex; align-items:stretch; gap:0; border:1px solid var(--line);
+  /* `flex:0 0 auto` ist hier das Entscheidende: ohne das quetscht die Spalte alle
+     Kacheln in die Fensterhöhe, und bei vierzig Positionen bleiben Striche übrig.
+     Erst so wird die Liste länger als der Schirm — und damit wischbar. */
+  .lwkachel{flex:0 0 auto; min-height:56px; display:flex; align-items:stretch; gap:0; border:1px solid var(--line);
     border-radius:11px; overflow:hidden; background:#fff;}
   .lwkachel .haupt{flex:1; min-width:0; text-align:left; border:none; background:none;
     padding:10px 12px;}
@@ -182,6 +185,14 @@
   .lwkachel.an{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent);}
   .lwkachel:active{background:#eef1f6;}
   #lwLeer{padding:20px 12px; text-align:center; color:var(--muted); font-size:13px;}
+  /* Zwei Wege zur Position, je nach Gerät — nie beide zugleich, sonst steht dasselbe
+     zweimal da: am Rechner und auf dem iPad die Suchzeile mit Vorschlagsliste
+     (Tastatur und Zeigegerät sind da), am Telefon die Vollbild-Auswahl. */
+  #lvPosZeile{display:none;}
+  @media (max-width:640px){
+    #lvKurzZeile{display:none;}
+    #lvPosZeile{display:flex;}
+  }
   #llText{white-space:pre-wrap; font-size:14px; line-height:1.55; padding:12px 14px;
     overflow-y:auto; flex:1 1 auto; min-height:0;}
   .hint{font-size:11px; color:var(--muted);}
@@ -668,11 +679,11 @@
     <div class="row"><label>Kapitel</label>
       <div id="lvKatWahl" class="katwahl"></div>
     </div>
-    <div class="row"><label>Kurztext</label>
+    <div class="row" id="lvKurzZeile"><label>Kurztext</label>
       <span class="sugwrap"><textarea id="lvKurz" rows="2" autocomplete="off" placeholder="Suchen: z. B. spachteln"></textarea><div class="sugbox" id="lvKurzSug"></div></span>
     </div>
     <!-- Am Telefon führt ein Tipp hierauf in die Vollbild-Auswahl -->
-    <div class="row"><label>Position</label>
+    <div class="row" id="lvPosZeile"><label>Position</label>
       <button class="btn small" id="lvWahlBtn" style="flex:1; text-align:left">— noch keine gewählt —</button></div>
     <div class="row"><label>Zuordnung</label><span class="hint" id="lvZiel" style="flex:1"></span></div>
     <div class="row"><label>Abschlag</label>
