@@ -91,14 +91,25 @@
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   #massOrt{display:block; font-size:11px; color:var(--muted);
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  #massAnzeige{flex:1 1 auto; min-height:70px; display:flex; align-items:center;
-    justify-content:flex-end; gap:6px; padding:10px 16px;}
-  #massWert{font-size:clamp(34px,11vw,56px); font-weight:600; line-height:1.1;
-    font-variant-numeric:tabular-nums;}
-  #massWert.leer{color:#c9ced8;}
-  /* Die Einheit steht direkt neben der Zahl und etwas tiefer — auf Grundlinie
-     gebracht, ohne die Zahl aus der Mitte zu ziehen. */
-  #massEinh{font-size:19px; color:var(--muted); position:relative; top:9px;}
+  /* Alle Maße einer Stelle untereinander. Das angetippte steht groß, die anderen
+     bleiben lesbar daneben stehen — man sieht beim Eintragen, was schon dasteht,
+     und springt mit einem Tipp hinüber. */
+  #massAnzeige{flex:1 1 auto; min-height:70px; display:flex; flex-direction:column;
+    justify-content:center; gap:2px; padding:8px 10px; overflow-y:auto;}
+  .massreihe{display:flex; align-items:baseline; gap:8px; width:100%; text-align:left;
+    border:none; background:none; padding:5px 8px; border-radius:9px; color:var(--muted);}
+  .massreihe .mn{flex:1; min-width:0; font-size:13px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .massreihe .mw{font-size:20px; font-weight:600; color:var(--ink); font-variant-numeric:tabular-nums;}
+  .massreihe .mw.leer{color:#c9ced8;}
+  .massreihe .me{font-size:12px;}
+  .massreihe.an{background:#eef4ff;}
+  .massreihe.an .mn{font-size:14px; color:var(--accent);}
+  .massreihe.an .mw{font-size:clamp(28px,8.5vw,42px); line-height:1.15;}
+  .massreihe.an .me{font-size:16px;}
+  /* Geändert, aber noch nicht übernommen — „Übernehmen" nimmt genau diese mit. */
+  .massreihe.neu .mw{color:var(--accent2);}
+  .massreihe.blitz{background:#e7f7f0;}
   /* Zwischenzeile: Laserzustand links, Zurücksetzen rechts — beides gehört zur
      Eingabe und nicht in die Kopfleiste der App, die hier gar nicht zu sehen ist. */
   #massZeile{display:flex; align-items:center; gap:8px; flex:0 0 auto;
@@ -112,12 +123,13 @@
      einer Hand am Laser — die Tasten dürfen ruhig groß sein. Nach oben begrenzt,
      damit die Anzeige nicht auf einen Streifen zusammenschrumpft. */
   #massTasten{flex:0 0 auto; display:grid; grid-template-columns:repeat(4,1fr);
-    grid-auto-rows:minmax(50px,15vh); gap:6px; background:#eef1f6;
+    grid-auto-rows:minmax(48px,13vh); gap:6px; background:#eef1f6;
     padding:8px 8px calc(8px + env(safe-area-inset-bottom));}
   #massTasten button{border:1px solid var(--line); border-radius:10px; background:#fff;
     padding:0; font-size:25px; font-weight:500; color:var(--ink); touch-action:manipulation;}
   #massTasten button:active{background:#dde3ec;}
   #massTasten .neben{font-size:19px; color:var(--muted);}
+  #massTasten .klein{font-size:13px;}
   #massOk{grid-row:2/5; grid-column:4; font-size:13.5px !important; font-weight:600 !important;
     line-height:1.5; padding:0 2px !important;
     background:var(--accent2) !important; border-color:var(--accent2) !important; color:#fff !important;}
@@ -1091,7 +1103,8 @@
       <button id="massAb" tabindex="-1" title="Abbrechen (Esc)">✕</button>
       <span id="massWas"><b id="massName">Maß</b><span id="massOrt"></span></span>
     </div>
-    <div id="massAnzeige"><span id="massWert">0</span><span id="massEinh">m</span></div>
+    <!-- Alle Maße dieser Stelle untereinander; das angetippte steht groß. Baut `massZeigen`. -->
+    <div id="massAnzeige"></div>
     <div id="massZeile">
       <span id="massBt"><i></i><span id="massBtTxt">Laser nicht verbunden</span></span>
       <button class="btn small" id="massStd" tabindex="-1"
@@ -1108,9 +1121,11 @@
       <button data-k="1" tabindex="-1">1</button>
       <button data-k="2" tabindex="-1">2</button>
       <button data-k="3" tabindex="-1">3</button>
-      <button data-k="," tabindex="-1">,</button>
+      <!-- Unten links Abbrechen, das Komma neben die 0: dort liegt der Daumen ohnehin,
+           und ein „alles löschen" braucht es nicht — die erste Ziffer ersetzt den Wert. -->
+      <button data-k="ab" class="neben klein" tabindex="-1">Abbrechen</button>
       <button data-k="0" tabindex="-1">0</button>
-      <button data-k="leer" class="neben" tabindex="-1" title="Alles löschen">C</button>
+      <button data-k="," tabindex="-1">,</button>
       <button data-k="ok" id="massOk" tabindex="-1">✓<br>Übernehmen</button>
     </div>
   </div>
@@ -10048,7 +10063,12 @@ document.addEventListener('focusout', e=>{
    Anmerkungen) hier nicht drankommt. */
 const MASSFELD=ZAHLFELD;          // dieselben Felder, die schon den Ziffernblock bekamen
 const dlgMass=$('#dlgMass');
-let massZiel=null, massText='', massFrisch=true, massStdText='', massEinheit='m';
+/* `massFelder` sind ALLE Maße der angetippten Stelle (Panel, Dialog oder Tabellenzeile),
+   `massAktiv` zeigt auf das, was gerade getippt wird. Je Eintrag:
+   {schluessel, el, name, einh, text, start, std}. Übernommen wird am Ende alles,
+   dessen `text` sich von `start` unterscheidet. */
+let massFelder=[], massAktiv=0, massFrisch=true;
+const massJetzt = () => massFelder[massAktiv] || null;
 
 // „2,500" → „2,5", „1,000" → „1". In der großen Anzeige zählt Lesbarkeit, nicht Stellenzahl.
 const massKurz = v => Number.isFinite(v) ? (fmt(v,3).replace(/,?0+$/,'') || '0') : '';
@@ -10123,7 +10143,34 @@ function massOrtVon(el){
   return '';
 }
 
-function massOffen(){ return !!(dlgMass && dlgMass.open && massZiel); }
+/* Welche Maße gehören zusammen? Die, die auf derselben Seite stehen: alle Maßfelder
+   des Dialogs, sonst die des Panels, sonst die der Tabellenzeile. Unsichtbare fallen
+   raus — im Fotoaufmaß-Fenster hängt es von der Einheit ab, welche Zeilen dastehen. */
+function massGeschwister(el){
+  const d=el.closest('dialog');
+  const wurzel = (d && d.id!=='dlgMass') ? d : (el.closest('.panel') || el.closest('tr'));
+  if(!wurzel) return [el];
+  const alle=[...wurzel.querySelectorAll(MASSFELD)]
+    .filter(f=>!f.disabled && !f.readOnly && f.getClientRects().length);
+  return alle.includes(el) ? alle : [el];
+}
+/* Nach dem Übernehmen des ersten Maßes baut sich die Seitenleiste neu auf — die
+   gemerkten Elemente sind dann tot. Über diesen Schlüssel holen wir das frische
+   Feld zurück, sonst käme nur das erste Maß an. */
+function massSchluessel(el){
+  if(el.id) return '#'+el.id;
+  const f=el.dataset.f;
+  if(el.dataset.op)    return `.opfld[data-op="${el.dataset.op}"][data-f="${f}"]`;
+  if(el.dataset.lvid)  return `.lvz[data-lvid="${el.dataset.lvid}"][data-lvfeld="${el.dataset.lvfeld}"]`;
+  if(el.classList.contains('objdim')) return `.objdim[data-f="${f}"]`;
+  return null;
+}
+function massEintrag(el){
+  const std=massStandard(el), text=massTextVon(el.value);
+  return {schluessel:massSchluessel(el), el, name:massNameVon(el), einh:massEinhVon(el),
+          text, start:text, std: std==null ? text : massKurz(std)};
+}
+function massOffen(){ return !!(dlgMass && dlgMass.open && massJetzt()); }
 function massBtZeigen(){
   const chip=$('#massBt'); if(!chip) return;
   const an=$('#btchip').classList.contains('on');
@@ -10134,91 +10181,118 @@ function massBtZeigen(){
     : (name ? 'Laser getrennt · '+name : 'Kein Laser verbunden');
 }
 function massZeigen(){
-  const w=$('#massWert');
-  w.textContent = massText || '0';
-  w.classList.toggle('leer', !massText);
-  $('#massEinh').textContent = massEinheit;
-  const s=$('#massStd');
-  s.textContent = '↺ '+massStdText;
-  s.style.visibility = massStdText==='' ? 'hidden' : '';
+  $('#massAnzeige').innerHTML = massFelder.map((f,i)=>
+    `<button class="massreihe${i===massAktiv?' an':''}${f.text!==f.start?' neu':''}"
+       data-i="${i}" tabindex="-1"><span class="mn">${esc(f.name)}</span>`+
+    `<span class="mw${f.text?'':' leer'}">${esc(f.text||'0')}</span>`+
+    `<span class="me">${esc(f.einh)}</span></button>`).join('');
+  const a=$('#massAnzeige .massreihe.an');
+  if(a && massFelder.length>3) a.scrollIntoView({block:'nearest'});
+  const j=massJetzt(), s=$('#massStd');
+  s.textContent = '↺ '+((j&&j.std)||'');
+  s.style.visibility = (j && j.std) ? '' : 'hidden';
 }
 function massOeffnen(el){
-  massZiel=el;
-  massText=massTextVon(el.value);
+  const felder=massGeschwister(el);
+  massFelder=felder.map(massEintrag);
+  massAktiv=Math.max(0, felder.indexOf(el));
   massFrisch=true;                       // die erste Ziffer ersetzt den alten Wert
-  const std=massStandard(el);
-  massStdText = std==null ? massText : massKurz(std);
-  massEinheit = massEinhVon(el);
-  $('#massName').textContent=massNameVon(el);
-  $('#massOrt').textContent=massOrtVon(el);
+  $('#massName').textContent=massOrtVon(el) || massFelder[massAktiv].name;
+  $('#massOrt').textContent=massFelder.length>1 ? massFelder.length+' Maße' : '';
   massBtZeigen(); massZeigen();
   if(!dlgMass.open) dlgMass.showModal();
   dlgMass.focus();                       // damit die echte Tastatur ankommt, ohne Knopf zu treffen
 }
 function massSchliessen(){
-  massZiel=null;
+  massFelder=[]; massAktiv=0;
   if(dlgMass.open) dlgMass.close();
+}
+function massWechseln(i){
+  if(i<0 || i>=massFelder.length || i===massAktiv) return;
+  massAktiv=i; massFrisch=true; massZeigen();
 }
 function massTaste(k){
   if(k==='ok'){ massAnwenden(); return; }
-  if(k==='leer'){ massText=''; massFrisch=false; }
-  else if(k==='zurueck'){ massText=massText.slice(0,-1); massFrisch=false; }
+  if(k==='ab'){ massSchliessen(); return; }
+  const j=massJetzt(); if(!j) return;
+  if(k==='zurueck'){ j.text=j.text.slice(0,-1); massFrisch=false; }
   /* Vorzeichen: auf dem Block gibt es keine Taste dafür — gebraucht wird es einzig bei
      „Drehung °" am Hintergrundplan, und dort tut 345 dasselbe wie −15. Über die echte
      Tastatur geht es trotzdem, das kostet eine Zeile. */
-  else if(k==='-'){ massText = massText.startsWith('-') ? massText.slice(1) : '-'+massText; massFrisch=false; }
+  else if(k==='-'){ j.text = j.text.startsWith('-') ? j.text.slice(1) : '-'+j.text; massFrisch=false; }
   else if(k===','){
-    if(massFrisch){ massText='0,'; massFrisch=false; }
-    else if(!massText.includes(',')) massText=(massText||'0')+',';
+    if(massFrisch){ j.text='0,'; massFrisch=false; }
+    else if(!j.text.includes(',')) j.text=(j.text||'0')+',';
   }
   else if(/^[0-9]$/.test(k)){
-    if(massFrisch){ massText=k; massFrisch=false; }
+    if(massFrisch){ j.text=k; massFrisch=false; }
     else {
-      const nk=massText.split(',')[1];
-      if(nk!=null && nk.length>=3) return;              // feiner als Millimeter misst niemand
-      if(nk==null && massText.length>=6) return;
-      massText = (massText==='0' ? '' : massText) + k;  // führende Null nicht mitschleppen
+      const nk=j.text.split(',')[1];
+      if(nk!=null && nk.length>=3) return;          // feiner als Millimeter misst niemand
+      if(nk==null && j.text.length>=6) return;
+      j.text = (j.text==='0' ? '' : j.text) + k;    // führende Null nicht mitschleppen
     }
   }
   massZeigen();
 }
-/* Ein Messwert, während die Seite offen ist: er geht in die ANZEIGE. Danach steht die
-   Seite wieder auf „frisch", eine getippte Ziffer ersetzt ihn also — genau wie bei einem
-   Wert, der beim Aufmachen schon im Feld stand. */
+/* Ein Messwert, während die Seite offen ist: er geht in die ANZEIGE des angewählten
+   Maßes. Danach steht die Seite wieder auf „frisch", eine getippte Ziffer ersetzt ihn
+   also — genau wie bei einem Wert, der beim Aufmachen schon im Feld stand. */
 function massMesswert(m){
-  massText=massKurz(m); massFrisch=true; massZeigen();
-  const a=$('#massAnzeige'); if(!a) return;
-  a.style.background='#e7f7f0';
-  setTimeout(()=>{ a.style.background=''; }, 600);
+  const j=massJetzt(); if(!j) return;
+  j.text=massKurz(m); massFrisch=true; massZeigen();
+  const a=$('#massAnzeige .massreihe.an'); if(!a) return;
+  a.classList.add('blitz');
+  setTimeout(()=>a.classList.remove('blitz'), 600);
 }
+/* „Übernehmen" nimmt ALLE geänderten Maße mit — man kann sich also durch die Felder
+   tippen und am Ende einmal bestätigen. Unangetastete bleiben unangetastet: das ist
+   nicht nur schneller, es verhindert auch, dass ein bloßes Draufschauen etwa ein
+   Objektmaß von der Zeichnung abkoppelt. */
 function massAnwenden(){
-  const el=massZiel;
+  const offen=massFelder.filter(f=>f.text!==f.start);
   massSchliessen();
-  if(!el || !document.body.contains(el)) return;
-  el.value=massText;
-  el.dispatchEvent(new Event('input', {bubbles:true}));
-  /* Enter zuerst: „Manuell (m)" im Laser-Panel und „Maßstab setzen" hören
-     ausschließlich darauf (dieselbe Not wie bei der Leiste über der Tastatur). */
-  el.dispatchEvent(new KeyboardEvent('keydown',
-    {key:'Enter', code:'Enter', keyCode:13, which:13, bubbles:true, cancelable:true}));
-  if(!document.body.contains(el)) return;      // Enter hat die Seitenleiste neu gebaut
-  el.dispatchEvent(new Event('change', {bubbles:true}));
+  offen.forEach(f=>{
+    const el=(f.schluessel && document.querySelector(f.schluessel))
+          || (f.el && document.body.contains(f.el) ? f.el : null);
+    if(!el) return;
+    el.value=f.text;
+    el.dispatchEvent(new Event('input', {bubbles:true}));
+    /* Enter zuerst: „Manuell (m)" im Laser-Panel und „Maßstab setzen" hören
+       ausschließlich darauf (dieselbe Not wie bei der Leiste über der Tastatur). */
+    el.dispatchEvent(new KeyboardEvent('keydown',
+      {key:'Enter', code:'Enter', keyCode:13, which:13, bubbles:true, cancelable:true}));
+    if(!document.body.contains(el)) return;    // Enter hat die Seitenleiste neu gebaut
+    el.dispatchEvent(new Event('change', {bubbles:true}));
+  });
 }
 $('#massTasten').addEventListener('click', e=>{
   const b=e.target.closest('button[data-k]');
   if(b) massTaste(b.dataset.k);
 });
+// Ein Tipp auf eine Reihe schaltet auf dieses Maß um
+$('#massAnzeige').addEventListener('click', e=>{
+  const b=e.target.closest('.massreihe');
+  if(b) massWechseln(+b.dataset.i);
+});
 $('#massAb').onclick=massSchliessen;
 $('#massStd').onclick=()=>{
-  if(!massStdText) return;
-  massText=massStdText; massFrisch=true; massZeigen();
+  const j=massJetzt();
+  if(!j || !j.std) return;
+  j.text=j.std; massFrisch=true; massZeigen();
 };
-dlgMass.addEventListener('close', ()=>{ massZiel=null; });
+dlgMass.addEventListener('close', ()=>{ massFelder=[]; massAktiv=0; });
 dlgMass.addEventListener('keydown', e=>{
   const k=e.key;
   if(k==='Enter'){ e.preventDefault(); massAnwenden(); return; }
   if(k==='Backspace'){ e.preventDefault(); massTaste('zurueck'); return; }
-  if(k==='Delete'){ e.preventDefault(); massTaste('leer'); return; }
+  // Tab und Pfeile gehen durch die Maße derselben Seite
+  if(k==='Tab' || k==='ArrowDown' || k==='ArrowUp'){
+    e.preventDefault();
+    const vor = k==='ArrowUp' || (k==='Tab' && e.shiftKey) ? -1 : 1;
+    massWechseln((massAktiv+vor+massFelder.length) % massFelder.length);
+    return;
+  }
   if(k===',' || k==='.'){ e.preventDefault(); massTaste(','); return; }
   if(k==='-'){ e.preventDefault(); massTaste('-'); return; }
   if(/^[0-9]$/.test(k)){ e.preventDefault(); massTaste(k); }
