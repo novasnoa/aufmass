@@ -484,20 +484,29 @@
   .raeder{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:10px 0 4px;}
   .radfeld{display:flex; flex-direction:column; gap:3px; min-width:0;}
   .radtitel{font-size:12px; color:var(--muted);}
-  /* Das Band markiert die Mitte — ohne es sähe das Rad aus wie eine Liste. */
+  /* Nur EINE Zeile hoch. Die Nachbarwerte darüber und darunter waren hübsch, kosteten
+     aber 68 px, die im Vollbild woanders fehlen — und was oben und unten steht, sieht
+     man ohnehin, sobald man anfängt zu wischen. Der Winkel rechts sagt, dass es geht. */
   .radbox{position:relative;}
-  /* 104 = 3 × 34 Zeilen + die beiden 1-px-Rahmen. Das Band sitzt darum bei 35, nicht
-     bei 34 — der obere Rahmen schiebt den Inhalt um ein Pixel nach unten. */
-  .radband{position:absolute; left:0; right:0; top:35px; height:34px; pointer-events:none;
-    border-top:1px solid var(--accent); border-bottom:1px solid var(--accent);}
-  .rad{height:104px; border:1px solid var(--line); border-radius:9px; background:#f7f8fa;
+  .radbox::after{content:'⌄'; position:absolute; right:9px; top:50%; margin-top:-11px;
+    color:var(--muted); font-size:14px; pointer-events:none;}
+  .rad{height:42px; border:1px solid var(--line); border-radius:9px; background:#f7f8fa;
     overflow-y:auto; scroll-snap-type:y mandatory; overscroll-behavior:contain;
     scrollbar-width:none; -webkit-overflow-scrolling:touch;}
   .rad::-webkit-scrollbar{display:none;}
-  .rad div{height:34px; display:flex; align-items:center; justify-content:center;
-    scroll-snap-align:center; font-size:15px; color:var(--muted); white-space:nowrap;}
-  .rad div.an{color:var(--ink); font-weight:600; font-size:16px;}
-  .rad div.leer{scroll-snap-align:none;}
+  /* Ohne Leerzeilen oben und unten: bei einer sichtbaren Zeile erreicht jeder Wert die
+     Mitte von allein, und `scrollTop = index × RAD_H` bleibt die einfache Rechnung. */
+  .rad div{height:40px; display:flex; align-items:center; justify-content:center;
+    scroll-snap-align:center; font-size:16px; font-weight:600; color:var(--ink);
+    white-space:nowrap;}
+  /* Beim Abschlag sagt die Farbe, was vorher als Zeile darunter stand: grün = das ist
+     der laufende Abschlag, grau = ein anderer. Jede Zeile trägt ihre eigene Farbe, man
+     sieht die Auskunft also schon beim Rollen und nicht erst nach dem Loslassen. */
+  #radAbschlag div{color:var(--muted);}
+  #radAbschlag div.laufend{color:var(--accent2);}
+  /* Der Kopieren-Knopf steht in einer Zelle des Maßrasters und soll darum genauso hoch
+     sein wie ein Feld daneben. */
+  #lvKopieren{min-height:32px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   /* Große Schalter statt Kontrollkästchen. `:has()` allein wäre knapp — Bluefy hängt
      an der iPadOS-Version des Geräts —, darum setzt das Skript zusätzlich `.an`. */
   .schalter{display:grid; grid-template-columns:1fr; gap:6px;}
@@ -509,14 +518,29 @@
   .schalter label.an, .schalter label:has(input:checked){
     border-color:var(--accent); background:#eef4ff; color:var(--accent); font-weight:600;}
   .schalter input{position:absolute; opacity:0; width:0; height:0; pointer-events:none;}
+  .schalter + .schalter{margin-top:6px;}
   /* Der kleine Knopf hinter Länge und Höhe — quadratisch, damit die Zeile nicht bricht */
   .mini{flex:0 0 40px; padding:0; font-size:15px;}
   #dlgLv .grid2 .row{flex-wrap:nowrap; margin-bottom:0;}
-  #dlgLv .grid2 .row input{min-width:0;}
-  /* Am Telefon ist eine Spalte des Zweispalters rund 160 px breit — Beschriftung,
-     Feld und der kleine Knopf passen dort nicht nebeneinander, der Knopf rutschte in
-     die nächste Zeile. Untereinander hat jede Zeile die volle Breite. */
-  @media (max-width:640px){ #dlgLv .grid2{grid-template-columns:1fr;} }
+  #dlgLv .grid2 .row input{min-width:0; text-align:right;}
+  /* Kurze Beschriftungen statt „Länge in m". Nur so bleiben zwei Spalten auch auf
+     375 px möglich: eine Spalte ist dort rund 165 px breit, und „Durchmesser" allein
+     hätte 78 davon belegt. ⌀ ist genormt (ISO 3461); L, B und H sind die Kurzform,
+     die im Aufmaß ohnehin überall steht. Der volle Name hängt im `title`. */
+  .row label.sym{min-width:24px; flex:0 0 auto; font-size:15px; font-weight:600;
+    color:var(--ink); text-align:center;}
+  /* Am Telefon nimmt der Dialog den ganzen Schirm: über dem Plan schwebend blieb für
+     das Panel ein Streifen, und die Tastatur schob den Rest aus dem Bild. Die Höhe
+     setzen wir NUR hier, nicht über `height:fit-content` — das hatte die Maßseite in
+     Bluefy schon einmal unsichtbar gemacht. */
+  @media (max-width:640px){
+    #dlgLv{width:100vw; max-width:100vw; height:100vh; height:100dvh; max-height:100dvh;
+      margin:0; border-radius:0;}
+    #dlgLv[open]{display:flex; flex-direction:column;}
+    #dlgLv .dbody{flex:1 1 auto; min-height:0; max-height:none; overflow-y:auto;}
+    #dlgLv .dfoot{padding-bottom:calc(10px + env(safe-area-inset-bottom));}
+    #dlgLv .dfoot .btn{flex:1; padding:12px;}
+  }
   fieldset{border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin:8px 0;}
   legend{font-size:12px; color:var(--muted); padding:0 4px;}
 
@@ -761,14 +785,16 @@
          und bleiben die Quelle der Wahrheit — jeder vorhandene Handler liest weiter
          `#lvAbschlag` bzw. `#lvEinheit`, das Rad schreibt nur hinein. -->
     <div class="raeder">
+      <!-- Die Zeile „laufender Abschlag" darunter ist weg: dieselbe Auskunft steckt
+           jetzt in der Farbe. Grün heißt „das ist der laufende Abschlag", grau heißt
+           „ein anderer" — beim Rollen sieht man sofort, wo man landet. -->
       <div class="radfeld">
         <span class="radtitel">Abschlag</span>
-        <div class="radbox"><div class="rad" id="radAbschlag"></div><div class="radband"></div></div>
-        <span class="hint" id="lvAbschlagHint"></span>
+        <div class="radbox"><div class="rad" id="radAbschlag"></div></div>
       </div>
       <div class="radfeld">
         <span class="radtitel">Einheit</span>
-        <div class="radbox"><div class="rad" id="radEinheit"></div><div class="radband"></div></div>
+        <div class="radbox"><div class="rad" id="radEinheit"></div></div>
       </div>
     </div>
     <input id="lvAbschlag" type="number" min="1" step="1" hidden>
@@ -782,19 +808,21 @@
     <!-- „in m" stand hinter jedem Feld und sagte nichts: die Einheit steht im Rad
          darüber, und gemessen wird in dieser App ausschließlich in Metern. -->
     <div class="grid2">
-      <div class="row"><label>Menge</label><input id="lvMenge" class="laser" value="1"></div>
-      <div class="row"><label>Durchmesser</label><input id="lvD" class="laser"></div>
+      <div class="row"><label class="sym">St.</label><input id="lvMenge" class="laser" value="1"></div>
+      <div class="row"><label class="sym">B</label><input id="lvB" class="laser"></div>
       <!-- Die beiden Raum-Knöpfe stehen jetzt an dem Feld, das sie füllen. -->
-      <div class="row"><label>Länge</label><input id="lvL" class="laser">
-        <button class="btn small mini" id="lvUmfangRaum" title="Deckenumfang des Raums in dieses Feld">⭘</button></div>
-      <div class="row"><label>Höhe</label><input id="lvH" class="laser">
-        <button class="btn small mini" id="lvHoeheRaum" title="Deckenhöhe des Raums in dieses Feld">↕</button></div>
-      <div class="row"><label>Breite</label><input id="lvB" class="laser"></div>
+      <div class="row"><label class="sym">L</label><input id="lvL" class="laser">
+        <button class="btn small mini" id="lvUmfangRaum">▭</button></div>
+      <div class="row"><label class="sym">H</label><input id="lvH" class="laser">
+        <button class="btn small mini" id="lvHoeheRaum">↕</button></div>
+      <div class="row"><label class="sym">⌀</label><input id="lvD" class="laser"></div>
+      <!-- Kopieren sitzt in der freien Zelle neben dem Durchmesser statt in einer
+           eigenen Zeile darunter — gleiche Größe wie ein Maßfeld. -->
+      <div class="row"><label class="sym"></label><button class="btn small" id="lvKopieren" style="flex:1">⧉ In Räume</button></div>
       <!-- „Umfang in m" gab es hier bis 2026-08-05. Es war ein totes Feld: keine
            einzige Einheit hat je damit gerechnet (siehe `lvCalc`), der Umfang gehört
            über den Knopf an der Länge in die LÄNGE. -->
     </div>
-    <div class="row"><button class="btn small" id="lvKopieren" style="flex:1">⧉ In Räume kopieren</button></div>
 
     <fieldset id="lvRichtFeld"><legend>Flächenrichtungen</legend>
       <div class="schalter drei">
@@ -807,11 +835,13 @@
       </div>
     </fieldset>
     <fieldset><legend>Automatik</legend>
-      <div class="schalter zwei">
+      <!-- An einer Wand gibt es weder Grund- noch Ansichtsfläche zu übernehmen: die
+           gehören dem Raum. Dort stehen an dieser Stelle die beiden Kopplungen. -->
+      <div class="schalter zwei" id="lvFlaechenZeile">
         <label><input type="checkbox" id="lvNutzGrund"><span>Grundfläche</span></label>
         <label title="Alle Wände + Decke + Boden: 2 × Grundfläche + Umfang × Raumhöhe"><input type="checkbox" id="lvNutzAnsicht"><span>Ansichtsfläche</span></label>
       </div>
-      <div class="schalter zwei" style="margin-top:6px">
+      <div class="schalter zwei" id="lvKopplungZeile">
         <label id="lvAutoLZeile" title="Wird die Wand gezogen oder ihre Länge getippt, zieht dieses Maß mit"><input type="checkbox" id="lvAutoL"><span>Länge folgt der Wand</span></label>
         <label id="lvAutoHZeile" title="Wird die Raumhöhe geändert, zieht dieses Maß mit"><input type="checkbox" id="lvAutoH"><span>Höhe folgt dem Raum</span></label>
       </div>
@@ -6168,7 +6198,7 @@ function lvZielAnzeige(){
   /* Kopieren gibt es am Raum und (seit 2026-08-04) an der Wand. An Objekten, Türen und
      Fenstern nicht: dort hinge die Kopie an einem Bauteil, das es anderswo nicht gibt. */
   $('#lvKopieren').style.display = lvObjId ? 'none' : '';
-  $('#lvKopieren').textContent = lvPresetWall!=null ? '⧉ Auf Wände kopieren' : '⧉ In Räume kopieren';
+  $('#lvKopieren').textContent = lvPresetWall!=null ? '⧉ Auf Wände' : '⧉ In Räume';
   /* Die Zeile „Zuordnung: Erdgeschoss › Raum 2" gibt es seit 2026-08-05 nicht mehr
      (Nutzerwunsch). Sie stand nur da: auswählen ließ sie sich ohnehin nie, sie ergibt
      sich daraus, WO der Dialog geöffnet wurde. Was bleibt, ist die Beschriftung des
@@ -6190,9 +6220,6 @@ function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
   $('#lvKurz').value=a?(a.kurz||''):'';
   // Neue Zuordnungen fallen in den laufenden Abschlag; bestehende lassen sich umhängen
   $('#lvAbschlag').value=a?abschlagVon(a):p.abschlag;
-  $('#lvAbschlagHint').textContent=a
-    ? (abschlagVon(a)<p.abschlag ? `bereits abgerechnet (laufend: ${p.abschlag})` : 'noch offen')
-    : 'laufender Abschlag';
   $('#lvMenge').value=a?fmt3(a.menge):'1';
   $('#lvEinheit').value=a?a.einheit:'Flache';
   $('#lvL').value=a&&isFinite(a.laenge)?fmt3(a.laenge):'';
@@ -6271,21 +6298,18 @@ function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
    `#lvAbschlag` und `#lvEinheit` bleiben als versteckte Felder die Quelle der Wahrheit,
    jeder vorhandene Handler liest weiter dort. Das Rad schreibt nur hinein und löst
    `change` aus — es gibt also keine zweite Stelle, an der derselbe Wert verwaltet wird. */
-const RAD_H=34;                                  // muss zu `.rad div` im CSS passen
+const RAD_H=40;                                  // muss zu `.rad div` im CSS passen
 function radFuellen(box, werte){
-  // Leerzeilen oben und unten, damit auch der erste und letzte Wert in die Mitte rollen
-  box.innerHTML='<div class="leer"></div>'
-    + werte.map(w=>`<div data-w="${esc(String(w.wert))}">${esc(w.text)}</div>`).join('')
-    + '<div class="leer"></div>';
+  box.innerHTML=werte.map(w=>
+    `<div data-w="${esc(String(w.wert))}"${w.klasse?` class="${w.klasse}"`:''}>${esc(w.text)}</div>`).join('');
 }
 function radAufWert(box, wert){
-  const d=[...box.children].filter(x=>!x.classList.contains('leer'));
+  const d=[...box.children];
   const i=Math.max(0, d.findIndex(x=>x.dataset.w===String(wert)));
   box.scrollTop=i*RAD_H;
-  d.forEach((x,k)=>x.classList.toggle('an', k===i));
 }
 function radWert(box){
-  const d=[...box.children].filter(x=>!x.classList.contains('leer'));
+  const d=[...box.children];
   const i=Math.max(0, Math.min(d.length-1, Math.round(box.scrollTop/RAD_H)));
   return d[i] ? d[i].dataset.w : null;
 }
@@ -6298,7 +6322,6 @@ function radKoppeln(box, feldSel){
     clearTimeout(ruht);
     ruht=setTimeout(()=>{
       const w=radWert(box); if(w==null) return;
-      [...box.children].forEach(x=>x.classList.toggle('an', x.dataset.w===w));
       const feld=$(feldSel);
       if(feld && feld.value!==w){ feld.value=w; feld.dispatchEvent(new Event('change',{bubbles:true})); }
     }, 90);
@@ -6311,7 +6334,8 @@ function lvRaederStellen(p, a){
      mehr wäre Vorrat, weniger ließe die bestehende Zuordnung aus dem Rad fallen. */
   const jetzt=Math.max(1, Math.round(parseNum($('#lvAbschlag').value)||1));
   const bis=Math.max(6, (p.abschlag||1)+2, jetzt+2);
-  radFuellen($('#radAbschlag'), Array.from({length:bis}, (_,i)=>({wert:i+1, text:'AZ '+(i+1)})));
+  radFuellen($('#radAbschlag'), Array.from({length:bis}, (_,i)=>
+    ({wert:i+1, text:'AZ '+(i+1), klasse:(i+1)===p.abschlag ? 'laufend' : ''})));
   radFuellen($('#radEinheit'), [...$('#lvEinheit').options].map(o=>({wert:o.value, text:o.textContent})));
   lvRaederNachstellen();
 }
@@ -6335,6 +6359,10 @@ function lvSchalterAuffrischen(){
   });
   // Richtungen zählen nur bei Flächen — bei Länge oder Stück stünden sie nur im Weg
   $('#lvRichtFeld').style.display = $('#lvEinheit').value==='Flache' ? '' : 'none';
+  /* An der Wand gibt es weder Grund- noch Ansichtsfläche zu übernehmen — die gehören
+     dem Raum. Dafür stehen dort die Kopplungen, die es am Raum wiederum nicht gibt.
+     Die beiden Reihen tauschen also einfach den Platz. */
+  $('#lvFlaechenZeile').style.display = lvPresetWall!=null ? 'none' : '';
 }
 dlgLv.addEventListener('change', e=>{
   if(e.target.matches('.schalter input, #lvEinheit')) lvSchalterAuffrischen();
