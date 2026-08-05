@@ -151,23 +151,40 @@
     #massAnzeige{min-height:96px;}
     #massTasten{grid-auto-rows:minmax(42px,58px);}
   }
-  /* ---------- LV-Auswahl: Kapitel als Schalter, Positionen als Kacheln ----------
+  /* ---------- LV-Auswahl: Kapitel im Menü, Positionen als Kacheln ----------
      Die LV-Nummer ist eindeutig, aber niemand sucht danach. Gesucht wird über das
-     Kapitel (in Airtable „Kategorie") und den Kurztext. */
-  .katwahl{display:flex; flex-wrap:wrap; gap:5px; flex:1; min-width:0;}
-  .katwahl button{border:1px solid var(--line); background:#fff; border-radius:14px;
-    padding:3px 10px; font-size:12px; color:var(--muted); white-space:nowrap;}
-  .katwahl button.an{background:var(--accent); border-color:var(--accent); color:#fff;}
-  .katwahl .leer{font-size:11px; color:var(--muted); padding:3px 0;}
+     Kapitel (in Airtable „Kategorie") und den Kurztext.
+     Die Kapitel standen zuerst als Schalterreihe da. Bei zwei Kapiteln ging das; ein
+     echtes LV hat dreißig, und die Reihe wurde zu einem Block, der die Positionsliste
+     nach unten schob. Jetzt: eine Zeile, die das Menü öffnet. */
+  .katbtn{flex:1; min-width:0; text-align:left; border:1px solid var(--line); background:#fff;
+    border-radius:8px; padding:7px 10px; font-size:13px; color:var(--ink);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .katbtn::after{content:' ▾'; color:var(--muted);}
+  /* Das Menü selbst: eine Zeile je Kapitel, Nummer vorn, Haken hinten. Vollbild, weil
+     die Kapitelnamen lang sind („Baustelleneinrichtung allgemein und besonders …") und
+     in einem Aufklapper unter dem Knopf nur als Stummel ankämen. */
+  #dlgKat{background:#fff;}
+  #katListe{flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
+    padding-bottom:calc(10px + env(safe-area-inset-bottom));}
+  .katzeile{width:100%; display:flex; align-items:center; gap:10px; text-align:left;
+    border:none; border-bottom:1px solid var(--line); background:none; padding:11px 14px;
+    font-size:15px; min-height:50px;}
+  .katzeile .nr{flex:0 0 auto; min-width:46px; font-variant-numeric:tabular-nums;
+    color:var(--muted); font-size:12px;}
+  .katzeile .txt{flex:1; min-width:0; white-space:normal; overflow-wrap:anywhere; line-height:1.3;}
+  .katzeile .zahl{flex:0 0 auto; color:var(--muted); font-size:12px;}
+  .katzeile .hak{flex:0 0 16px; color:var(--accent); font-size:15px;}
+  .katzeile.an{background:#eaf1ff;}
+  .katzeile:active{background:#e2e9f5;}
+  .katzeile.leer{color:var(--muted); font-size:13px; justify-content:center;}
   /* Vollbild-Auswahl (Telefon): Suchleiste oben, darunter Kacheln */
   #dlgLvWahl, #dlgLvLang{background:#fff;}
   #lwSuchzeile{display:flex; gap:8px; align-items:center; padding:8px 10px;
     border-bottom:1px solid var(--line); flex:0 0 auto;}
   #lwSuche{flex:1; min-width:0; border:1px solid var(--line); border-radius:9px;
     padding:9px 11px; font-size:16px;}
-  #lwKat{display:flex; gap:5px; overflow-x:auto; padding:6px 10px; flex:0 0 auto;
-    border-bottom:1px solid var(--line); scrollbar-width:none;}
-  #lwKat::-webkit-scrollbar{display:none;}
+  #lwKat{display:flex; padding:6px 10px; flex:0 0 auto; border-bottom:1px solid var(--line);}
   #lwListe{flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
     padding:8px 10px calc(10px + env(safe-area-inset-bottom)); display:flex;
     flex-direction:column; gap:6px;}
@@ -636,8 +653,15 @@
     <input id="lwSuche" type="search" placeholder="Im Kurztext suchen …" autocomplete="off">
     <button class="btn" id="lwZu">Abbrechen</button>
   </div>
-  <div id="lwKat" class="katwahl"></div>
+  <div id="lwKat"><button type="button" class="katbtn" id="lwKatBtn">Alle Kapitel</button></div>
   <div id="lwListe"></div>
+</dialog>
+
+<!-- Kapitelmenü: Mehrfachauswahl, „Alle Kapitel" ganz oben, sortiert nach LV-Nummer -->
+<dialog id="dlgKat" class="vollbild" tabindex="-1">
+  <div class="dhead"><span style="flex:1">Kapitel</span>
+    <button class="btn small" id="katFertig">Fertig</button></div>
+  <div id="katListe"></div>
 </dialog>
 
 <!-- Langtext einer Position: eigene Seite mit „← Zurück" -->
@@ -677,7 +701,7 @@
          Nummer kommt mit der Auswahl und steht sichtbar in der Kopfzeile. -->
     <input id="lvPos" type="hidden">
     <div class="row"><label>Kapitel</label>
-      <div id="lvKatWahl" class="katwahl"></div>
+      <button type="button" class="katbtn" id="lvKatBtn">Alle Kapitel</button>
     </div>
     <div class="row" id="lvKurzZeile"><label>Kurztext</label>
       <span class="sugwrap"><textarea id="lvKurz" rows="2" autocomplete="off" placeholder="Suchen: z. B. spachteln"></textarea><div class="sugbox" id="lvKurzSug"></div></span>
@@ -6077,7 +6101,7 @@ function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
   if(!a) lvGrundAuto();     // neue Raum-Position mit Flächeneinheit → Grundfläche anhaken
   lvFotos = a ? (a.fotos||[]).map(f=>({...f})) : [];
   renderLvFotos();
-  lvKatSchalter('#lvKatWahl'); lvWahlAnzeigen();
+  lvKatKnoepfe(); lvWahlAnzeigen();
   dlgLv.showModal();
   autoGrow($('#lvKurz'));   // erst im geöffneten Dialog messbar
 }
@@ -7674,34 +7698,79 @@ function makeSuggest(inp, box, match, row, onInput, onChoose){
    Kapitel laufen unter „Ohne Kapitel" — sie verschwinden also nicht. */
 const lvKatVon = lv => (proj().lvKat||{})[lv] || '';
 const KAT_OHNE='Ohne Kapitel';
+/* Kapitel sind nummeriert — nur steht die Nummer nirgends als eigenes Feld, sie steckt
+   in den LV-Nummern der Positionen: „1. 2. 29" und „1. 2. 48" gehören zu Kapitel 1.2.
+   Darum wird beides aus den Positionsnummern abgeleitet: der gemeinsame Anfang ist die
+   Kapitelnummer, die kleinste Positionsnummer die Sortierung. Alphabetisch war die
+   falsche Reihenfolge — ein LV liest man von vorn nach hinten, nicht von A nach Z. */
+const lvTeile = lv => String(lv||'').split('.').map(t=>t.trim()).filter(t=>t!=='');
+const lvNormNr = lv => lvTeile(lv).join('.');
+function lvKapNummer(nummern){
+  const teile=nummern.map(lvTeile).filter(t=>t.length);
+  if(!teile.length) return '';
+  let pre=teile[0].slice();
+  teile.forEach(t=>{ let i=0; while(i<pre.length && i<t.length && pre[i]===t[i]) i++; pre=pre.slice(0,i); });
+  // Deckt sich der gemeinsame Anfang mit einer ganzen Positionsnummer, ist das die
+  // Position und nicht das Kapitel (typisch bei Kapiteln mit nur einer Position).
+  if(teile.some(t=>t.length===pre.length)) pre=pre.slice(0,-1);
+  return pre.join('.');
+}
 function lvKategorien(){
-  const zahl=new Map();
-  lvPairs().forEach(it=>{ const k=lvKatVon(it.lv)||KAT_OHNE; zahl.set(k, (zahl.get(k)||0)+1); });
-  return [...zahl.entries()].sort((a,b)=>a[0].localeCompare(b[0],'de'))
-    .map(([name, n])=>({name, n}));
+  const m=new Map();
+  lvPairs().forEach(it=>{
+    const k=lvKatVon(it.lv)||KAT_OHNE;
+    if(!m.has(k)) m.set(k, []);
+    m.get(k).push(it.lv);
+  });
+  return [...m.entries()]
+    .map(([name, nrn])=>({name, n:nrn.length, nr:lvKapNummer(nrn),
+      erste:nrn.map(lvNormNr).sort(lvCmp)[0]||''}))
+    .sort((a,b)=> lvCmp(a.erste, b.erste) || a.name.localeCompare(b.name,'de'));
 }
 let lvKatAktiv=new Set();                       // leer = alle Kapitel
 const lvImKapitel = it => !lvKatAktiv.size || lvKatAktiv.has(lvKatVon(it.lv)||KAT_OHNE);
 const lvAuswahl = () => lvPairs().filter(lvImKapitel);
-/* Die Kapitel-Schalter — dieselben in beiden Ansichten, darum eine Funktion mit Ziel. */
-function lvKatSchalter(ziel){
-  const box=$(ziel); if(!box) return;
-  const kats=lvKategorien();
-  if(kats.length<=1 && !lvKatAktiv.size){       // ein einziges Kapitel: die Reihe hilft nicht
-    box.innerHTML=`<span class="leer">${kats.length?esc(kats[0].name):'Noch keine Positionen geladen'}</span>`;
+/* Das Kapitelmenü — dasselbe für beide Ansichten, darum ein Dialog und zwei Knöpfe,
+   die ihn öffnen. Mehrfachauswahl bleibt: jede Zeile schaltet um, „Alle Kapitel"
+   hebt die Auswahl auf. Der Dialog bleibt dabei offen, man hakt ja meist mehrere ab. */
+const dlgKat=$('#dlgKat');
+function lvKatText(){
+  if(!lvKatAktiv.size) return 'Alle Kapitel';
+  if(lvKatAktiv.size===1){
+    const name=[...lvKatAktiv][0], k=lvKategorien().find(x=>x.name===name);
+    return (k && k.nr ? k.nr+'  ' : '')+name;
+  }
+  return `${lvKatAktiv.size} Kapitel gewählt`;
+}
+function lvKatKnoepfe(){
+  ['#lvKatBtn','#lwKatBtn'].forEach(sel=>{ const b=$(sel); if(b) b.textContent=lvKatText(); });
+}
+function katMenue(){
+  const kats=lvKategorien(), box=$('#katListe');
+  if(!kats.length){
+    box.innerHTML='<div class="katzeile leer">Noch keine Positionen geladen.</div>';
     return;
   }
-  box.innerHTML=`<button type="button" data-kat="" class="${lvKatAktiv.size?'':'an'}">Alle</button>`+
-    kats.map(k=>`<button type="button" data-kat="${esc(k.name)}"
-      class="${lvKatAktiv.has(k.name)?'an':''}">${esc(k.name)} <b>${k.n}</b></button>`).join('');
+  box.innerHTML=`<button type="button" class="katzeile${lvKatAktiv.size?'':' an'}" data-kat="">
+      <span class="nr"></span><span class="txt">Alle Kapitel</span>
+      <span class="zahl">${kats.reduce((s,k)=>s+k.n,0)}</span>
+      <span class="hak">${lvKatAktiv.size?'':'✓'}</span></button>`+
+    kats.map(k=>{ const an=lvKatAktiv.has(k.name); return `
+      <button type="button" class="katzeile${an?' an':''}" data-kat="${esc(k.name)}">
+        <span class="nr">${esc(k.nr)}</span><span class="txt">${esc(k.name)}</span>
+        <span class="zahl">${k.n}</span><span class="hak">${an?'✓':''}</span></button>`; }).join('');
   box.querySelectorAll('[data-kat]').forEach(b=>b.onclick=()=>{
     const k=b.dataset.kat;
-    if(!k) lvKatAktiv.clear();                  // „Alle" hebt die Auswahl auf
+    if(!k) lvKatAktiv.clear();                  // „Alle Kapitel" hebt die Auswahl auf
     else if(lvKatAktiv.has(k)) lvKatAktiv.delete(k); else lvKatAktiv.add(k);
-    lvKatSchalter(ziel);
-    if(ziel==='#lwKat') lvWahlListe();
+    katMenue(); lvKatKnoepfe();
+    if(dlgLvWahl.open) lvWahlListe();
   });
 }
+function katOeffnen(){ katMenue(); if(!dlgKat.open) dlgKat.showModal(); }
+$('#lvKatBtn').onclick=katOeffnen;
+$('#lwKatBtn').onclick=katOeffnen;
+$('#katFertig').onclick=()=>dlgKat.close();
 // Kurztext: Suche im ganzen Text, begrenzt auf die gewählten Kapitel
 makeSuggest($('#lvKurz'), $('#lvKurzSug'),
   (it,q)=>it.kurz && lvImKapitel(it) && (!q || it.kurz.toLowerCase().includes(q)),
@@ -7734,7 +7803,7 @@ function lvWahlListe(){
   const box=$('#lwListe');
   if(!treffer.length){
     box.innerHTML=`<div id="lwLeer">Nichts gefunden.${
-      lvKatAktiv.size?'<br>Vielleicht steht die Position in einem anderen Kapitel — „Alle" antippen.':''}</div>`;
+      lvKatAktiv.size?'<br>Vielleicht steht die Position in einem anderen Kapitel — oben „Alle Kapitel" wählen.':''}</div>`;
     return;
   }
   box.innerHTML=treffer.map((it,i)=>`<div class="lwkachel${it.lv===jetzt?' an':''}">
@@ -7759,11 +7828,15 @@ function lvWahlListe(){
 }
 function lvWahlOeffnen(){
   $('#lwSuche').value='';
-  lvKatSchalter('#lwKat'); lvWahlListe();
+  lvKatKnoepfe(); lvWahlListe();
   if(!dlgLvWahl.open) dlgLvWahl.showModal();
-  // Auf dem Telefon NICHT von selbst in die Suche springen: sonst verdeckt die Tastatur
-  // sofort die halbe Kachelliste, obwohl man meist nur scrollen will.
-  if(innerWidth>640) setTimeout(()=>$('#lwSuche').focus(), 40);
+  /* Der Cursor springt nur dort von selbst ins Suchfeld, wo eine echte Tastatur steht.
+     Auf jedem Bildschirm zum Anfassen — Telefon wie iPad — fährt sonst die Tastatur
+     hoch und verdeckt die halbe Kachelliste, obwohl man meist nur wischen will.
+     Die Fensterbreite taugt als Unterscheidung nicht: das iPad ist breiter als 640.
+     `fingerGeraet` ist dieselbe Abfrage, die schon über die Tastenleiste entscheidet —
+     eine Stelle, an der wir „Bildschirm zum Anfassen" bestimmen, nicht zwei. */
+  if(!fingerGeraet) setTimeout(()=>$('#lwSuche').focus(), 40);
 }
 $('#lvWahlBtn').onclick=lvWahlOeffnen;
 $('#lwZu').onclick=()=>dlgLvWahl.close();
