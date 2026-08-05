@@ -2669,14 +2669,19 @@ function renderCanvas(){
            verdeckt sie nicht mehr, die zieht `pointerdown` über `elementsFromPoint` vor. */
         if(dQ>0) out+=`<path d="M ${a.x} ${a.y} L ${b.x} ${b.y} L ${b.x+anQ.x*dQ} ${b.y+anQ.y*dQ}`+
           ` L ${a.x+anQ.x*dQ} ${a.y+anQ.y*dQ} Z" fill="transparent" data-roomid="${r.id}" data-wall="${i}" style="cursor:pointer"/>`;
+        /* Maßzahlen sind anfassbar: Ein Tipp öffnet die Maßseite mit der Maßkette dieser
+           Wand (`massVomPlan`). Vorher wählte er nur die Wand aus — dasselbe, was ein
+           Tipp auf die Wand selbst tut, also ein Weg umsonst. */
+        const dbasis = offen ? ` data-roomid="${r.id}" style="cursor:pointer"` : '';
         const dopts={color:isSelW?'#2f6fed':'#8a93a5', tcol:isSelW?'#2f6fed':'#4a5468', bold:isSelW, fs:lbl*0.9,
           wand:wandDicke(r,i),
           lock:!imDruck && wandGesperrt(r,i),   // Schloss vor der Maßzahl — nur Bildschirm
-          data: offen ? ` data-roomid="${r.id}" data-wall="${i}" style="cursor:pointer"` : ''};
+          data: offen ? ` data-massw="${i}"`+dbasis : ''};
         const segs=wallChainCuts(r,i);
         if(segs.length>1){
           // Wand mit Türen/Fenstern: Maßkette (Abstand – Öffnung – Abstand) + Gesamtmaß in zweiter Reihe
-          segs.forEach(([p,q])=>{ out+=dimSvg(p, q, nx, ny, lbl, {...dopts, fs:lbl*0.8, lock:false}); });
+          segs.forEach(([p,q],k)=>{ out+=dimSvg(p, q, nx, ny, lbl, {...dopts, fs:lbl*0.8, lock:false,
+            data: offen ? ` data-massseg="${i}:${k}"`+dbasis : ''}); });
           out+=dimSvg(a, b, nx, ny, lbl, {...dopts, off:lbl*3.4});
         } else {
           out+=dimSvg(a, b, nx, ny, lbl, dopts);
@@ -3564,6 +3569,12 @@ svg.addEventListener('pointerdown', e=>{
   }
   let t=e.target;
   merkPunkt=null;          // hält nur bis zum nächsten Klick — die Zweige unten setzen ihn neu
+  /* Maßzahl angetippt → Maßseite mit der Maßkette dieser Wand. Steht vor allem
+     anderen: die Maßlinie liegt außerhalb des Raums, ohne diesen Zweig fiele der Tipp
+     in den Schiebe-Zweig. */
+  if(!zoneEdit && t.dataset && (t.dataset.massw!==undefined || t.dataset.massseg!==undefined)){
+    zyklus=null; massVomPlan(t); return;
+  }
   /* Unter dem Finger liegen oft mehrere Bauteile übereinander — Objektgriff auf einer
      Wand, Tür in der Wand, Ecke am Wandende. `kandidatenUnter` sammelt sie in der
      bisherigen Rangfolge (Griff → Objekt → Öffnung → Ecke → Wand), damit der ERSTE Tipp
@@ -4384,6 +4395,18 @@ const opName = o => o && o.type==='door' ? 'Tür' : 'Fenster';
    gesperrte Wand darf davon NICHT betroffen sein: solche Änderungen werden
    abgelehnt. Direkt geändert werden kann sie weiterhin, aber nur nach Rückfrage. */
 const wandGesperrt = (r,i) => !!(r.wallLock||{})[i];
+/* Ein Maß einer Tür/eines Fensters setzen — von überall her dieselbe Stelle: aus dem
+   Panel (`.opfld`) und aus der Maßkette im Plan. Die Raumsperre steht hier und nicht
+   nur als `disabled` im Feld, weil Laser und Maßseite den Wert per `dispatchEvent`
+   bzw. direkt setzen und an einem `disabled` vorbeigingen. */
+function oeffnungSetzen(r, o, feld, v){
+  if(!r || !o || !isFinite(v) || v<0) return false;
+  if(!raumOffen(r)){ melde('Das Aufmaß ist gesperrt — Maß nicht geändert.', true); renderAll(); return false; }
+  raumBeruehrt(r);
+  o[feld]=mm(v);
+  pushDoorToPartner(r,o); save(); renderAll();
+  return true;
+}
 const wandLaengeVon = (pts,i) => dist(pts[i], pts[(i+1)%pts.length]);
 /* Setzt die Wandlänge. Die Änderung fängt bevorzugt eine PARALLELE Wand ab: sie
    wächst oder schrumpft nur, alles dazwischen wird starr mitgeschoben. Gewählt wird
@@ -4410,10 +4433,12 @@ function setWallLength(r, i, L){
       && Math.abs(wandLaengeVon(neu,k)-wandLaengeVon(p,k))>0.0005);
   // Parallele, nicht gesperrte Wände als Abfang-Kandidaten, entfernteste zuerst
   const kandidaten=[];
+  let parallelGesperrt=false;        // gegenüber liegt ein Schloss — dann geben die Winkel nach
   for(let j=0;j<n;j++){
-    if(j===i || wandGesperrt(r,j)) continue;
+    if(j===i) continue;
     const A=p[j], B=p[(j+1)%n], l=dist(A,B); if(l<1e-6) continue;
     if(Math.abs(((B.x-A.x)*ux+(B.y-A.y)*uy)/l)<0.99) continue;   // nicht parallel
+    if(wandGesperrt(r,j)){ parallelGesperrt=true; continue; }
     const abst=Math.abs(((A.x+B.x)/2-(a.x+b.x)/2)*-uy + ((A.y+B.y)/2-(a.y+b.y)/2)*ux);
     kandidaten.push({j, abst});
   }
@@ -4429,17 +4454,60 @@ function setWallLength(r, i, L){
     syncSharedDoors(); save();
     return true;
   }
+  /* Liegt gegenüber eine GESPERRTE parallele Wand, ist die Sache klar: die soll bleiben,
+     wie sie ist, also geben die Winkel nach. Der alte Rückfall würde stattdessen die
+     Schlusswand verziehen — an einem Trapez mit gemessener Grundlinie das Falsche. */
+  if(parallelGesperrt) return winkelWeg(r, i, L, ux, uy, L-cur);
   // Rückfall: altes Verhalten — die Schlusswand verzieht sich
   const neu=p.map(q=>({...q}));
   for(let k=i+1;k<n;k++){ neu[k].x+=dx; neu[k].y+=dy; }
-  const kollision=gesperrtVerletzt(neu);
-  if(kollision.length){
-    melde(`Nicht geändert: Wand ${kollision.map(k=>k+1).join(', ')} ist gesperrt und würde `+
-      `mitwandern. Erst dort das Schloss öffnen.`, true);
+  if(!gesperrtVerletzt(neu).length){
+    r.points=neu;
+    syncSharedDoors(); save();
+    return true;
+  }
+  // Letzter Weg: nur die eigenen Endpunkte bewegen — die Nachbarwände kippen mit
+  return winkelWeg(r, i, L, ux, uy, L-cur);
+}
+/* ---------- Wenn nichts mehr geht: die Winkel geben nach (seit 2026-08-05) ----------
+   Steht der gegenüberliegenden Wand ein Schloss im Weg, hieß es bisher schlicht „nicht
+   geändert". Beim Trapez ist das aber der Normalfall: unten gemessen und gesperrt, oben
+   soll trotzdem die neue Länge stehen. Dann wandert **nur ein Endpunkt der Wand
+   selbst** — alle anderen Ecken bleiben, wo sie sind, und die anstoßenden Wände ändern
+   ihren Winkel. Die gesperrte Wand wird dabei nicht angefasst.
+
+   Welcher Endpunkt gibt nach? **Zuerst der mit dem schiefen Winkel** — dort ist ohnehin
+   kein rechter Winkel zu verlieren. Sind beide Ecken rechtwinklig (oder beide schief),
+   teilen sie sich die Änderung zu gleichen Teilen. Ein Endpunkt, dessen Nachbarwand
+   gesperrt ist, bleibt außen vor: sie würde beim Kippen ihre Länge ändern. */
+function winkelWeg(r, i, L, ux, uy, d){
+  const p=r.points, n=p.length;
+  const iA=i, iB=(i+1)%n;                      // Ecken der Wand
+  const wandVor=(i-1+n)%n, wandNach=(i+1)%n;   // Wände, die an ihnen hängen
+  const kand=[];
+  if(!wandGesperrt(r, wandVor))  kand.push({ecke:iA, vz:-1, gerade:winkelGerade((eckWinkel(r,iA)||{}).grad)});
+  if(!wandGesperrt(r, wandNach)) kand.push({ecke:iB, vz:+1, gerade:winkelGerade((eckWinkel(r,iB)||{}).grad)});
+  if(!kand.length){
+    melde('Nicht geändert: an beiden Enden dieser Wand ist eine gesperrte Wand — '+
+      'dort erst das Schloss öffnen.', true);
     return false;
   }
+  const schief=kand.filter(k=>!k.gerade);
+  const nehmen=schief.length ? schief : kand;          // erst die schiefen Ecken
+  const teil=d/nehmen.length;
+  const neu=p.map(q=>({...q}));
+  nehmen.forEach(k=>{ neu[k.ecke]={x:neu[k.ecke].x+ux*teil*k.vz, y:neu[k.ecke].y+uy*teil*k.vz}; });
+  // Keine Nachbarwand darf dabei verschwinden — sonst entsteht ein entarteter Raum
+  const zuKurz=nehmen.some(k=>{
+    const w=(k.vz<0) ? wandVor : wandNach;
+    return wandLaengeVon(neu, w) < 0.05;
+  });
+  if(zuKurz){ melde('Nicht geändert: eine Nachbarwand würde dabei verschwinden.', true); return false; }
   r.points=neu;
   syncSharedDoors(); save();
+  melde(nehmen.length>1
+    ? 'Die gesperrte Wand bleibt — die Länge verteilt sich auf beide Ecken, die Winkel ändern sich.'
+    : `Die gesperrte Wand bleibt — Ecke ${nehmen[0].ecke+1} gibt nach, der Winkel ändert sich.`);
   return true;
 }
 /* Zieht man eine Ecke oder eine Wand im Plan, ändern sich Nachbarwände mit —
@@ -5520,11 +5588,7 @@ function wireSidebar(r){
     document.querySelectorAll('.opfld').forEach(inp=>{
       inp.onchange=()=>{
         const o=r.openings.find(o=>o.id===inp.dataset.op); if(!o) return;
-        // wie bei der Wandlänge: der Laser umgeht `disabled`, die Sperre gehört hierher
-        if(!raumOffen(r)){ melde('Das Aufmaß ist gesperrt — Maß nicht geändert.', true); renderAll(); return; }
-        raumBeruehrt(r);
-        const v=parseNum(inp.value);
-        if(isFinite(v)&&v>=0){ o[inp.dataset.f]=v; pushDoorToPartner(r,o); save(); renderAll(); }
+        oeffnungSetzen(r, o, inp.dataset.f, parseNum(inp.value));
       };
     });
     document.querySelectorAll('.opdel').forEach(btn=>{
@@ -10302,6 +10366,73 @@ function massEintrag(el){
   return {schluessel:massSchluessel(el), el, name:massNameVon(el), einh:massEinhVon(el),
           text, start:text, std: std==null ? text : massKurz(std)};
 }
+/* ---------- Maße aus dem Plan (Ticket „Man kann Messungen anwählen") ----------
+   Ein Tipp auf eine Maßzahl im Plan öffnet die Maßseite mit der ganzen Maßkette dieser
+   Wand: Länge, dann je Öffnung „Abstand" und „Breite" und zum Schluss „Rest bis zur
+   Ecke" — genau die Zahlen, die auch im Plan stehen. Angetippt ist das Maß, das man
+   getroffen hat; die übrigen stehen darunter und sind einen Tipp entfernt.
+
+   Die **Länge** kommt aus dem echten Feld `#wlen` (die Wand wird vorher angewählt) und
+   läuft damit durch dieselben Handler wie im Panel — samt Rückfrage bei gesperrter Wand.
+   Alles Übrige sind Einträge mit `setz`, die über `oeffnungSetzen` gehen; dort steckt
+   auch die Prüfung auf die Raumsperre. `t0`/`t1` sagen, welches Stück der Wand ein
+   Eintrag meint — darüber findet der Tipp auf ein Kettenglied seinen Eintrag. */
+function wandMassKette(r, i){
+  const [a,b]=wallPoints(r,i), L=dist(a,b);
+  const liste=[];
+  const feld=$('#wlen');
+  if(feld) liste.push({...massEintrag(feld), name:'Wandlänge', t0:0, t1:L});
+  const virt=(name, wert, t0, t1, setz)=>liste.push({
+    name, einh:'m', text:massKurz(wert), start:massKurz(wert), std:massKurz(wert), t0, t1, setz});
+  const offs=(r.openings||[]).filter(o=>o.wall===i)
+    .map(o=>({o, t0:Math.max(0, Math.min(o.offset, L-o.width))}))
+    .sort((x,y)=>x.t0-y.t0);
+  let vor=0;
+  offs.forEach(({o, t0})=>{
+    const was=o.type==='door'?'Tür':'Fenster';
+    if(t0-vor>0.001){
+      const ab=vor;                       // von hier aus wird gemessen
+      virt(`Abstand bis ${was}`, t0-vor, vor, t0,
+        w=>{ const v=parseNum(w); if(isFinite(v)) oeffnungSetzen(r, o, 'offset', ab+v); });
+    }
+    virt(`${was} Breite`, o.width, t0, t0+o.width,
+      w=>{ const v=parseNum(w); if(isFinite(v) && v>0) oeffnungSetzen(r, o, 'width', v); });
+    vor=t0+o.width;
+  });
+  if(offs.length && L-vor>0.001){
+    const letzte=offs[offs.length-1].o;
+    virt('Rest bis zur Ecke', L-vor, vor, L,
+      w=>{ const v=parseNum(w); if(isFinite(v) && v>=0)
+        oeffnungSetzen(r, letzte, 'offset', Math.max(0, L-v-letzte.width)); });
+  }
+  return liste;
+}
+/* Tipp auf eine Maßzahl im Plan: Wand anwählen, Maßkette aufmachen, das getroffene
+   Kettenglied vorne. Getroffen wird über die Mitte des Segments — nicht über seine
+   Nummer: ohne Vorabstand gibt es das erste Kettenglied gar nicht, und dann läge die
+   Zählung um eins daneben. */
+function massVomPlan(el){
+  const ds=el.dataset;
+  const r=roomById(ds.roomid)||roomById(focusRoomId); if(!r) return;
+  const seg = ds.massseg!==undefined ? ds.massseg.split(':').map(Number) : null;
+  const i = seg ? seg[0] : +ds.massw;
+  if(!(i>=0 && i<r.points.length)) return;
+  sel={roomId:r.id, wall:i, vertex:null};
+  renderAll();                                   // erst jetzt gibt es `#wlen`
+  const liste=wandMassKette(r, i);
+  let idx=0;
+  if(seg){
+    const [a2,b2]=wallPoints(r,i), Lg=dist(a2,b2);
+    const stueck=wallChainCuts(r,i)[seg[1]];
+    if(stueck){
+      const m=(dist(a2, stueck[0])+dist(a2, stueck[1]))/2;   // Mitte des Segments auf der Wand
+      // Ab 1 gesucht: die Wandlänge spannt über die ganze Wand und passte sonst immer
+      const tr=liste.findIndex((f,ix)=>ix>0 && f.t0!=null && m>f.t0+0.001 && m<f.t1-0.001);
+      if(tr>0 && Lg>0) idx=tr;
+    }
+  }
+  massOeffnenListe(liste, idx, `Wand ${wallNrOf(r,i)||(i+1)} — ${r.name}`);
+}
 function massOffen(){ return !!(dlgMass && dlgMass.open && massJetzt()); }
 function massBtZeigen(){
   const chip=$('#massBt'); if(!chip) return;
@@ -10326,10 +10457,18 @@ function massZeigen(){
 }
 function massOeffnen(el){
   const felder=massGeschwister(el);
-  massFelder=felder.map(massEintrag);
-  massAktiv=Math.max(0, felder.indexOf(el));
+  massOeffnenListe(felder.map(massEintrag), felder.indexOf(el), massOrtVon(el));
+}
+/* Dieselbe Seite für Maße, hinter denen KEIN Eingabefeld steht — etwa die Maßkette im
+   Plan („Abstand", „Breite", „Rest"). Solche Einträge tragen statt `el` ein `setz(wert)`,
+   das weiß, wohin die Zahl gehört. Gemischte Listen sind erlaubt: die Wandlänge kommt
+   weiter aus `#wlen` und läuft damit durch dieselben Handler wie im Panel. */
+function massOeffnenListe(liste, i, ort){
+  if(!liste || !liste.length) return;
+  massFelder=liste;
+  massAktiv=Math.max(0, Math.min(i<0?0:i, liste.length-1));
   massFrisch=true;                       // die erste Ziffer ersetzt den alten Wert
-  $('#massName').textContent=massOrtVon(el) || massFelder[massAktiv].name;
+  $('#massName').textContent=ort || massFelder[massAktiv].name;
   $('#massOrt').textContent=massFelder.length>1 ? massFelder.length+' Maße' : '';
   massBtZeigen(); massZeigen();
   if(!dlgMass.open) dlgMass.showModal();
@@ -10385,6 +10524,7 @@ function massAnwenden(){
   const offen=massFelder.filter(f=>f.text!==f.start);
   massSchliessen();
   offen.forEach(f=>{
+    if(f.setz){ f.setz(f.text); return; }        // Maß ohne Feld (Maßkette im Plan)
     const el=(f.schluessel && document.querySelector(f.schluessel))
           || (f.el && document.body.contains(f.el) ? f.el : null);
     if(!el) return;
