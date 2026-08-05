@@ -519,6 +519,15 @@
     border-color:var(--accent); background:#eef4ff; color:var(--accent); font-weight:600;}
   .schalter input{position:absolute; opacity:0; width:0; height:0; pointer-events:none;}
   .schalter + .schalter{margin-top:6px;}
+  /* Zuklappbarer Kasten — sieht aus wie ein `fieldset`, ist aber ein `details`.
+     Der Winkel rechts ersetzt das Standarddreieck, das je nach Browser anders aussitzt. */
+  details.klapp{border:1px solid var(--line); border-radius:9px; padding:8px 10px; margin:8px 0;}
+  details.klapp > summary{font-size:12px; color:var(--muted); cursor:pointer;
+    list-style:none; display:flex; justify-content:space-between; align-items:center;}
+  details.klapp > summary::-webkit-details-marker{display:none;}
+  details.klapp > summary::after{content:'⌄'; font-size:14px;}
+  details.klapp[open] > summary{margin-bottom:8px;}
+  details.klapp[open] > summary::after{content:'⌃';}
   /* Der kleine Knopf hinter Länge und Höhe — quadratisch, damit die Zeile nicht bricht */
   .mini{flex:0 0 40px; padding:0; font-size:15px;}
   #dlgLv .grid2 .row{flex-wrap:nowrap; margin-bottom:0;}
@@ -534,12 +543,21 @@
      setzen wir NUR hier, nicht über `height:fit-content` — das hatte die Maßseite in
      Bluefy schon einmal unsichtbar gemacht. */
   @media (max-width:640px){
-    #dlgLv{width:100vw; max-width:100vw; height:100vh; height:100dvh; max-height:100dvh;
+    /* `100dvw` statt `100vw`: iOS rechnet `vw` gegen den Layout-Bereich, der beim
+       kleinsten Zoom breiter sein kann als der sichtbare — dann ließ sich das Bild
+       seitlich schieben. `overflow-x:hidden` ist der Riegel dahinter: was trotzdem zu
+       breit gerät, wird abgeschnitten statt zum Schieben einzuladen. */
+    #dlgLv{width:100dvw; max-width:100%; height:100vh; height:100dvh; max-height:100dvh;
       margin:0; border-radius:0;}
     #dlgLv[open]{display:flex; flex-direction:column;}
-    #dlgLv .dbody{flex:1 1 auto; min-height:0; max-height:none; overflow-y:auto;}
+    #dlgLv .dbody{flex:1 1 auto; min-height:0; max-height:none;
+      overflow-y:auto; overflow-x:hidden; padding:12px;}
     #dlgLv .dfoot{padding-bottom:calc(10px + env(safe-area-inset-bottom));}
     #dlgLv .dfoot .btn{flex:1; padding:12px;}
+    /* Die Maßfelder liefen bis an den rechten Rand. Gedeckelt bleibt sichtbar Luft,
+       und die Zeile mit dem kleinen Knopf (L, H) passt sicher in die Spalte. */
+    #dlgLv .grid2{gap:6px 10px;}
+    #dlgLv .grid2 .row input, #dlgLv .grid2 .row .btn{max-width:96px;}
   }
   fieldset{border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin:8px 0;}
   legend{font-size:12px; color:var(--muted); padding:0 4px;}
@@ -824,7 +842,9 @@
            über den Knopf an der Länge in die LÄNGE. -->
     </div>
 
-    <fieldset id="lvRichtFeld"><legend>Flächenrichtungen</legend>
+    <!-- Zugeklappt, weil selten gebraucht. Sind Richtungen gesetzt, geht der Kasten
+         beim Öffnen von allein auf — sonst sähe man nicht, dass welche gelten. -->
+    <details id="lvRichtFeld" class="klapp"><summary>Flächenrichtungen</summary>
       <div class="schalter drei">
         <label><input type="checkbox" id="lvVorn"><span>Vorn</span></label>
         <label><input type="checkbox" id="lvOben"><span>Oben</span></label>
@@ -833,7 +853,7 @@
         <label><input type="checkbox" id="lvHinten"><span>Hinten</span></label>
         <label><input type="checkbox" id="lvUnten"><span>Unten</span></label>
       </div>
-    </fieldset>
+    </details>
     <fieldset><legend>Automatik</legend>
       <!-- An einer Wand gibt es weder Grund- noch Ansichtsfläche zu übernehmen: die
            gehören dem Raum. Dort stehen an dieser Stelle die beiden Kopplungen. -->
@@ -6287,7 +6307,8 @@ function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
   renderLvFotos();
   lvKatKnoepfe(); lvWahlAnzeigen();
   lvRaederStellen(p, a);    // Drehräder auf die versteckten Felder einstellen
-  lvSchalterAuffrischen();
+  $('#lvRichtFeld').open=false;   // jede Position fängt zugeklappt an …
+  lvSchalterAuffrischen();        // … außer sie hat Richtungen gesetzt
   dlgLv.showModal();
   autoGrow($('#lvKurz'));   // erst im geöffneten Dialog messbar
   lvRaederNachstellen();    // Rollhöhe geht erst im offenen Dialog zu setzen
@@ -6358,7 +6379,11 @@ function lvSchalterAuffrischen(){
     if(c) l.classList.toggle('an', c.checked);
   });
   // Richtungen zählen nur bei Flächen — bei Länge oder Stück stünden sie nur im Weg
-  $('#lvRichtFeld').style.display = $('#lvEinheit').value==='Flache' ? '' : 'none';
+  const rf=$('#lvRichtFeld');
+  rf.style.display = $('#lvEinheit').value==='Flache' ? '' : 'none';
+  /* Zu bleibt der Kasten nur, solange keine Richtung gesetzt ist. Sonst gälte etwas,
+     das man nicht sieht — und aufklappen kann man ihn ja jederzeit selbst. */
+  if(rf.querySelector('input:checked')) rf.open=true;
   /* An der Wand gibt es weder Grund- noch Ansichtsfläche zu übernehmen — die gehören
      dem Raum. Dafür stehen dort die Kopplungen, die es am Raum wiederum nicht gibt.
      Die beiden Reihen tauschen also einfach den Platz. */
