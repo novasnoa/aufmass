@@ -106,6 +106,9 @@
     scrollbar-width:none;}
   #leiste::-webkit-scrollbar{display:none;}
   #layout.ohneblatt #leiste{display:flex;}
+  /* Die Leiste spiegelt die Knöpfe der Werkzeugspalte — im LV-Tab gibt es die nicht,
+     dort stand sie leer bzw. mit den Knöpfen der letzten Planansicht herum. */
+  #layout.lvoffen #leiste{display:none;}
   #leiste button{flex:0 0 auto; width:57px; height:57px; padding:5px; border:1px solid var(--line);
     background:#fff; border-radius:12px; color:var(--accent); font-size:15px; line-height:1;
     overflow:hidden;}
@@ -360,7 +363,16 @@
   #drawhint b{color:#8fe3bd;}
 
   /* LV-Ansicht */
-  #lvview{flex:1; overflow:auto; padding:14px; display:none;}
+  /* `overflow-x:hidden` ist der Riegel gegen das seitliche Wandern auf dem iPad
+     (Nutzerwunsch 6.8.2026): Ohne ihn ließ sich die ganze Ansicht hin- und
+     herschieben, weil die Tabellen breiter waren als das Fenster. Breite Tabellen
+     scrollen jetzt in IHREM eigenen Rahmen (`.tabrahmen`), die Seite steht still. */
+  #lvview{flex:1; overflow-x:hidden; overflow-y:auto; padding:14px; display:none;}
+  #lvview .tabrahmen{overflow-x:auto; overscroll-behavior-x:contain;}
+  /* Sonst klebte die Kopfzeile am Rahmen statt am Fenster und wanderte beim
+     Herunterrollen mit. Der Rahmen ist so hoch wie sein Inhalt, es gibt dort
+     senkrecht nichts zu scrollen. */
+  #lvview .tabrahmen table{margin:0;}
   #lvview table{border-collapse:collapse; width:100%; background:#fff; border:1px solid var(--line); border-radius:8px;}
   #lvview th,#lvview td{border-bottom:1px solid var(--line); padding:6px 9px; text-align:left; font-size:13px; white-space:nowrap;}
   #lvview th{background:#f0f2f5; position:sticky; top:0; font-size:12px;}
@@ -592,6 +604,33 @@
   .vollbild{width:100vw; max-width:100vw; height:100vh; height:100dvh;
     max-height:100vh; max-height:100dvh; margin:0; border-radius:0;}
   .vollbild[open]{display:flex; flex-direction:column;}
+  /* Ganzseitig wie `.vollbild`, aber mit normal fliessendem Rumpf: Baustelle und Ausgabe
+     sind Formulare, keine Listen — ein Flex-Spalten-Rumpf wuerde ihre Kaesten strecken. */
+  .vollseite{width:100vw; max-width:100vw; height:100vh; height:100dvh; max-height:100dvh;
+    margin:0; border-radius:0;}
+  .vollseite[open]{display:flex; flex-direction:column;}
+  .vollseite .dbody{flex:1 1 auto; min-height:0; max-height:none;
+    overflow-y:auto; overflow-x:hidden;}
+  .vollseite .dfoot{padding-bottom:calc(10px + env(safe-area-inset-bottom));}
+  /* Kacheln der gespeicherten Aufmasse. So viele nebeneinander, wie hineinpassen —
+     `auto-fill` mit einer Mindestbreite regelt das von allein, ohne dass irgendwo eine
+     Zahl von Spalten stehen muesste. */
+  .aufmassgitter{display:grid; grid-template-columns:repeat(auto-fill, minmax(210px, 1fr));
+    gap:10px;}
+  .aufmasskachel{border:1px solid var(--line); border-radius:10px; padding:8px;
+    background:#fff;}
+  .aufmasskachel.an{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent);}
+  /* Das Bild IST der Knopf — ein Klick darauf laedt das Aufmass. `padding` gibt der
+     Etage ihren Rand, `box-sizing` haelt die Kachelbreite. */
+  .aufmassbild{box-sizing:border-box; width:100%; height:150px; padding:10px;
+    border:1px solid var(--line); border-radius:8px; background:#f7f8fa;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;}
+  .aufmassbild:hover{border-color:var(--accent); background:#f2f6ff;}
+  .aufmassbild svg{width:100%; height:100%; display:block;}
+  .aufmassbild .leer{font-size:11px; color:var(--muted); text-align:center;}
+  .aufmasskachel .wer{margin-top:6px; min-width:0;}
+  .aufmasskachel .wer b{display:block; overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap;}
   .vollbild .dbody{flex:1; min-height:0; max-height:none; display:flex; flex-direction:column;}
   /* Foto-Editor */
   #feWrap{flex:1; min-height:0; display:flex; align-items:center; justify-content:center;
@@ -723,6 +762,12 @@
       justify-content:flex-start; align-items:baseline; gap:6px;}
   }
   #lvtab .nurschmal{display:none;}           /* Gegenstück steht in der Handy-Regel */
+  /* Umbrechen statt breit werden: `#lvview td` steht auf `nowrap`, und mit neun
+     Spalten sprengte das auf dem iPad das Fenster. Der Kurztext und die
+     Spaltenüberschriften dürfen darum überall umbrechen — die Zahlen nicht, die
+     sollen in einer Zeile bleiben. */
+  #lvtab .sp-kurz{white-space:normal;}
+  #lvtab thead th{white-space:normal;}
   /* Die LV-Übersicht am Telefon: acht Zahlenspalten passen dort nicht, ohne dass jede
      unlesbar wird. Übrig bleiben die drei, nach denen man am Bau schaut — Kurztext,
      Zuordnungen, Betrag (Nutzerwunsch 6.8.2026). Der Papierkorb bleibt: eine Aktion,
@@ -1129,6 +1174,17 @@
         <code>data.records:read</code> <b>und</b> <code>data.records:write</code> sowie Zugriff auf die Base.
         Der Token wird nur auf diesem Gerät gespeichert — <b>nie</b> im Aufmaß oder im Backup.</p>
     </fieldset>
+    <fieldset><legend>Automatisch sichern</legend>
+      <label style="display:flex; gap:6px; align-items:center; margin-bottom:6px">
+        <input type="checkbox" id="setAuto"> Aufmaß nach dem Weglegen von allein nach Airtable sichern</label>
+      <p class="hint" id="setAutoInfo"></p>
+      <p class="hint">Gesichert wird <b>nicht</b> beim Weglegen, sondern beim <b>Zurückkommen</b>:
+        Sobald die App im Hintergrund liegt, drosselt das Gerät jede Übertragung, und der
+        mehrstufige Weg nach Airtable (Datensatz, Projektdatei, Fotos) bricht mittendrin ab.
+        Beim Weglegen wird deshalb nur vermerkt, dass etwas ansteht — beim nächsten Öffnen
+        läuft es dann im Vordergrund durch, wo du es auch siehst.
+        Voraussetzung: verbunden, geändert, online. <b>Fotos gehen mit hoch.</b></p>
+    </fieldset>
     <fieldset><legend>Laser (Bluetooth)</legend>
       <div class="row">
         <button class="btn small" id="btleica" style="flex:1">Leica verbinden</button>
@@ -1196,29 +1252,84 @@
 </dialog>
 
 <!-- Baustelle: binden, sichern, laden, LV holen -->
-<dialog id="dlgCloud">
+<dialog id="dlgCloud" class="vollseite">
   <div class="dhead">Baustelle <button data-close>✕</button></div>
   <div class="dbody">
     <div class="panel" id="clAktuell" style="margin-bottom:10px"></div>
     <div id="clAktionen"></div>
-    <div class="row"><label>Suchen</label><input id="clFilter" type="text" placeholder="Baustelle suchen …"></div>
-    <div class="row" id="clStatusFilter" style="gap:6px; flex-wrap:wrap"></div>
+    <!-- Alles, was das Aufmass als GANZES betrifft, an einer Stelle: die Datei ohne Netz
+         und die Ausgabe. Beides lag vorher im Ausgabe-Dialog. -->
+    <div class="panel" style="margin-bottom:10px">
+      <div class="row" style="flex-wrap:wrap; gap:6px">
+        <button class="btn small" id="clDateiSave">Als Datei sichern</button>
+        <button class="btn small" id="clDateiLoad">Aus Datei laden</button>
+        <span style="flex:1"></span>
+        <button class="btn small primary" id="clExport">Export …</button>
+      </div>
+      <p class="hint" style="margin-top:6px">Die Datei ist der Weg ohne Netz — sie enthält
+        das Aufmaß samt Fotos. <b>Export</b> öffnet Bericht und CSV mit ihren Einstellungen.</p>
+    </div>
     <p class="hint" id="clStatus" style="white-space:pre-line"></p>
+    <!-- Eigene Such- und Statusleiste fuer die Kacheln. Sie steht DIREKT ueber ihnen —
+         ein Filter, der wirkt, aber nicht zu sehen ist, laesst Aufmasse verschwinden,
+         ohne dass man den Grund erkennt. Der Suchtext ist ein eigener: nach einem
+         gespeicherten Aufmass zu suchen ist etwas anderes, als eine Baustelle zum
+         Verbinden zu suchen. Die Statuswahl teilen sich beide (`clStatusAn`) — das ist
+         eine Einstellung darueber, welche Datensaetze einen ueberhaupt angehen. -->
+    <div class="row"><label>Suchen</label>
+      <input id="clAufSuche" type="text" placeholder="Gespeichertes Aufmaß suchen …"></div>
+    <div class="row" id="clAufStatus" style="gap:6px; flex-wrap:wrap"></div>
     <div id="clAufmasse"></div>
-    <div id="clList"></div>
-    <p class="hint" style="margin-top:10px"><b>Gespeicherte Aufmaße</b> lädt direkt — das aktuelle wird dabei
-      ersetzt (mit Rückfrage, falls dort Ungesichertes liegt) und die Baustelle gleich mit verbunden.
-      <b>Alle Baustellen</b> ist zum <i>Verbinden</i> eines neuen Aufmaßes: das setzt nur die Zuordnung samt
-      Adresse und Zeitraum fürs Deckblatt, geladen wird dabei nichts.
-      Die <b>Status-Knöpfe</b> gelten für beide Listen und merken sich die Auswahl;
-      Einträge mit anderem Status (Lagerorte, Fahrzeuge, Krank/Urlaub …) erscheinen gar nicht erst.
+    <p class="hint" style="margin-top:10px">Ein Klick auf den <b>Grundriss</b> lädt das Aufmaß —
+      das aktuelle wird dabei ersetzt (mit Rückfrage, falls dort Ungesichertes liegt) und die
+      Baustelle gleich mit verbunden. Die Liste aller Baustellen samt Suche und Statuswahl
+      steht hinter <b>„Verbinden …"</b>.
       Zugangsdaten stehen unter <b>⚙ Einstellungen</b>.</p>
   </div>
   <div class="dfoot"><button class="btn" data-close>Schließen</button></div>
 </dialog>
 
+<!-- Verbinden: die Liste ALLER Baustellen mit Suche und Statuswahl. Eigenes Fenster,
+     weil man sie nur beim Verbinden braucht — unter den Kacheln stand sie sonst bei
+     jedem Oeffnen im Weg. Suche und Status gehoeren hierher: die Kacheln der
+     gespeicherten Aufmasse sind wenige und werden nie gefiltert. -->
+<dialog id="dlgVerbinden" class="vollseite">
+  <div class="dhead">Mit einer Baustelle verbinden <button data-close>✕</button></div>
+  <div class="dbody">
+    <div class="row"><label>Suchen</label><input id="clFilter" type="text" placeholder="Baustelle suchen …"></div>
+    <div class="row" id="clStatusFilter" style="gap:6px; flex-wrap:wrap"></div>
+    <div id="clList"></div>
+    <p class="hint" style="margin-top:10px">Verbinden setzt nur die <b>Zuordnung</b> samt Adresse
+      und Zeitraum fürs Deckblatt — geladen wird dabei nichts. Das Aufmaß der Baustelle öffnest
+      du im Fenster davor über den Grundriss.
+      Die <b>Status-Knöpfe</b> merken sich die Auswahl; Einträge mit anderem Status (Lagerorte,
+      Fahrzeuge, Krank/Urlaub …) erscheinen gar nicht erst.</p>
+  </div>
+  <div class="dfoot"><button class="btn" data-close>Schließen</button></div>
+</dialog>
+
+<!-- Rueckfrage, bevor ein Aufmass ueberschrieben wird.
+     Sie stand bis 6.8.2026 IN der Baustellenliste (`#clList`) — also ganz unten und
+     seit dem Umbau meist zugeklappt. Man bekam sie schlicht nicht zu Gesicht und die
+     App wirkte, als taete sie nichts. Eine Frage, die eine Entscheidung verlangt,
+     gehoert nach vorn. -->
+<dialog id="dlgUeberschreiben" style="width:min(560px,94vw)">
+  <div class="dhead">Aufmaß ersetzen? <button data-close id="cfAbbruch2">✕</button></div>
+  <div class="dbody">
+    <p id="cfText" style="margin-bottom:10px"></p>
+    <p class="hint" id="cfHinweis" style="margin-bottom:10px"></p>
+  </div>
+  <div class="dfoot" style="flex-wrap:wrap">
+    <button class="btn danger" id="cfDrop">Verwerfen</button>
+    <span style="flex:1"></span>
+    <button class="btn" id="cfAbbruch">Abbrechen</button>
+    <button class="btn" id="cfBackup">Als Datei sichern</button>
+    <button class="btn primary" id="cfSave">Erst sichern</button>
+  </div>
+</dialog>
+
 <!-- Ausgabe: Bericht, CSV und Backup-Datei an einer Stelle -->
-<dialog id="dlgAusgabe" style="width:480px">
+<dialog id="dlgAusgabe" class="vollseite">
   <div class="dhead">Ausgabe <button data-close>✕</button></div>
   <div class="dbody">
     <fieldset><legend>Bericht</legend>
@@ -1236,17 +1347,10 @@
         im <b>magicplan-Format</b> — genau das, was die vorhandenen Excel-Makros erwarten.</p>
       <button class="btn" id="agCsv">📊 CSV-Export</button>
     </fieldset>
-    <fieldset><legend>Backup-Datei</legend>
-      <p class="hint" style="margin-bottom:8px">Sichert das Aufmaß samt Fotos in eine JSON-Datei —
-        der Weg ohne Netz. Auf iPhone/iPad öffnet sich das Teilen-Menü: dort
-        <b>„In Dateien sichern"</b> wählen. Beim Laden wird das aktuelle Aufmaß ersetzt;
-        angenommen werden Backup-Dateien und die <code>aufmass.json</code> aus Airtable.</p>
-      <div class="row">
-        <button class="btn" id="agSave">💾 Als Datei sichern</button>
-        <button class="btn" id="agLoad">📂 Aus Datei laden</button>
-      </div>
-      <p class="hint" id="agStatus" style="margin-top:8px"></p>
-    </fieldset>
+    <!-- „Als Datei sichern / laden" steht seit 2026-08-06 unter Baustelle: dort geht es
+         um das Aufmass als Ganzes, hier nur noch um seine Ausgabe. Die Statuszeile bleibt,
+         die Meldungen der Dateiwege laufen weiter hierher. -->
+    <p class="hint" id="agStatus" style="margin-top:8px"></p>
   </div>
   <div class="dfoot"><button class="btn" data-close>Schließen</button></div>
 </dialog>
@@ -9961,7 +10065,7 @@ function renderLvUebersicht(){
     <!-- „Einheit" ist raus (6.8.2026): sie stand schon hinter jeder Menge. Die
          sp-Klassen steuern, was am Telefon übrig bleibt — siehe CSS zu #lvtab.
          ACHTUNG: keine Backticks in diesem Kommentar, er steht in einem Template-String. -->
-    <table id="lvtab"><thead><tr>
+    <div class="tabrahmen"><table id="lvtab"><thead><tr>
       <th class="sp-lv">LV Position</th><th class="sp-kurz">Kurztext</th><th class="sp-zu">Zuordnungen</th>
       <th class="sp-soll" style="text-align:right">Menge lt. LV</th>
       <th class="sp-summe" style="text-align:right">Summe</th>
@@ -10010,7 +10114,7 @@ function renderLvUebersicht(){
       <td class="num sp-solleur"><b>${mitSoll.length?fmtGeld(gesamtSoll):'–'}</b></td>
       <td class="sp-weg"></td>
     </tr></tfoot>`:''}
-    </table>
+    </table></div>
     <p class="hint" style="margin-top:8px">Zeile anklicken zeigt die einzelnen Zuordnungen. Gerechnet wird wie in
       magicplan; bei gemischten Einheiten innerhalb einer Position gibt es keine Summe („Zu überprüfen“).
       Der <b>Betrag</b> ist die aufgemessene Summe × Einheitspreis, die <b>Summe lt. LV</b> die
@@ -10107,7 +10211,10 @@ function renderLvDetail(){
       ${Number.isFinite(g.preis)?`<span class="hint">EP: ${fmtGeld(g.preis)} €</span>`:''}
       <span data-lvkopfsum="1">${lvKopfSumme(g)}</span>
     </div>
-    <table><thead><tr>
+    <!-- Dreizehn Spalten mit Eingabefeldern lassen sich nicht sinnvoll auf 768 px
+         quetschen — diese Tabelle scrollt darum in ihrem eigenen Rahmen, statt die
+         ganze Seite mitzunehmen. -->
+    <div class="tabrahmen"><table><thead><tr>
       <th>Etage</th><th>Raum</th><th>Objekt</th><th>Menge</th><th>Einheit</th>
       <th>L</th><th>B</th><th>H</th><th>Ø</th><th>Ansichtsfl.</th><th>Flags</th><th>Abschl.</th>
       <th style="text-align:right">Ergebnis</th><th></th>
@@ -10156,7 +10263,7 @@ function renderLvDetail(){
     </tbody>
     <tfoot><tr><td colspan="13" style="text-align:right"><b>Summe</b></td>
       <td class="num" data-lvsum="1"><b>${g.einheiten.length>1?'—':fmt3(g.summe)+' '+g.sym}</b></td><td></td></tr></tfoot>
-    </table>
+    </table></div>
     <p class="hint" style="margin-top:8px">Menge, Einheit, Maße und Abschlag lassen sich <b>direkt in der Zeile</b>
       ändern — beim Abschlag auch mit den Pfeiltasten. Ergebnis je Zeile wie in magicplan gerechnet — Formel als Tooltip.
       ${g.alleNein&&g.einheiten[0]==='Flache'?'Ohne gesetzte Richtungen gilt für diese Position L×H + L×B.':''}</p>`;
@@ -11040,6 +11147,8 @@ $('#settingsbtn').onclick=()=>{
   $('#setStand').textContent=APP_STAND;
   $('#setDatei').textContent=dateiStand();
   setStatus('');
+  $('#setAuto').checked=autoAn();      // Zustand beim Öffnen zeigen
+  autoInfoText();
   dlgSettings.showModal();
 };
 /* Wann wurde die geladene Datei zuletzt geändert? `document.lastModified` gibt das
@@ -11264,6 +11373,7 @@ async function clLadeBaustellen(){
     // Lagerorte, Fahrzeuge, Krank/Urlaub … kommen gar nicht erst in die Liste
     clSites=roh.filter(s=>CL_STATUS.includes(s.status))
                .sort((a,b)=>a.name.localeCompare(b.name,'de'));
+    clVorschauenLaden();                       // Grundrisse im Hintergrund nachziehen
     const mit=clSites.filter(s=>s.json).length;
     const weg=roh.length-clSites.length;
     clStatus(`${clSites.length} Bauvorhaben — ${mit} mit gespeichertem Aufmaß.`+
@@ -11294,8 +11404,15 @@ function clStand(s){
   const m=/(\d{4})-(\d{2})-(\d{2})/.exec((s.json&&s.json.filename)||'');
   return m?`${m[3]}.${m[2]}.${m[1]}`:'';
 }
-// Suchtext für beide Listen
+// Suchtext der Verbinden-Liste bzw. der Kachelleiste — zwei Felder, zwei Absichten
 function clFilterText(){ return (($('#clFilter')||{}).value||'').trim().toLowerCase(); }
+function clAufFilterText(){ return (($('#clAufSuche')||{}).value||'').trim().toLowerCase(); }
+function clPasstAufmass(s){
+  const f=clAufFilterText();
+  if(f && !s.name.toLowerCase().includes(f)) return false;
+  if(!clStatusAn.length) return true;
+  return clStatusAn.includes(s.status);
+}
 /* Gemeinsamer Filter beider Listen: Suchtext UND Status-Knöpfe. Ohne angehakten
    Status wäre alles leer — dann gilt „keine Einschränkung", das ist weniger irritierend
    als eine leere Liste. */
@@ -11306,16 +11423,20 @@ function clPasst(s){
   return clStatusAn.includes(s.status);
 }
 function renderClStatusFilter(){
-  const el=$('#clStatusFilter'); if(!el) return;
   const zahl={};
   (clSites||[]).forEach(s=>{ zahl[s.status]=(zahl[s.status]||0)+1; });
-  el.innerHTML=CL_STATUS.map(st=>{
+  const html=CL_STATUS.map(st=>{
     const an=clStatusAn.includes(st);
     return `<button class="btn small${an?' active':''}" data-clstatus="${st}"
       title="Baustellen mit Status „${st}" ${an?'ausblenden':'einblenden'}">${
       an?'☑':'☐'} ${st}${clSites?` (${zahl[st]||0})`:''}</button>`;
   }).join('');
-  el.querySelectorAll('[data-clstatus]').forEach(b=>{
+  // Beide Leisten zeigen dieselbe Wahl — es ist eine Einstellung, nicht zwei
+  const el=$('#clStatusFilter'), el2=$('#clAufStatus');
+  if(el)  el.innerHTML=html;
+  if(el2) el2.innerHTML=html;
+  if(!el && !el2) return;
+  document.querySelectorAll('#clStatusFilter [data-clstatus], #clAufStatus [data-clstatus]').forEach(b=>{
     b.onclick=()=>{
       const st=b.dataset.clstatus;
       clStatusAn = clStatusAn.includes(st) ? clStatusAn.filter(x=>x!==st) : clStatusAn.concat([st]);
@@ -11329,25 +11450,63 @@ function renderClStatusFilter(){
    häufigste Fall, und der Umweg über „Verbinden" hängt das AKTUELLE Aufmaß erst an die
    fremde Baustelle — verwirrend und im schlimmsten Fall gefährlich (falsch beschriftet
    gesichert). Beim Laden setzt `cloudLaden` die Bindung ohnehin selbst. */
+/* Mini-Grundriss der ERSTEN Etage als Vorschau. Gezeichnet wird mit demselben
+   `planSvg` wie der Druck, im Uebersichtsmodus (`grau`) und ohne Masse — auf 96 x 72 px
+   ist alles andere ohnehin nicht zu lesen. Faellt es aus (fremde Datei, altes Format),
+   steht ein Wort statt eines kaputten Bildes. */
+function vorschauSvg(s){
+  const v=s && s.vorschau;
+  if(!v) return '<span class="leer">' + (s && s.json ? 'lädt …' : 'kein Plan') + '</span>';
+  try{
+    const f=(v.floors||[])[0];
+    const rooms=(v.rooms||[]).filter(r=>!f || r.floorId===f.id);
+    if(!rooms.length) return '<span class="leer">leer</span>';
+    const alt=plakettenAus;
+    plakettenAus=true;
+    try{
+      /* Ohne `grau`: das ist fuer nicht angewaehlte Raeume gedacht und blasst so weit ab,
+         dass in der kleinen Kachel nichts mehr zu erkennen war.
+         `ohneGroesse`, weil `planSvg` sonst eine Groesse in MILLIMETERN ins SVG schreibt
+         (fuer den Druck richtig) — im Kasten war das Bild dadurch vielfach zu gross und
+         wurde nur beschnitten. Ohne die Angabe fuellt es ueber seine viewBox den Rahmen. */
+      return planSvg(rooms, {namen:false, masse:false, objekte:false,
+        boxW:170, boxH:120, ohneGroesse:true});
+    } finally { plakettenAus=alt; }
+  }catch(e){ return '<span class="leer">kein Bild</span>'; }
+}
 function renderClAufmasse(){
   const el=$('#clAufmasse'); if(!el) return;
   if(!clSites){ el.innerHTML=''; return; }
-  const liste=clSites.filter(s=>s.json && clPasst(s));
-  if(!liste.length){ el.innerHTML=''; return; }
+  const liste=clSites.filter(s=>s.json && clPasstAufmass(s));
+  if(!liste.length){
+    const wieviel=clSites.filter(x=>x.json).length;
+    el.innerHTML = wieviel
+      ? `<p class="hint" style="margin-top:8px">Kein gespeichertes Aufmaß passt zur Suche —
+          ${wieviel} ${wieviel===1?'ist':'sind'} vorhanden.</p>`
+      : '';
+    return;
+  }
   const b=proj().baustelle;
-  el.innerHTML=`<h3 style="margin:10px 0 0">Gespeicherte Aufmaße (${liste.length})</h3>
-    <div class="panel" style="margin-top:6px; max-height:220px; overflow:auto">
+  el.innerHTML=`<h3 style="margin:10px 0 6px">Gespeicherte Aufmaße (${liste.length})</h3>
+    <div class="aufmassgitter">
     ${liste.map(s=>{
       const stand=clStand(s);
       const aktiv=b && b.id===s.id;
-      return `<div class="stat" style="align-items:center">
-        <span>${aktiv?'✅ ':''}${esc(s.name)}
-          <span class="hint">· ${stand?'vom '+stand:'gespeichert'} · ${s.fotos.length} Foto(s)</span></span>
-        <button class="btn small primary" data-clopen="${s.id}" ${clBusy?'disabled':''}
-          title="Lädt dieses Aufmaß und ersetzt das aktuelle">📥 Laden</button>
+      const v=s.vorschau;
+      return `<div class="aufmasskachel${aktiv?' an':''}">
+        <div class="aufmassbild" data-clopen="${s.id}"
+          title="${clBusy?'Gerade beschäftigt':'Lädt „'+esc(s.name)+'“ und ersetzt das aktuelle Aufmaß'}"
+          >${vorschauSvg(s)}</div>
+        <div class="wer">
+          <b>${aktiv?'✅ ':''}${esc(s.name)}</b>
+          <div class="hint">${stand?'vom '+stand:'gespeichert'} · ${s.fotos.length} Foto(s)${
+            v?`<br>${v.rooms.length} Raum/Räume · ${(v.floors||[]).length} Etage(n)`:''}</div>
+        </div>
       </div>`;
     }).join('')}
-    </div>`;
+    </div>
+    <p class="hint" style="margin-top:6px">Auf den Grundriss tippen lädt das Aufmaß —
+      das aktuelle wird dabei ersetzt.</p>`;
   el.querySelectorAll('[data-clopen]').forEach(btn=>{
     btn.onclick=()=>{
       const s=clSites.find(x=>x.id===btn.dataset.clopen);
@@ -11365,8 +11524,8 @@ function renderClList(){
   const liste=clSites.filter(clPasst);
   if(!liste.length){ el.innerHTML='<p class="hint" style="margin-top:8px">Keine Baustelle gefunden.</p>'; return; }
   const b=proj().baustelle;
-  el.innerHTML=`<h3 style="margin:10px 0 0">Alle Baustellen (${liste.length})</h3>
-    <div class="panel" style="margin-top:6px;max-height:260px;overflow:auto">
+  el.innerHTML=`<h3 style="margin:10px 0 0">${liste.length} Baustelle(n)</h3>
+    <div class="panel" style="margin-top:6px">
     ${liste.map(s=>{
       const stand=clStand(s);
       const info=s.json ? `Aufmaß${stand?' vom '+stand:''} · ${s.fotos.length} Foto(s)` : 'noch kein Aufmaß';
@@ -11392,33 +11551,31 @@ function renderClList(){
           `Umhängen auf „${s.name}"? Zum ÖFFNEN des dortigen Aufmaßes brauchst du das nicht — `+
           `dafür oben in „Gespeicherte Aufmaße" auf „Laden" tippen.`)) return;
       ohneUndo(()=>{ baustelleUebernehmen(proj(), s); save(); });
+      dlgVerbinden.close();                // Zweck erfüllt
       clStatus(`Mit „${s.name}" verbunden.`);
       renderAll(); renderClList(); renderClAktuell(); renderClAktionen();
     };
   });
 }
 
-/* Was mit der verbundenen Baustelle möglich ist */
+/* Der Kopfbereich traegt seit 2026-08-06 ALLES zum aktuellen Aufmass — vorher lag es auf
+   zwei Kaesten verteilt und man musste raten, was wozu gehoert. `renderClAktionen` bleibt
+   als Name stehen, weil es von ueberall aufgerufen wird; sein Kasten ist jetzt leer. */
 function renderClAktionen(){
-  const el=$('#clAktionen'); if(!el) return;
-  const s=clGebunden();
-  if(!s){ el.innerHTML=''; return; }
-  const stand=clStand(s);
-  el.innerHTML=`<div class="panel" style="margin-bottom:10px">
-    <div class="row" style="flex-wrap:wrap; gap:6px">
-      <button class="btn small primary" id="clSave" ${clBusy?'disabled':''}>📤 Aufmaß sichern</button>
-      <button class="btn small" id="clLoad" ${clBusy||(!s.json&&!s.unbekannt)?'disabled':''}
-        title="${s.json?'Ersetzt das aktuelle Aufmaß'
-          :(s.unbekannt?'Holt den Stand dieser Baustelle und ersetzt das aktuelle Aufmaß'
-                       :'An dieser Baustelle liegt noch kein Aufmaß')}"
-        >📥 Aufmaß laden${s.json&&stand?` (${stand})`:''}</button>
-      <button class="btn small" id="clLv" ${clBusy?'disabled':''}
-        title="Holt die LV-Positionen dieser Baustelle: neue kommen dazu, bestehende werden aufgefrischt. Die Zuordnungen im Aufmaß bleiben unberührt.">📋 LV-Positionen holen</button>
-    </div>
-  </div>`;
-  $('#clSave').onclick=()=>cloudSpeichern(s);
-  $('#clLoad').onclick=()=>cloudLaden(s);
-  $('#clLv').onclick=()=>cloudLvHolen(s);
+  const el=$('#clAktionen'); if(el) el.innerHTML='';
+}
+/* Die Bindung an eine Baustelle loesen. Name, Adresse und Zeitraum BLEIBEN stehen — sie
+   gehoeren zum Aufmass, und wer nur die Verknuepfung kappt, will selten auch das
+   Deckblatt leeren. Was nicht mehr geht, ist das Sichern nach Airtable. */
+function cloudVerbindungLoesen(){
+  const p=proj(), b=p.baustelle;
+  if(!b) return;
+  if(!confirm('Verbindung zu \u201e'+b.name+'\u201c aufheben?\n\n'
+    +'Das Aufmaß bleibt vollständig erhalten, auch Name und Adresse. '
+    +'Sichern nach Airtable geht erst wieder, wenn du es neu verbindest.')) return;
+  ohneUndo(()=>{ delete p.baustelle; save(); });
+  clStatus('Verbindung aufgehoben — das Aufmaß liegt jetzt nur noch auf diesem Gerät.');
+  renderAll(); renderClList(); renderClAktuell();
 }
 
 /* LV-Positionen der verbundenen Baustelle nachladen — Nachtrag-sicher */
@@ -11442,10 +11599,10 @@ async function cloudLvHolen(s){
   }finally{ clBusy=false; renderClList(); renderClAktionen(); }
 }
 
-/* Kopfbereich des Dialogs: welches Aufmaß liegt gerade vor, woran hängt es */
+/* Kopfbereich: welches Aufmass liegt vor, woran haengt es, und was geht damit. */
 function renderClAktuell(){
   const el=$('#clAktuell'); if(!el) return;
-  const p=proj(), b=p.baustelle;
+  const p=proj(), b=p.baustelle, s=clGebunden();
   const stand=p.gesichertAm ? new Date(p.gesichertAm).toLocaleString('de-DE') : null;
   const zahl=`${p.rooms.length} Raum/Räume · ${alleFotos(p).length} Foto(s) · `+
     `${Object.keys(p.lvTexts||{}).length} LV-Position(en)`;
@@ -11455,39 +11612,71 @@ function renderClAktuell(){
         <span class="hint">· ${zahl}</span></span>
       <button class="btn small" id="clNeu" ${clBusy?'disabled':''}>＋ Neues Aufmaß</button>
     </div>
-    <p class="hint" style="margin-top:4px">${b
+    <p class="hint" style="margin:4px 0 8px">${b
       ? (stand ? (istGeaendert()?`zuletzt gesichert ${stand} — seitdem geändert`:`gesichert ${stand}`)
                : 'mit dieser Baustelle verbunden, noch nicht gesichert')
-      : 'Noch keiner Baustelle zugeordnet — unten eine aus der Liste verbinden.'}</p>`;
+      : 'Noch keiner Baustelle zugeordnet.'}</p>
+    <div class="row" style="flex-wrap:wrap; gap:6px">
+      ${s?`
+        <button class="btn small primary" id="clSave" ${clBusy?'disabled':''}>Sichern</button>
+        <button class="btn small" id="clLv" ${clBusy?'disabled':''}
+          title="Holt die LV-Positionen dieser Baustelle: neue kommen dazu, bestehende werden aufgefrischt. Die Zuordnungen im Aufmaß bleiben unberührt."
+          >LV-Positionen laden</button>
+        <span class="hint" style="align-self:center">verbunden mit <b>${esc(s.name)}</b></span>
+        <span style="flex:1"></span>
+        <button class="btn small danger" id="clLos" ${clBusy?'disabled':''}
+          title="Löst nur die Verknüpfung — das Aufmaß bleibt vollständig"
+          >Verbindung aufheben</button>`
+      : `<button class="btn small primary" id="clVerbinden"
+          title="Springt zur Liste aller Baustellen">Verbinden …</button>
+         <span class="hint" style="align-self:center">nicht verbunden — Sichern und
+           LV-Positionen brauchen eine Baustelle</span>`}
+    </div>`;
   $('#clNeu').onclick=cloudNeuesAufmass;
+  if(s){
+    $('#clSave').onclick=()=>cloudSpeichern(s);
+    $('#clLv').onclick=()=>cloudLvHolen(s);
+    $('#clLos').onclick=cloudVerbindungLoesen;
+  } else {
+    $('#clVerbinden').onclick=()=>{
+      renderClList();
+      dlgVerbinden.showModal();
+      const f=$('#clFilter'); if(f) f.focus();
+    };
+  }
 }
 
 /* Rückfrage, bevor das aktuelle Aufmaß überschrieben wird — mit Ausweg ohne Netz */
+/* `text` kommt mit fertigen Anfuehrungszeichen und ist bereits maskiert — er wird
+   deshalb als HTML gesetzt, nicht als Text. */
+const dlgVerbinden=$('#dlgVerbinden');
+const dlgUeberschreiben=$('#dlgUeberschreiben');
 function cloudFrageUeberschreiben(text, weiter){
-  const p=proj(), b=p.baustelle, el=$('#clList');
-  el.innerHTML=`<div class="panel" style="margin-top:8px">
-    <p style="margin-bottom:8px">${text}</p>
-    <div class="row" style="flex-wrap:wrap; gap:6px">
-      ${b?`<button class="btn small primary" id="cfSave">Erst in „${esc(b.name)}" sichern</button>`:''}
-      <button class="btn small" id="cfBackup">Als Datei sichern</button>
-      <button class="btn small danger" id="cfDrop">Verwerfen</button>
-      <button class="btn small" id="cfAbbruch">Abbrechen</button>
-    </div>
-    ${b?'':'<p class="hint" style="margin-top:6px">Dieses Aufmaß hängt an keiner Baustelle — es kann nur als Datei gesichert werden.</p>'}
-  </div>`;
-  const zurueck=()=>{ renderClList(); renderClAktionen(); };
-  $('#cfAbbruch').onclick=zurueck;
-  $('#cfDrop').onclick=()=>{ zurueck(); weiter(); };
+  const b=proj().baustelle;
+  $('#cfText').innerHTML=text;
+  $('#cfHinweis').textContent = b
+    ? 'Das aktuelle Aufmaß lässt sich vorher sichern — nach Airtable oder in eine Datei.'
+    : 'Dieses Aufmaß hängt an keiner Baustelle — es kann nur als Datei gesichert werden.';
+  const sv=$('#cfSave');
+  sv.style.display = b ? '' : 'none';
+  if(b) sv.textContent = `Erst in „${b.name}" sichern`;   // textContent: kein Maskieren nötig
+  const zu=()=>{ dlgUeberschreiben.close(); renderClList(); renderClAktionen(); };
+  $('#cfAbbruch').onclick=zu;
+  $('#cfAbbruch2').onclick=zu;
+  $('#cfDrop').onclick=()=>{ zu(); weiter(); };
   $('#cfBackup').onclick=async()=>{
     const blob=new Blob([JSON.stringify(db,null,1)],{type:'application/json'});
-    if(!await dateiAusgeben(blob, backupDateiname())){ clStatus('Nicht gesichert — Vorgang abgebrochen.', true); return; }
-    zurueck(); weiter();
+    if(!await dateiAusgeben(blob, backupDateiname())){
+      clStatus('Nicht gesichert — Vorgang abgebrochen.', true); return; }
+    zu(); weiter();
   };
-  const sv=$('#cfSave');
-  if(sv) sv.onclick=async()=>{
+  sv.onclick=async()=>{
     const ok=await cloudSpeichern({id:b.id, name:b.name, json:null, fotos:[]}, true);
-    if(ok){ zurueck(); weiter(); }
+    if(ok){ zu(); weiter(); }
   };
+  /* Der Baustellen-Dialog ist selbst modal — ein zweiter modaler Dialog darueber ist
+     erlaubt und legt sich korrekt davor. Escape schliesst ihn wie „Abbrechen". */
+  if(!dlgUeberschreiben.open) dlgUeberschreiben.showModal();
 }
 // Leeres Aufmaß — ersetzt das aktuelle (nach Rückfrage, falls ungesichert)
 function cloudNeuesAufmass(){
@@ -11683,14 +11872,110 @@ async function cloudLaden(s, ohneRueckfrage){
   }finally{ clBusy=false; renderClList(); renderClAktuell(); renderClAktionen(); }
 }
 
+/* ---------- Automatisch sichern (seit 2026-08-06) ----------
+   Der Auslöser ist bewusst NICHT ein Untätigkeits-Timer. Zwei Minuten ohne Eingabe
+   heißt auf der Baustelle „misst gerade", nicht „fertig" — und genau dieser Timer ist
+   in dieser App schon einmal gescheitert (die alte Raumsperre, siehe README). Das
+   ehrliche Abschiedssignal ist, dass die Seite unsichtbar wird: Gerät gesperrt, App
+   gewechselt, weggelegt.
+
+   ABER dort wird nur VERMERKT. Sobald die Seite im Hintergrund liegt, drosselt iOS
+   jede Übertragung, und `cloudSpeichern` ist kein einzelner Aufruf, sondern PATCH +
+   Projektdatei + jedes geänderte Foto. Bricht die Kette mittendrin ab, steht in
+   Airtable ein halb aufgeräumter Datensatz. Gesichert wird darum beim ZURÜCKKOMMEN,
+   im Vordergrund, mit voller Zeit — und sichtbar. */
+const AUTO_KEY='grundriss-autosichern';
+const AUTO_MARKE='grundriss-autosichern-offen';
+const autoAn   = () => localStorage.getItem(AUTO_KEY)==='1';
+const autoOffen= () => localStorage.getItem(AUTO_MARKE)==='1';
+let autoLetzte=null;                     // Zeitpunkt der letzten selbsttätigen Sicherung
+function autoInfoText(){
+  const el=$('#setAutoInfo'); if(!el) return;
+  const p=proj();
+  el.innerHTML = !autoAn() ? 'Aus — gesichert wird nur von Hand.'
+    : autoLetzte ? `Zuletzt selbsttätig gesichert: <b>${autoLetzte.toLocaleString('de-DE')}</b>`
+    : (p.baustelle ? 'An — beim nächsten Zurückkommen wird gesichert, falls etwas ansteht.'
+                   : 'An, aber das Aufmaß ist mit keiner Baustelle verbunden — dann passiert nichts.');
+}
+/* Steht wirklich etwas an? Jede Bedingung hat einen Grund:
+   verbunden (sonst gibt es kein Ziel), geändert (sonst nichts zu tun), Token und Netz
+   (sonst scheitert es ohnehin), nicht beschäftigt und kein Dialog offen (sonst fährt
+   das Sichern dem Nutzer in die Hand). */
+function autoMoeglich(){
+  return !!(autoAn() && proj().baustelle && istGeaendert() && atToken()
+    && navigator.onLine !== false && !clBusy
+    && !document.querySelector('dialog[open]'));
+}
+function autoVermerken(){
+  if(!autoAn() || !proj().baustelle || !istGeaendert()) return;
+  try{ localStorage.setItem(AUTO_MARKE,'1'); }catch(e){}
+}
+async function autoNachholen(){
+  if(!autoOffen() || !autoMoeglich()) return;
+  const s=clGebunden(); if(!s) return;
+  try{ localStorage.removeItem(AUTO_MARKE); }catch(e){}
+  melde('Sichere das Aufmaß automatisch …');
+  const ok=await cloudSpeichern(s, true);          // ohne Rückfrage — sonst stünde sie im Weg
+  if(ok){ autoLetzte=new Date(); melde('Aufmaß automatisch gesichert.'); }
+  else melde('Automatisches Sichern hat nicht geklappt — bitte von Hand sichern.', true);
+  autoInfoText();
+}
+/* `visibilitychange` und `pagehide` sind auf iOS die EINZIGEN verlässlichen
+   Abschiedssignale — `beforeunload`/`unload` feuern dort oft gar nicht. */
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='hidden') autoVermerken();
+  else autoNachholen();
+});
+addEventListener('pagehide', autoVermerken);
+
+/* ---------- Vorschaubilder nachladen (seit 2026-08-06) ----------
+   Zu jedem gespeicherten Aufmass die `aufmass.json` holen und den Grundriss merken.
+   Das ist billig: `cloudSpeichern` leert vor dem Hochladen alle Bilddaten (`f.src=''`),
+   die Fotos liegen als eigene Anhaenge daneben. In der JSON steckt also nur Geometrie,
+   LV und Kopfdaten — ein paar Dutzend Kilobyte je Baustelle.
+
+   Nacheinander statt alle auf einmal: Auf der Baustelle haengt das Geraet oft an einer
+   duennen Leitung, und ein Schwall paralleler Anfragen bringt dort mehr Aerger als
+   Tempo. Jede fertige Vorschau zeichnet die Liste sofort nach, man sieht sie also
+   auffuellen. Fehler bleiben still — ein fehlendes Vorschaubild ist kein Grund, eine
+   Meldung ueber die Arbeit zu legen. */
+let clVorschauLaeuft=false;
+async function clVorschauenLaden(){
+  if(clVorschauLaeuft || !clSites) return;
+  clVorschauLaeuft=true;
+  try{
+    const offen=clSites.filter(x=>x.json && !x.vorschau && !x.vorschauFehlt);
+    for(const site of offen){
+      if(!clSites.includes(site)) continue;             // Liste wurde zwischendurch neu geholt
+      try{
+        const r=await fetch(site.json.url);
+        if(!r.ok) throw new Error(String(r.status));
+        const d=await r.json();
+        const v=d.projekt||d;
+        if(v && Array.isArray(v.rooms) && Array.isArray(v.floors)) site.vorschau=v;
+        else site.vorschauFehlt=true;
+      }catch(e){ site.vorschauFehlt=true; }
+      if(dlgCloud.open) renderClAufmasse();
+    }
+  } finally { clVorschauLaeuft=false; }
+}
+$('#setAuto').onchange=e=>{
+  try{ localStorage.setItem(AUTO_KEY, e.target.checked?'1':'0'); }catch(err){}
+  if(!e.target.checked){ try{ localStorage.removeItem(AUTO_MARKE); }catch(err){} }
+  autoInfoText();
+};
 $('#cloudbtn').onclick=()=>{
-  clSites=null; clBusy=false; $('#clFilter').value='';
+  /* Die Liste steht oft schon vom Start her — dann gleich zeigen statt erst zu laden.
+     Sonst blitzte bei jedem Oeffnen eine leere Liste auf, obwohl alles da war. */
+  clBusy=false; $('#clFilter').value='';   // die Kachelsuche bleibt stehen: sie ist sichtbar
   renderClList(); renderClAktuell(); renderClAktionen();
   dlgCloud.showModal();
+  if(clSites){ clVorschauenLaden(); return; }
   if(atToken()) clLadeBaustellen();                       // Token da → Liste gleich holen
   else clStatus('Kein Zugriffstoken hinterlegt — bitte unter „⚙ Einstellungen" eintragen.', true);
 };
 $('#clFilter').oninput=renderClList;
+$('#clAufSuche').oninput=renderClAufmasse;
 
 /* ================= Bluetooth ================= */
 const LEICA_SVC='3ab10100-f831-4395-b29d-570977d5bf94';
@@ -12663,8 +12948,11 @@ function abschlagAbschliessen(f){
   p.abschlag=p.abschlag+1; save(); renderAll();
   melde(`Abschlag abgeschlossen — neue Zuordnungen zählen zu Abschlag ${p.abschlag}.`);
 }
-$('#agSave').onclick=backupSichern;
-$('#agLoad').onclick=()=>$('#importfile').click();
+/* Beide Wege gibt es nur noch unter Baustelle. `agStatus` bleibt ihr Meldungsfeld —
+   es steht im Ausgabe-Dialog, und `dateiAusgeben` schreibt weiter dorthin. */
+$('#clDateiSave').onclick=backupSichern;
+$('#clDateiLoad').onclick=()=>$('#importfile').click();
+$('#clExport').onclick=()=>{ dlgCloud.close(); $('#ausgabebtn').click(); };
 $('#agCsv').onclick=()=>{ $('#dlgAusgabe').close(); exportCsv(); };
 $('#importfile').onchange=e=>{
   const f=e.target.files[0]; e.target.value='';
@@ -12853,7 +13141,8 @@ function planSvg(rooms, opts){
   const prefFs=PT9_MM/mmProM;                               // Standard 9 pt (in Metern)
   const refs=planRefs;                                      // wird unterwegs gefüllt
   let out=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${bb.minx-pad} ${bb.miny-pad} ${w} ${h}"`+
-    ` preserveAspectRatio="xMidYMid meet" style="width:${boxW}mm; height:${boxH}mm">`;
+    ` preserveAspectRatio="xMidYMid meet"${opts.ohneGroesse ? '>'
+      : ` style="width:${boxW}mm; height:${boxH}mm">`}`;
   // Erst alle Böden, dann die Wände als eine Lage — sonst stünden zwischen zwei
   // verschieden dicken Wänden deren Innenkanten als Linie im Mauerwerk (wie am Bildschirm)
   rooms.forEach(r=>{
@@ -13671,6 +13960,7 @@ function renderAll(){
   $('#main').style.display=isPlan?'':'none';
   $('#blatt').style.display=isPlan?'':'none';
   $('#lvview').style.display=isPlan?'none':'block';
+  $('#layout').classList.toggle('lvoffen', !isPlan);
   if(isPlan){ renderSidebar(); renderCanvas(); renderCrumb(); }
   else renderLv();
 }
@@ -14163,6 +14453,11 @@ bilderNachladen()
   .then(n=>{ if(n) renderAll(); return bilderAufraeumen(); })   // Bilddaten stehen nicht im
                                                                // Schnappschuss — Undo bleibt gültig
   .catch(err=>melde('Bildspeicher nicht verfügbar: '+err.message+' — Fotos fehlen in dieser Sitzung.', true));
+/* Gespeicherte Aufmasse schon beim Start holen (seit 2026-08-06): Wer die Baustelle
+   aufmacht, will die Liste sehen und nicht auf sie warten. Erst nach kurzer Wartezeit,
+   damit Zeichnen und Bilder Vorrang haben, und still — ohne Token oder ohne Netz
+   passiert einfach nichts, der Dialog holt sie dann beim Oeffnen wie bisher. */
+if(atToken()) setTimeout(()=>{ clLadeBaustellen().catch(()=>{}); }, 1500);
 btStartVerbinden();          // Laser ohne Dialog wieder anbinden, wenn der Browser ihn kennt
 // Auf der Baustelle geschriebene Tickets nachreichen, sobald wieder Netz da ist
 tkOffeneSenden().then(r=>{ if(r.gesendet) melde(`${r.gesendet} wartende(s) Ticket(s) übertragen.`); });
