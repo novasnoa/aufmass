@@ -67,6 +67,23 @@
   #tbmehr{display:flex; align-items:center; gap:8px;}
   #tbmehrbtn{display:none;}
   #sidebar{flex:1; min-height:0; overflow-y:auto; padding:10px;}
+  /* ---------- Breite Schirme: die Spalte wird zur Fläche (seit 2026-08-06) ----------
+     Auf einem 21:9-Monitor ist links Platz ohne Ende und der Plan trotzdem groß genug.
+     Statt einer langen Rolle laufen die Karten dort in zwei bzw. drei Spalten
+     nebeneinander — man sieht alles auf einmal.
+     `column-count` und nicht Grid: Die Karten sind verschieden hoch, und der Umbruch
+     soll sich selbst verteilen; `break-inside:avoid` hält jede Karte zusammen.
+     Gescrollt wird weiterhin, wenn es sein muss — bei sehr vielen LV-Positionen etwa —,
+     nur eben halb bzw. ein Drittel so weit. */
+  @media (min-width:1600px){
+    #blatt{width:620px; min-width:620px;}
+    #sidebar{column-count:2; column-gap:12px;}
+    #sidebar > *{break-inside:avoid; -webkit-column-break-inside:avoid;}
+  }
+  @media (min-width:2300px){
+    #blatt{width:930px; min-width:930px;}
+    #sidebar{column-count:3;}
+  }
   /* Werkzeugspalte ein- und ausklappen (seit 2026-08-06).
      Der Knopf sitzt im PLAN, nicht in der Spalte -- so verschwindet er nicht mit ihr
      und braucht kein zweites Gegenstueck. Bei offener Spalte steht er an deren rechter
@@ -302,6 +319,10 @@
   .btn.danger{background:#fff; border-color:#f0c4c4; color:var(--danger);}
   .btn.small{padding:3px 8px; font-size:12px;}
   .btn.active{outline:2px solid var(--accent);}
+  /* Ausgegraut heißt: den Knopf gibt es, er kann nur noch nicht. Er bleibt sichtbar,
+     damit man weiß, wo die Funktion später sitzt — der Tooltip sagt, warum nicht. */
+  .btn:disabled{opacity:.45; cursor:default; filter:grayscale(1);}
+  .btn:disabled:hover{background:#f6f7f9;}
   /* ---------- Symbole (seit 2026-08-06) ----------
      Statt Emoji: gezeichnete Striche, die `currentColor` erben. Damit stimmt die Farbe
      von allein — blau auf hellen Knöpfen, weiß auf dem grünen, rot auf dem Papierkorb —
@@ -682,6 +703,45 @@
     #dlgLv .grid2{gap:6px 10px;}
     #dlgLv .grid2 .row input, #dlgLv .grid2 .row .btn{max-width:96px;}
   }
+  /* Ergebnis der offenen Zuordnung, unten links im Dialogfuß. Die Zahl ist die
+     Auskunft, das Wort davor nur die Beschriftung — darum die beiden Größen. */
+  #lvErgebnis{margin-right:auto; font-size:11px; color:var(--muted); line-height:1.25;
+    display:flex; flex-direction:column; justify-content:center; min-width:0;}
+  #lvErgebnis b{font-size:16px; color:var(--ink); font-weight:700;
+    font-variant-numeric:tabular-nums;}
+  /* Fehlt ein Maß, rechnet die Formel still mit 0 weiter — dann muss die Zahl warnen,
+     sonst nimmt man eine 0,000 für ein Ergebnis. */
+  #lvErgebnis.fehlt b{color:var(--danger);}
+  @media (max-width:640px){
+    /* Am Telefon nehmen die drei Knöpfe die ganze Zeile (`flex:1`) — das Ergebnis
+       bekommt darum eine eigene Zeile darüber, statt sie zusammenzuquetschen. */
+    #dlgLv .dfoot{flex-wrap:wrap;}
+    /* `justify-content` muss mit zurückgesetzt werden: oben zentriert es SENKRECHT
+       (Spalte), hier läge sonst die ganze Zeile mittig statt links. */
+    #lvErgebnis{flex:0 0 100%; margin:0 0 8px; flex-direction:row;
+      justify-content:flex-start; align-items:baseline; gap:6px;}
+  }
+  #lvtab .nurschmal{display:none;}           /* Gegenstück steht in der Handy-Regel */
+  /* Die LV-Übersicht am Telefon: acht Zahlenspalten passen dort nicht, ohne dass jede
+     unlesbar wird. Übrig bleiben die drei, nach denen man am Bau schaut — Kurztext,
+     Zuordnungen, Betrag (Nutzerwunsch 6.8.2026). Der Papierkorb bleibt: eine Aktion,
+     keine Datenspalte, und ohne ihn ließe sich unterwegs nichts löschen.
+     Die Fußzeile braucht kein eigenes `colspan`: ausgeblendete Spalten fallen ganz weg,
+     die Beschriftungszelle wird dadurch von allein schmaler. */
+  @media (max-width:640px){
+    #lvtab .sp-lv, #lvtab .sp-soll, #lvtab .sp-summe, #lvtab .sp-ep,
+    #lvtab .sp-solleur{display:none;}
+    /* `#lvview td` steht auf `nowrap`. Bei den Zahlenspalten ist das richtig, beim
+       Kurztext nicht: er schob am Telefon Zuordnungen und Betrag aus dem Bild, und
+       man musste seitlich scrollen — genau das sollte das Ausblenden verhindern. */
+    /* Nur `normal`, NICHT `anywhere`: das ließe mitten im Wort trennen, und die Spalte
+       schrumpfte auf ein Zeichen Breite. So ist das längste Wort die Untergrenze. */
+    #lvtab .sp-kurz{white-space:normal;}
+    #lvtab .sp-zu, #lvtab .sp-weg{width:1%;}   /* so schmal wie ihr Inhalt */
+    #lvtab th, #lvtab td{padding:6px 5px;}     /* vier Spalten auf 375 px */
+    #lvtab .nurbreit{display:none;}
+    #lvtab .nurschmal{display:inline;}
+  }
   fieldset{border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin:8px 0;}
   legend{font-size:12px; color:var(--muted); padding:0 4px;}
 
@@ -982,9 +1042,13 @@
     <fieldset><legend>Automatik</legend>
       <!-- An einer Wand gibt es weder Grund- noch Ansichtsfläche zu übernehmen: die
            gehören dem Raum. Dort stehen an dieser Stelle die beiden Kopplungen. -->
-      <div class="schalter zwei" id="lvFlaechenZeile">
+      <!-- Alle drei nehmen ein Maß aus dem RAUM statt aus den Feldern darüber. Jedes
+           greift nur bei seiner Einheit: die beiden Flächen bei „Fläche", das Volumen
+           bei „Volumen" — sonst rechnet die Formel unverändert weiter. -->
+      <div class="schalter drei" id="lvFlaechenZeile">
         <label><input type="checkbox" id="lvNutzGrund"><span>Grundfläche</span></label>
         <label title="Alle Wände + Decke + Boden: 2 × Grundfläche + Umfang × Raumhöhe"><input type="checkbox" id="lvNutzAnsicht"><span>Ansichtsfläche</span></label>
+        <label title="Rauminhalt: Grundfläche × Raumhöhe — wirkt bei der Einheit „Volumen“"><input type="checkbox" id="lvNutzVolumen"><span>Volumen</span></label>
       </div>
       <div class="schalter zwei" id="lvKopplungZeile">
         <label id="lvAutoLZeile" title="Wird die Wand gezogen oder ihre Länge getippt, zieht dieses Maß mit"><input type="checkbox" id="lvAutoL"><span>Länge folgt der Wand</span></label>
@@ -1003,6 +1067,13 @@
     <div class="fotos raster" id="lvFotos"></div>
   </div>
   <div class="dfoot">
+    <!-- Was am Ende herauskommt, während man tippt. Steht im Fuß und nicht im Rumpf:
+         der scrollt, und ausgerechnet das Ergebnis darf nicht wegrutschen.
+         `margin-right:auto` schiebt die Knöpfe nach rechts. -->
+    <span id="lvErgebnis"></span>
+    <!-- Nur beim Bearbeiten sichtbar: an einer noch nicht gespeicherten Zuordnung gibt
+         es nichts zu löschen. -->
+    <button class="btn danger" id="lvDel">Löschen</button>
     <button class="btn" data-close>Abbrechen</button>
     <button class="btn primary" id="lvOk">Speichern</button>
   </div>
@@ -2001,6 +2072,15 @@ function lvMasseNachziehen(){
     if(!a.autoL && !a.autoH) return;
     const r=roomById(a.roomId);
     if(!r){ delete a.autoL; delete a.autoH; return; }        // Raum gelöscht → Kopplung endet
+    /* Hängt die Zuordnung an einer Tür oder einem Fenster, kommen BEIDE Maße aus dem
+       Bauteil — nicht die Höhe aus dem Raum wie an der Wand. Dieselben Merker, andere
+       Quelle; siehe `lvKoppelMass`. */
+    const op = a.objId ? (r.openings||[]).find(o=>o.id===a.objId) : null;
+    if(op){
+      if(a.autoL) a.laenge=mm(op.width);
+      if(a.autoH) a.hoehe=mm(op.height);
+      return;
+    }
     if(a.autoH) a.hoehe=r.height;
     if(a.autoL){
       // Wand weg (Ecke gelöscht, Raum neu gezeichnet): letzter Wert bleibt stehen
@@ -3843,7 +3923,7 @@ function fmAttrsNachziehen(){
          „Vorn" L×H, Laenge menge×L, Stueck nur die Menge. */
       a.menge=mm(fmMenge(m)); a.laenge=0; a.breite=0; a.hoehe=0;
       a.vorn=a.hinten=a.links=a.rechts=a.oben=a.unten=false;
-      a.nutzGrund=a.nutzAnsicht=false;
+      a.nutzGrund=a.nutzAnsicht=a.nutzVolumen=false;
       if(m.art==='flaeche'){ a.laenge=mm(+m.laenge||0); a.hoehe=mm(+m.breite||0); a.vorn=true; }
       else if(m.art==='linie'){ a.laenge=mm(+m.laenge||0); }
     });
@@ -5867,12 +5947,12 @@ function panelWand(p, r){
     ${rueckkehrPunkt?`<div class="row"><button class="btn small danger" id="rueckkehr" style="flex:1"
       title="Stellt den Stand vor diesem Eingriff wieder her">${ico('zurueck')}Zurück vor „${esc(rueckkehrPunkt.was)}"</button></div>`:''}
     <div class="row"><button class="btn green small" id="walllv" style="flex:1">${ico('liste')}LV-Position</button></div>
-    <!-- ACHTUNG, der Knopf hält noch nicht, was er verspricht: er schließt bislang nur
-         die Wand-Ansicht. Die Beschriftung ist auf Wunsch schon die künftige — geplant
-         ist, die Wand wirklich zu löschen und den Raum an der Stelle offen zu zeigen.
-         Bis dahin sagt der Tooltip, was tatsächlich passiert. -->
-    <div class="row"><button class="btn small danger" id="walldesel" style="flex:1"
-      title="Schließt bislang nur die Wand-Ansicht — Raum und Wand bleiben erhalten">${ico('papierkorb')}Löschen</button></div>
+    <!-- Ausgegraut bis das Löschen wirklich gebaut ist (Nutzerwunsch 6.8.2026). Er stand
+         hier mit der künftigen Beschriftung, schloss aber nur die Wand-Ansicht — ein
+         Knopf, der etwas anderes tut als er sagt, ist schlimmer als einer, der wartet.
+         Sichtbar bleibt er, damit klar ist, wo die Funktion später sitzt. -->
+    <div class="row"><button class="btn small danger" id="walldesel" style="flex:1" disabled
+      title="Wand löschen ist noch nicht gebaut — geplant ist, den Raum an der Stelle offen zu zeigen">${ico('papierkorb')}Löschen</button></div>
     <p class="hint">Nochmal anfassen und ziehen verschiebt die Wand parallel — die Nachbarwände behalten ihre Richtung und werden nur länger oder kürzer. <b>Ecke einfügen und dann eine Hälfte ziehen ergibt einen rechtwinkligen Vor- oder Rücksprung.</b> Wandlänge ändern verschiebt die nachfolgenden Ecken mit.</p>
     </div>`;
   html+=fotoPanel((r.wallFotos||{})[sel.wall], 'wfoto')
@@ -6074,8 +6154,14 @@ function wireEtage(on, r){
     const p=proj();
     if(p.floors.length<=1){ alert('Die letzte Etage kann nicht gelöscht werden.'); return; }
     const f=p.floors.find(f=>f.id===activeFloorId);
-    if(!confirm(`Etage „${f.name}“ inkl. aller Räume löschen?`)) return;
-    const roomIds=p.rooms.filter(r=>r.floorId===f.id).map(r=>r.id);
+    const ids=p.rooms.filter(r=>r.floorId===f.id).map(r=>r.id);
+    /* Die Rückfrage muss die Zuordnungen nennen — sie gehen mit weg, und in einer Etage
+       hängt daran das ganze Aufmaß. Raum und Objekt sagen es längst, hier fehlte es. */
+    const nLv=(p.attrs||[]).filter(a=>ids.includes(a.roomId)).length;
+    if(!confirm(`Etage „${f.name}“ inkl. aller Räume löschen?`
+      + (ids.length?`\n\n${ids.length===1?'Ein Raum':ids.length+' Räume'}`:'\n\nKeine Räume')
+      + (nLv?` und ${nLv===1?'eine LV-Zuordnung':nLv+' LV-Zuordnungen'} werden mit gelöscht.`:'.'))) return;
+    const roomIds=ids;
     p.rooms=p.rooms.filter(r=>r.floorId!==f.id);
     p.attrs=p.attrs.filter(a=>!roomIds.includes(a.roomId));
     p.floors=p.floors.filter(x=>x.id!==f.id);
@@ -6330,7 +6416,9 @@ function wireWand(on, r){
       const [a,b]=wallPoints(r,sel.wall);
       openLvDialog(null, r.id, null, {laenge:dist(a,b), hoehe:r.height, wall:sel.wall});
     });
-    on('#walldesel','onclick',()=>{ sel={roomId:focusRoomId, wall:null, vertex:null}; renderAll(); });
+    /* `#walldesel` hat bewusst KEINEN Handler mehr: Er schloss nur die Wandansicht,
+       während er „Löschen" heißt. Der Knopf ist ausgegraut, bis das echte Löschen da
+       ist — bekäme er den alten Handler zurück, täte er wieder das Falsche. */
     on('#wallsplit','onclick',()=>{                       // Wand teilen → neue Ecke
       if(eckeEinfuegen(r, sel.wall, merkFuerWand(r, sel.wall))){
         merkPunkt=null;                                   // verbraucht
@@ -6647,6 +6735,7 @@ let lvPresetWall=null; // Wand-Index, wenn der Dialog aus dem Wand-Panel geöffn
    angezeigt, nicht ausgewählt. Zwei Auswahlmenüs, die man praktisch nie umstellt,
    haben beim Aufmessen mehr verwirrt als geholfen. */
 let lvRoomId=null, lvObjId=null;
+let lvAnOeffnung=null;      // die Tür/das Fenster, an dem der Dialog hängt — sonst null
 let lvFuerRaeume=null;      // aus der Mehrfachanwahl: in diese Räume kopieren
 /* Über „＋ Neue LV-Position" im LV-Tab angelegt: die Position gehört keinem Bauteil,
    sondern dem Projekt. Sie liegt technisch trotzdem in einem Raum (die Rechnung
@@ -6667,6 +6756,7 @@ function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
   lvEditId=attrId;
   const a=attrId? p.attrs.find(x=>x.id===attrId) : null;
   $('#lvDlgTitle').textContent=a?'LV-Position bearbeiten':'Neue LV-Position';
+  $('#lvDel').style.display = a ? '' : 'none';
   syncLvTexts(p);
   lvRoomId = a ? a.roomId : (presetRoomId || (p.rooms[0]||{}).id || null);
   lvObjId  = (a ? a.objId : presetObjId) || null;
@@ -6711,14 +6801,39 @@ function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
   ['Vorn','Oben','Links','Rechts','Hinten','Unten'].forEach(k=>{ $('#lv'+k).checked=a?!!a[k.toLowerCase()]:false; });
   $('#lvNutzGrund').checked=a?!!a.nutzGrund:false;
   $('#lvNutzAnsicht').checked=a?!!a.nutzAnsicht:false;
+  $('#lvNutzVolumen').checked=a?!!a.nutzVolumen:false;
   /* Kopplung an die Wand — nur sichtbar, wenn die Zuordnung überhaupt an einer Wand hängt.
      Neu angelegt ist sie an; bei bestehenden Zuordnungen zählt, was gespeichert steht
      (Altbestand hat den Merker nicht und bleibt darum bei festen Zahlen). */
   const anWand = lvPresetWall!=null;
-  $('#lvAutoLZeile').style.display = anWand?'':'none';
-  $('#lvAutoHZeile').style.display = anWand?'':'none';
-  $('#lvAutoL').checked = anWand && (a ? !!a.autoL : true);
-  $('#lvAutoH').checked = anWand && (a ? !!a.autoH : true);
+  lvAnOeffnung = lvOeffnungVon(roomById(lvRoomId), lvObjId);
+  const koppelbar = anWand || !!lvAnOeffnung;
+  $('#lvAutoLZeile').style.display = koppelbar?'':'none';
+  $('#lvAutoHZeile').style.display = koppelbar?'':'none';
+  $('#lvAutoL').checked = koppelbar && (a ? !!a.autoL : true);
+  $('#lvAutoH').checked = koppelbar && (a ? !!a.autoH : true);
+  /* An der Wand kommt die Höhe aus dem RAUM, an Tür und Fenster aus dem Bauteil selbst.
+     Dieselben zwei Häkchen, zwei Quellen — die Beschriftung muss das sagen, sonst hakt
+     man das Falsche an. */
+  const wo = lvAnOeffnung ? (lvAnOeffnung.type==='door'?'der Tür':'dem Fenster') : null;
+  const zeile=(sel, txt, tip)=>{ const l=$(sel); l.querySelector('span').textContent=txt; l.title=tip; };
+  zeile('#lvAutoLZeile', wo?`Länge folgt ${wo}`:'Länge folgt der Wand',
+    wo?'Wird die Breite der Öffnung geändert, zieht dieses Maß mit'
+      :'Wird die Wand gezogen oder ihre Länge getippt, zieht dieses Maß mit');
+  zeile('#lvAutoHZeile', wo?`Höhe folgt ${wo}`:'Höhe folgt dem Raum',
+    wo?'Wird die Höhe der Öffnung geändert, zieht dieses Maß mit'
+      :'Wird die Raumhöhe geändert, zieht dieses Maß mit');
+  // Hinter H gibt es an Tür und Fenster nichts zu holen — die Raumhöhe ist dort nicht gemeint
+  $('#lvHoeheRaum').style.display = lvAnOeffnung ? 'none' : '';
+  $('#lvUmfangRaum').title = lvAnOeffnung
+    ? 'Umfang der Öffnung (2 × Breite + 2 × Höhe) in die Länge'
+    : 'Umfang des Raums in die Länge';
+  // Neu an Tür oder Fenster: die gekoppelten Maße stehen sofort da, sonst wären die
+  // Häkchen an und die Felder leer
+  if(!a && lvAnOeffnung){
+    $('#lvL').value=fmt3(lvAnOeffnung.width);
+    $('#lvH').value=fmt3(lvAnOeffnung.height);
+  }
   /* „Folge Objekt" gibt es nur an Flächen und Linien — nur die haben Maße. Bei Türen,
      Fenstern und Symbolen bleibt die Zeile weg. Neu angelegt ist sie an: wer eine
      Position an eine Fläche hängt, meint fast immer deren Maß. */
@@ -6750,6 +6865,7 @@ function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
   dlgLv.showModal();
   autoGrow($('#lvKurz'));   // erst im geöffneten Dialog messbar
   lvRaederNachstellen();    // Rollhöhe geht erst im offenen Dialog zu setzen
+  lvErgebnisZeigen();       // Startwert im Fuß
 }
 /* ---------- Drehräder für Abschlag und Einheit ----------
    Beides sind Werte aus einer kurzen, festen Liste — zum Tippen zu schade und mit
@@ -6837,41 +6953,68 @@ function lvSchalterAuffrischen(){
   /* Zu bleibt der Kasten nur, solange keine Richtung gesetzt ist. Sonst gälte etwas,
      das man nicht sieht — und aufklappen kann man ihn ja jederzeit selbst. */
   if(rf.querySelector('input:checked')) rf.open=true;
-  /* An der Wand gibt es weder Grund- noch Ansichtsfläche zu übernehmen — die gehören
-     dem Raum. Dafür stehen dort die Kopplungen, die es am Raum wiederum nicht gibt.
+  /* An der Wand — und seit 2026-08-06 genauso an Tür und Fenster — gibt es weder
+     Grundfläche noch Ansichtsfläche noch Raumvolumen zu übernehmen: die gehören dem
+     Raum. Dafür stehen dort die Kopplungen, die es am Raum wiederum nicht gibt.
      Die beiden Reihen tauschen also einfach den Platz. */
-  $('#lvFlaechenZeile').style.display = lvPresetWall!=null ? 'none' : '';
+  $('#lvFlaechenZeile').style.display = (lvPresetWall!=null || lvAnOeffnung) ? 'none' : '';
 }
 dlgLv.addEventListener('change', e=>{
   if(e.target.matches('.schalter input, #lvEinheit')) lvSchalterAuffrischen();
 });
-/* Hängt die Position am RAUM selbst (kein Objekt, keine Wand) und wird eine Fläche
-   abgerechnet, ist fast immer die Bodenfläche gemeint — dann setzt sich das Häkchen
-   von allein. Bei Objekten, Wänden und anderen Einheiten bleibt es unberührt. */
+/* Hängt die Position am RAUM selbst (kein Objekt, keine Wand), ist fast immer das Maß
+   des Raums gemeint — bei „Fläche" die Bodenfläche, bei „Volumen" der Rauminhalt. Das
+   Häkchen setzt sich dann von allein. Bei Objekten und Wänden bleibt es unberührt. */
 function lvGrundAuto(){
   if(lvObjId || lvPresetWall!=null) return;
-  // Bei anderen Einheiten wirkt das Häkchen ohnehin nicht — dann bleibt es auch aus
-  $('#lvNutzGrund').checked = $('#lvEinheit').value==='Flache';
+  // Jedes Häkchen wirkt nur bei seiner Einheit — bei den anderen bleibt es auch aus
+  const e=$('#lvEinheit').value;
+  $('#lvNutzGrund').checked   = e==='Flache';
+  $('#lvNutzVolumen').checked = e==='Volumen';
+  // Die Ansichtsfläche wird nie von allein gesetzt, muss beim Wechsel aber weichen —
+  // sonst leuchtete ein Schalter, der in der neuen Einheit nichts mehr tut.
+  if(e!=='Flache') $('#lvNutzAnsicht').checked=false;
 }
 $('#lvEinheit').addEventListener('change', lvGrundAuto);
-// Grundfläche und Ansichtsfläche schließen sich aus — beides zugleich ergibt keinen Sinn
-$('#lvNutzGrund').onchange=e=>{ if(e.target.checked) $('#lvNutzAnsicht').checked=false; };
-$('#lvNutzAnsicht').onchange=e=>{ if(e.target.checked) $('#lvNutzGrund').checked=false; };
+/* Die drei schließen sich aus: jedes ersetzt die Maßfelder durch EIN Maß des Raums,
+   zwei davon zugleich ergeben keine Rechnung. */
+const LV_RAUMHAKEN=['#lvNutzGrund','#lvNutzAnsicht','#lvNutzVolumen'];
+LV_RAUMHAKEN.forEach(sel=>$(sel).onchange=e=>{
+  if(e.target.checked) LV_RAUMHAKEN.forEach(a=>{ if(a!==sel) $(a).checked=false; });
+});
 /* Kopplung an die Wand: Wer selbst etwas einträgt, meint es auch so — dann fällt das
    Häkchen. Das gilt für die Tastatur (`input`) UND für den Laser, der den Wert über
    `change` einträgt: auf ein Feld zu zielen ist eine bewusste Entscheidung. Umgekehrt
    trägt das Anhaken den aktuellen Wert sofort ein, damit man sieht, was man bekommt. */
-const lvWandMass = () => {
+/* Tür und Fenster verhalten sich wie eine Wand (seit 2026-08-06): Länge und Höhe
+   folgen dem Bauteil, und zwar standardmäßig. Nur die Quelle unterscheidet sich —
+   an der Wand sind es Wandlänge und RAUMhöhe, an einer Öffnung deren eigene Breite
+   und Höhe. Dieselben zwei Häkchen, dieselben Merker `autoL`/`autoH`; welcher Zweig
+   gilt, entscheidet allein, ob die Zuordnung an einer Öffnung hängt. */
+const lvOeffnungVon = (r, id) => (r && id) ? ((r.openings||[]).find(o=>o.id===id)||null) : null;
+function lvKoppelMass(){
   const r=roomById(lvRoomId);
-  if(!r || lvPresetWall==null || !(lvPresetWall>=0 && lvPresetWall<r.points.length)) return null;
+  if(!r) return null;
+  const op=lvOeffnungVon(r, lvObjId);
+  if(op) return {laenge:op.width, hoehe:op.height};
+  if(lvPresetWall==null || !(lvPresetWall>=0 && lvPresetWall<r.points.length)) return null;
   const [p1,p2]=wallPoints(r, lvPresetWall);
   return {laenge:mm(dist(p1,p2)), hoehe:r.height};
-};
+}
 // „Folge Objekt" fällt, sobald Länge ODER Breite von Hand kommt — beide hängen daran
 ['#lvL','#lvB'].forEach(id=>{
   const loesen=()=>{ $('#lvAutoObj').checked=false; };
   $(id).addEventListener('input', loesen);
   $(id).addEventListener('change', loesen);
+});
+/* Grundfläche, Ansichtsfläche und Volumen ersetzen die Maßfelder durch ein Maß des
+   Raums. Wer in eines dieser Felder etwas einträgt, will genau diese Zahl — dann
+   fällt der Haken (Nutzerwunsch vom 6.8.2026). Vorher stand die eigene Eingabe da
+   und wurde stillschweigend nicht gerechnet. */
+const lvRaummassLoesen=()=>LV_RAUMHAKEN.forEach(s=>$(s).checked=false);
+['#lvL','#lvB','#lvH'].forEach(id=>{
+  $(id).addEventListener('input', lvRaummassLoesen);
+  $(id).addEventListener('change', lvRaummassLoesen);
 });
 [['#lvL','#lvAutoL','laenge'], ['#lvH','#lvAutoH','hoehe']].forEach(([feld, haken, k])=>{
   const loesen=()=>{ $(haken).checked=false; };
@@ -6879,9 +7022,9 @@ const lvWandMass = () => {
   $(feld).addEventListener('change', loesen);
   $(haken).addEventListener('change', e=>{
     if(!e.target.checked) return;
-    const m=lvWandMass();
+    const m=lvKoppelMass();
     if(m) $(feld).value=fmt3(m[k]);
-    else { e.target.checked=false; melde('Diese Wand gibt es nicht mehr — das Maß bleibt, wie es ist.'); }
+    else { e.target.checked=false; melde('Dieses Bauteil gibt es nicht mehr — das Maß bleibt, wie es ist.'); }
   });
 });
 // LV-Nummer ↔ Kurztext: bekannte Paare ergänzen sich gegenseitig (beide Richtungen)
@@ -8536,7 +8679,32 @@ function lvWahlAnzeigen(){
   const lv=$('#lvPos').value.trim(), kurz=$('#lvKurz').value.trim();
   b.textContent = lv||kurz ? `${lv||'—'}${kurz?' · '+kurz:''}` : '— noch keine gewählt —';
   b.title = lv ? 'Andere Position wählen' : 'Position wählen';
+  lvErgebnisZeigen();          // andere Position, andere Einheit → anderes Ergebnis
 }
+/* ---------- Ergebnis der offenen Zuordnung, live beim Tippen (seit 2026-08-06) ----------
+   Gerechnet wird mit **derselben** Funktion wie in Tabelle, Druck und CSV (`lvCalc`) —
+   nie mit einer zweiten Formel daneben, sonst stünde hier irgendwann etwas anderes als
+   in der Abrechnung.
+
+   `alleNein` gilt für die GANZE LV-Position: die Ersatzformel L×H + L×B greift nur, wenn
+   nirgends in der Gruppe eine Richtung gesetzt ist. Die noch nicht gespeicherten Werte
+   des Dialogs zählen dabei mit, die gespeicherte Fassung **derselben** Zuordnung
+   dagegen nicht — sonst rechnete die Vorschau gegen ihren eigenen alten Stand. */
+function lvErgebnisZeigen(){
+  const el=$('#lvErgebnis'); if(!el) return;
+  const p=proj(), d=lvDialogDaten();
+  if(!d.lv){ el.className=''; el.title='';
+    el.innerHTML='<span>Noch keine Position gewählt</span>'; return; }
+  const andere=(p.attrs||[]).filter(x=>x.lv===d.lv && x.id!==lvEditId && imAbschlag(x));
+  const res=lvCalc(d, lvGroupAlleNein(andere.concat([d])));
+  el.className = res.fehlt.length ? 'fehlt' : '';
+  el.title = res.formel || '';           // die Formel als Tooltip, wie in der Positionstabelle
+  el.innerHTML = `<span>Ergebnis${res.fehlt.length
+      ? ' — es fehlt ' + esc(res.fehlt.join(' und ')) : ''}</span>`
+    + `<b>${fmt3(res.wert)} ${esc(res.sym)}</b>`;
+}
+// Jede Eingabe im Dialog rechnet neu — auch der Laser, der über `change` einträgt
+['input','change'].forEach(ev=>dlgLv.addEventListener(ev, lvErgebnisZeigen));
 function lvWahlListe(){
   const q=($('#lwSuche').value||'').trim().toLowerCase();
   const jetzt=$('#lvPos').value.trim();
@@ -8602,12 +8770,19 @@ $('#lvHoeheRaum').onclick=()=>{
   const r=roomById(lvRoomId); if(!r) return;
   $('#lvH').value=fmt3(r.height);
   $('#lvAutoH').checked=false;
+  lvRaummassLoesen();
+  lvErgebnisZeigen();        // die Knöpfe tragen selbst ein und lösen kein `input` aus
 };
-// Der Umfang gehört in die LÄNGE — dort rechnet er (Menge × Länge), nicht im Umfang-Feld
+/* Der Umfang gehört in die LÄNGE — dort rechnet er (Menge × Länge), nicht im Umfang-Feld.
+   An Tür und Fenster ist „der Umfang" der des BAUTEILS (2 × Breite + 2 × Höhe), nicht
+   der des Raums: an einer Öffnung ist der Raumumfang nie das gesuchte Maß. */
 $('#lvUmfangRaum').onclick=()=>{
   const r=roomById(lvRoomId); if(!r) return;
-  $('#lvL').value=fmt3(roomStats(r).per);
+  const op=lvOeffnungVon(r, lvObjId);
+  $('#lvL').value=fmt3(op ? 2*((op.width||0)+(op.height||0)) : roomStats(r).per);
   $('#lvAutoL').checked=false;
+  lvRaummassLoesen();
+  lvErgebnisZeigen();        // die Knöpfe tragen selbst ein und lösen kein `input` aus
 };
 // Alle Felder des Dialogs als Datensatz — von „Speichern" wie vom Kopieren genutzt
 function lvDialogDaten(){
@@ -8624,6 +8799,7 @@ function lvDialogDaten(){
     vorn:$('#lvVorn').checked, oben:$('#lvOben').checked, links:$('#lvLinks').checked,
     rechts:$('#lvRechts').checked, hinten:$('#lvHinten').checked, unten:$('#lvUnten').checked,
     nutzGrund:$('#lvNutzGrund').checked, nutzAnsicht:$('#lvNutzAnsicht').checked,
+    nutzVolumen:$('#lvNutzVolumen').checked,
     anmerkung:$('#lvAnm').value.trim(),  // erscheint im Druck unter dem Raumplan
     nutzUmfang:false,                    // gibt es nicht mehr — der Umfang steht als Zahl in der Länge
     abschlag:Math.max(1, Math.round(parseNum($('#lvAbschlag').value)||p.abschlag)),
@@ -8633,8 +8809,9 @@ function lvDialogDaten(){
   if(lvPresetWall!=null) data.wall=lvPresetWall;
   // Kopplung nur mitschreiben, wenn sie besteht — sonst stünde bei jeder Zuordnung
   // ein `false` im Aufmaß, das niemand braucht (und `delete` beim Bearbeiten greift).
-  if(lvPresetWall!=null && $('#lvAutoL').checked) data.autoL=true;
-  if(lvPresetWall!=null && $('#lvAutoH').checked) data.autoH=true;
+  const koppelbar = lvPresetWall!=null || !!lvAnOeffnung;   // Wand ODER Tür/Fenster
+  if(koppelbar && $('#lvAutoL').checked) data.autoL=true;
+  if(koppelbar && $('#lvAutoH').checked) data.autoH=true;
   if(lvObjId && $('#lvAutoObj').checked && $('#lvAutoObjZeile').style.display!=='none') data.autoObj=true;
   return data;
 }
@@ -8686,6 +8863,27 @@ function lvSpeichern(){
 $('#lvOk').onclick=()=>{
   if(!lvSpeichern()) return;
   save(); dlgLv.close(); renderAll(); if(view!=='lv') renderLv();
+};
+/* Eine Zuordnung wegwerfen. Dieselbe Frage und dasselbe Aufräumen, egal ob der Klick
+   aus der Positionsliste kommt oder aus dem Dialog — sonst driften die beiden Wege
+   auseinander, sobald am Aufräumen etwas dazukommt. Gibt zurück, ob gelöscht wurde;
+   das Nachzeichnen bleibt beim Aufrufer, der weiß, welche Ansicht er gerade zeigt. */
+function lvZuordnungLoeschen(id){
+  const p=proj(), a=(p.attrs||[]).find(x=>x.id===id);
+  if(!a) return false;
+  const n=(a.fotos||[]).length;
+  const fotos = n ? `\n\n${n===1?'Ein Foto wird':n+' Fotos werden'} mit gelöscht.` : '';
+  const alt = abschlagVon(a)<p.abschlag
+    ? `\n\nAchtung: gehört zum bereits abgeschlossenen Abschlag ${abschlagVon(a)}.` : '';
+  if(!confirm(`LV-Zuordnung „${a.lv}" (${lvZielText(a)}) löschen?${fotos}${alt}`)) return false;
+  fmMarkeLoeschen(a.fmMark);          // Fotoaufmaß: auch die Markierung im Bild
+  p.attrs=p.attrs.filter(x=>x.id!==id);
+  save();
+  return true;
+}
+$('#lvDel').onclick=()=>{
+  if(!lvEditId || !lvZuordnungLoeschen(lvEditId)) return;
+  lvEditId=null; dlgLv.close(); renderAll(); if(view!=='lv') renderLv();
 };
 
 /* ---------- Position in weitere Räume kopieren ----------
@@ -8989,6 +9187,10 @@ $('#lkOk').onclick=()=>{
    Stuck   : Menge
    Lange   : Menge × Länge          (Nutze Umfang als Länge → Länge = Deckenumfang des Raums)
    Volumen : Länge × Breite × Höhe  (ohne Menge — faithful zum VBA)
+             „Volumen" angehakt   → Menge × (Grundfläche × Raumhöhe)
+             ACHTUNG, Unterschied: der Raumweg rechnet die Menge mit, der Maßweg nicht.
+             Beides ist Absicht — L×B×H bleibt zeichengetreu zur VBA-Pipeline, während
+             der Raumweg sich wie Grund- und Ansichtsfläche verhält, wo die Menge zählt.
    Flache  : Nutze Ansichtsfläche → Menge × (2 × Grundfläche + Umfang × Raumhöhe)
              Nutze Grundfläche    → Menge × Bodenfläche des Raums; sonst
              Richtungen gesetzt → Menge × (L·H·Vorn + L·B·Oben + B·H·Links + B·H·Rechts + L·H·Hinten + L·B·Unten)
@@ -9029,8 +9231,14 @@ function lvCalc(a, alleNein){
     if(!a.nutzUmfang) braucht.add('L');
     wert=menge*L; formel=`${fmt3(menge)} × ${fmt3(L)}${a.nutzUmfang?' (Umfang)':''}`;
   } else if(a.einheit==='Volumen'){
-    ['L','B','H'].forEach(k=>braucht.add(k));
-    wert=L*B*H; formel=`${fmt3(L)} × ${fmt3(B)} × ${fmt3(H)}`;
+    if(a.nutzVolumen && st && r){
+      // Rauminhalt aus den Raummaßen — dieselbe Zahl wie „Volumen" in der Statistik
+      wert=menge*st.vol;
+      formel=`${fmt3(menge)} × (${fmt3(st.area)} × ${fmt3(r.height)}) = ${fmt3(st.vol)} (Raumvolumen)`;
+    } else {
+      ['L','B','H'].forEach(k=>braucht.add(k));
+      wert=L*B*H; formel=`${fmt3(L)} × ${fmt3(B)} × ${fmt3(H)}`;
+    }
   } else {
     if(a.nutzAnsicht && st && r){
       // Ansichtsfläche = alle Wände + Decke + Boden, aus den Raummaßen gerechnet
@@ -9131,7 +9339,9 @@ function lvGroups(){
        darum auch keinen Betrag. */
     const preis=lvPreisWert(lv);
     const betrag=(Number.isFinite(preis) && einheiten.length<2) ? summe*preis : NaN;
-    return {lv, list, alleNein, einheiten, summe, fehlend, soll, ueber, preis, betrag,
+    // Was die Position laut LV wert ist — vorgesehene Menge × Preis, ohne das Aufmaß
+    const sollBetrag=(Number.isFinite(preis) && Number.isFinite(soll)) ? soll*preis : NaN;
+    return {lv, list, alleNein, einheiten, summe, fehlend, soll, ueber, preis, betrag, sollBetrag,
       sym:einheiten.length===1?(EINH_SYM[einheiten[0]]||''):'',
       kurz:(p.lvTexts||{})[lv] || (list.find(a=>a.kurz)||{}).kurz || ''};
   });
@@ -9142,6 +9352,12 @@ let lvDrill=null;   // gesetzt = Detailansicht einer LV-Position
    die Filterlogik ein zweites Mal nachzubauen. Gesetzt wird er nur um `lvGroups()`
    herum und im finally wieder zurückgenommen, damit er nirgends sonst hineinwirkt. */
 let lvAbschlagWahl=null;
+/* „Leere ausblenden" ist eine ANSICHTS-Einstellung, kein Bestandteil des Aufmaßes —
+   sie gehört darum ins Gerät (localStorage) und nicht ins Projekt. Bei einem großen
+   importierten LV stehen sonst hunderte 0-Zeilen zwischen den paar gemessenen; wer das
+   einmal wegschaltet, will es beim nächsten Öffnen nicht wieder anschalten. */
+const LV_LEER_KEY='grundriss-lv-nur-belegte';
+let lvNurBelegte = localStorage.getItem(LV_LEER_KEY)==='1';
 function lvGroupsGefiltert(){
   const alt=druckFilter;
   if(lvAbschlagWahl!=null) druckFilter={art:'teil', nr:lvAbschlagWahl};
@@ -9163,10 +9379,12 @@ function lvGroupsVoll(){
   const leer=Object.keys(p.lvTexts||{}).filter(lv=>lv && !da.has(lv)).map(lv=>{
     const einheit=(p.lvUnits||{})[lv] || einheitAusKurz((p.lvTexts||{})[lv]);
     const einheiten=einheit?[einheit]:[];
-    const preis=lvPreisWert(lv);
+    const preis=lvPreisWert(lv), soll=lvSollWert(lv);
     return {lv, list:[], alleNein:false, einheiten, summe:0, fehlend:[],
-      soll:lvSollWert(lv), ueber:false, preis,
-      betrag:Number.isFinite(preis) ? 0 : NaN, ohneAufmass:true,
+      soll, ueber:false, preis,
+      betrag:Number.isFinite(preis) ? 0 : NaN,
+      sollBetrag:(Number.isFinite(preis) && Number.isFinite(soll)) ? soll*preis : NaN,
+      ohneAufmass:true,
       sym:einheiten.length===1?(EINH_SYM[einheiten[0]]||''):'',
       kurz:(p.lvTexts||{})[lv]||''};
   });
@@ -9176,33 +9394,83 @@ function lvGroupsVoll(){
 function renderLv(){
   if(lvDrill!=null) renderLvDetail(); else renderLvUebersicht();
 }
+/* ---------- Eine ganze LV-Position wegwerfen (seit 2026-08-06) ----------
+   Nicht nur die Zuordnungen, sondern der Katalogeintrag selbst: die Position
+   verschwindet aus der Liste. Betroffen sind alle neun `p.lv*`-Kataloge — einen zu
+   vergessen hieße, dass die Position beim nächsten `syncLvTexts` aus dem Rest wieder
+   aufersteht.
+
+   **Airtable bleibt unberührt.** Dort wird beim Sichern der Baustelle nichts gelöscht,
+   und das LV wird ohnehin nur gelesen. Wer die Position später erneut holt, bekommt sie
+   neu — das ist gewollt und der Grund, warum hier ohne Netz-Rückfrage gelöscht werden
+   darf. */
+const LV_KATALOGE=['lvTexts','lvUnits','lvKat','lvLong','lvSoll','lvPreis',
+                   'lvHidden','lvOhneListe','lvColors'];
+function lvPositionLoeschen(lv){
+  const p=proj();
+  const dran=(p.attrs||[]).filter(a=>(a.lv||'')===lv);
+  const kurz=(p.lvTexts||{})[lv] || (dran.find(a=>a.kurz)||{}).kurz || '';
+  const alt=dran.filter(a=>abschlagVon(a)<p.abschlag).length;
+  if(!confirm(`LV-Position „${lv||'– ohne Nummer –'}"${kurz?` — ${kurz}`:''} ganz löschen?`
+    + (dran.length
+        ? `\n\n${dran.length===1?'Eine Zuordnung wird':dran.length+' Zuordnungen werden'} mit gelöscht.`
+        : '\n\nSie hat keine Zuordnungen.')
+    + (alt ? `\n\nAchtung: ${alt===1?'eine davon gehört':alt+' davon gehören'} zu einem bereits `
+             + 'abgeschlossenen Abschlag.' : '')
+    + '\n\nIn Airtable bleibt sie stehen und kommt beim nächsten Holen wieder.')) return false;
+  dran.forEach(a=>fmMarkeLoeschen(a.fmMark));       // Fotoaufmaß: Markierungen im Bild
+  p.attrs=(p.attrs||[]).filter(a=>(a.lv||'')!==lv);
+  LV_KATALOGE.forEach(k=>{ if(p[k]) delete p[k][lv]; });
+  if(lvDrill===lv) lvDrill=null;                    // die Detailansicht zeigte auf sie
+  save();
+  return true;
+}
 /* ---------- Ebene 1: Übersicht — eine Zeile je LV-Position ---------- */
 function renderLvUebersicht(){
   const p=proj(), teile=lvAbschlaege();
   // Nach einem Projektwechsel kann der gewählte Abschlag verschwunden sein
   if(lvAbschlagWahl!=null && !teile.includes(lvAbschlagWahl)) lvAbschlagWahl=null;
-  const groups=lvGroupsVoll();
-  const mitAufmass=groups.filter(g=>g.list.length).length;
+  const alle=lvGroupsVoll();
+  const mitAufmass=alle.filter(g=>g.list.length).length;
+  // Leere ausblenden: Positionen ohne jede Zuordnung in diesem Abschlag
+  const groups = lvNurBelegte ? alle.filter(g=>g.list.length) : alle;
   // Gesamtbetrag über alle Positionen, die einen Preis UND eine eindeutige Einheit haben
   const mitPreis=groups.filter(g=>Number.isFinite(g.betrag));
   const gesamt=mitPreis.reduce((s,g)=>s+g.betrag, 0);
   const ohnePreis=groups.length-mitPreis.length;
+  /* Summe laut LV = vorgesehene Menge × Einheitspreis, also das, was die Position nach
+     LV wert ist. Danebengestellt zeigt der Betrag sofort, ob das Aufmaß darüber oder
+     darunter liegt. Gezählt wird nur, wo BEIDES bekannt ist — sonst stünde unten eine
+     Summe, die die Hälfte der Positionen stillschweigend auslässt. */
+  const mitSoll=groups.filter(g=>Number.isFinite(g.sollBetrag));
+  const gesamtSoll=mitSoll.reduce((s,g)=>s+g.sollBetrag, 0);
   $('#lvview').innerHTML=`
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap">
-      <h2 style="font-size:17px">LV-Positionen (${groups.length}<span class="hint" style="font-weight:400">, davon ${mitAufmass} mit Aufmaß</span>)</h2>
+      <h2 style="font-size:17px">LV-Positionen (${groups.length}<span class="hint" style="font-weight:400">${
+        lvNurBelegte?` von ${alle.length}`:`, davon ${mitAufmass} mit Aufmaß`}</span>)</h2>
       <label class="hint" style="display:flex; align-items:center; gap:5px">Abschlag
         <select id="lvabschlag">
           <option value="">alle</option>
           ${teile.map(n=>`<option value="${n}" ${lvAbschlagWahl===n?'selected':''}>Abschlag ${n}</option>`).join('')}
         </select></label>
+      <label class="hint" style="display:flex; align-items:center; gap:5px"
+        title="Positionen ohne eine einzige Zuordnung nicht anzeigen">
+        <input type="checkbox" id="lvnurbelegt" ${lvNurBelegte?'checked':''}> leere ausblenden</label>
       <span style="flex:1"></span>
       <button class="btn primary" id="lvnew">＋ Neue LV-Position</button>
       <button class="btn" id="lvedit" title="Auswahllisten pflegen: Positionen ausblenden, Kurztexte ändern">LV editieren</button>
     </div>
-    <table><thead><tr>
-      <th>LV Position</th><th>Kurztext</th><th>Zuordnungen</th><th>Einheit</th>
-      <th style="text-align:right">Menge lt. LV</th><th style="text-align:right">Summe</th>
-      <th style="text-align:right">EP €</th><th style="text-align:right">Betrag €</th>
+    <!-- „Einheit" ist raus (6.8.2026): sie stand schon hinter jeder Menge. Die
+         sp-Klassen steuern, was am Telefon übrig bleibt — siehe CSS zu #lvtab.
+         ACHTUNG: keine Backticks in diesem Kommentar, er steht in einem Template-String. -->
+    <table id="lvtab"><thead><tr>
+      <th class="sp-lv">LV Position</th><th class="sp-kurz">Kurztext</th><th class="sp-zu">Zuordnungen</th>
+      <th class="sp-soll" style="text-align:right">Menge lt. LV</th>
+      <th class="sp-summe" style="text-align:right">Summe</th>
+      <th class="sp-ep" style="text-align:right">EP €</th>
+      <th style="text-align:right">Betrag €</th>
+      <th class="sp-solleur" style="text-align:right">Summe lt. LV €</th>
+      <th class="sp-weg"></th>
     </tr></thead><tbody>
     ${groups.map(g=>{
       const c=lvColor(p,g.lv);
@@ -9210,28 +9478,48 @@ function renderLvUebersicht(){
       // Positionen ohne Aufmaß stehen blass mit 0 da — sie gehören zum LV, sind aber offen
       return `<tr style="cursor:pointer${g.ohneAufmass?'; color:var(--muted)':''}" data-lvdrill="${esc(g.lv)}"
         title="${g.ohneAufmass?'Noch keine Zuordnung im Aufmaß':'Zuordnungen anzeigen'}">
-        <td>${c?`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${c};margin-right:6px;vertical-align:-1px"></span>`:''}<b>${esc(g.lv||'– ohne Nummer –')}</b></td>
-        <td>${esc(g.kurz)}</td>
-        <td class="num">${g.list.length}</td>
-        <td>${mix?`<span style="color:var(--danger)">Zu überprüfen</span>`:esc(einhTxt(g.einheiten[0]))}</td>
-        <td class="num">${Number.isFinite(g.soll)?fmt3(g.soll)+' '+g.sym:'–'}</td>
-        <td class="num"${g.ueber&&!mix?' title="Aufmaß liegt über der LV-Menge"':''}>
+        <td class="sp-lv">${c?`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${c};margin-right:6px;vertical-align:-1px"></span>`:''}<b>${esc(g.lv||'– ohne Nummer –')}</b></td>
+        <td class="sp-kurz">${esc(g.kurz)}${mix?` <span style="color:var(--danger)" title="Gemischte Einheiten in dieser Position">Zu überprüfen</span>`:''}</td>
+        <td class="num sp-zu">${g.list.length}</td>
+        <td class="num sp-soll">${Number.isFinite(g.soll)?fmt3(g.soll)+' '+g.sym:'–'}</td>
+        <td class="num sp-summe"${g.ueber&&!mix?' title="Aufmaß liegt über der LV-Menge"':''}>
           <b${g.ueber&&!mix?' style="color:var(--danger)"':''}>${mix?'—':fmt3(g.summe)+' '+g.sym}</b>${g.fehlend.length?` <span style="color:var(--danger)" title="Maß fehlt: ${esc(g.fehlend.join(', '))}">⚠</span>`:''}</td>
-        <td class="num">${Number.isFinite(g.preis)?fmtGeld(g.preis):'–'}</td>
+        <td class="num sp-ep">${Number.isFinite(g.preis)?fmtGeld(g.preis):'–'}</td>
         <td class="num"><b>${Number.isFinite(g.betrag)?fmtGeld(g.betrag):'–'}</b></td>
+        <td class="num sp-solleur">${Number.isFinite(g.sollBetrag)?fmtGeld(g.sollBetrag):'–'}</td>
+        <td class="sp-weg"><button class="btn small danger" data-lvweg="${esc(g.lv)}"
+          title="Diese LV-Position ganz löschen — samt aller Zuordnungen">${ico('papierkorb', true)}</button></td>
       </tr>`;
-    }).join('') || '<tr><td colspan="8" style="color:var(--muted)">Noch keine LV-Positionen. Über „＋ Neue LV-Position“, im Raum-Panel oder am ausgewählten Objekt anlegen.</td></tr>'}
+    }).join('') || `<tr><td colspan="9" style="color:var(--muted)">${lvNurBelegte
+        ? 'Keine Position mit Zuordnungen. Der Haken „leere ausblenden“ blendet gerade '+alle.length+' Position(en) aus.'
+        : 'Noch keine LV-Positionen. Über „＋ Neue LV-Position“, im Raum-Panel oder am ausgewählten Objekt anlegen.'}</td></tr>`}
     </tbody>
     ${groups.length?`<tfoot><tr>
-      <td colspan="7" style="text-align:right"><b>Summe${lvAbschlagWahl!=null?` Abschlag ${lvAbschlagWahl}`:''}</b>${
-        ohnePreis?` <span class="hint">(${ohnePreis} Position(en) ohne Preis)</span>`:''}</td>
+      <!-- KEIN colspan (keine Backticks hier, das ist ein Template-String):
+           display:none entfernt eine Zelle, die folgenden rutschen eine Spalte nach
+           vorn. Mit einem colspan im Fuss liefe die Zuordnung gegen Kopf und Rumpf
+           auseinander, und die Betraege staenden unter der falschen Ueberschrift.
+           Darum eine Zelle je Spalte — und die Beschriftung zweimal, einmal fuer breit
+           (in der EP-Spalte, direkt neben der Zahl) und einmal fuer schmal. -->
+      <td class="sp-lv"></td>
+      <td class="sp-kurz" style="text-align:right"><b class="nurschmal">Summe${
+        lvAbschlagWahl!=null?` AZ ${lvAbschlagWahl}`:''}</b></td>
+      <td class="sp-zu"></td><td class="sp-soll"></td><td class="sp-summe"></td>
+      <td class="sp-ep" style="text-align:right"><b class="nurbreit">Summe${
+        lvAbschlagWahl!=null?` Abschlag ${lvAbschlagWahl}`:''}</b>${
+        ohnePreis?` <span class="hint">(${ohnePreis} ohne Preis)</span>`:''}</td>
       <td class="num"><b>${mitPreis.length?fmtGeld(gesamt):'–'}</b></td>
+      <td class="num sp-solleur"><b>${mitSoll.length?fmtGeld(gesamtSoll):'–'}</b></td>
+      <td class="sp-weg"></td>
     </tr></tfoot>`:''}
     </table>
     <p class="hint" style="margin-top:8px">Zeile anklicken zeigt die einzelnen Zuordnungen. Gerechnet wird wie in
       magicplan; bei gemischten Einheiten innerhalb einer Position gibt es keine Summe („Zu überprüfen“).
-      Der <b>Betrag</b> ist die aufgemessene Summe × Einheitspreis — der Preis kommt aus Airtable
-      („Einheitspreis") bzw. aus dem GAEB-Import.</p>`;
+      Der <b>Betrag</b> ist die aufgemessene Summe × Einheitspreis, die <b>Summe lt. LV</b> die
+      vorgesehene Menge × Einheitspreis — nebeneinander sieht man, ob das Aufmaß darüber oder
+      darunter liegt. Der Preis kommt aus Airtable („Einheitspreis") bzw. aus dem GAEB-Import.
+      Der Papierkorb löscht die <b>ganze Position</b> samt Zuordnungen; in Airtable bleibt sie
+      stehen und kommt beim nächsten Holen wieder.</p>`;
   // Aus dem LV-Tab heraus gibt es kein Bauteil — die Position gehört dem Projekt
   $('#lvnew').onclick=()=>openLvDialog(null, sel.roomId||((proj().rooms[0]||{}).id), null, {projekt:true});
   $('#lvedit').onclick=openLvEdit;
@@ -9239,6 +9527,17 @@ function renderLvUebersicht(){
     lvAbschlagWahl = e.target.value==='' ? null : +e.target.value;
     renderLv();
   };
+  $('#lvnurbelegt').onchange=e=>{
+    lvNurBelegte=e.target.checked;
+    try{ localStorage.setItem(LV_LEER_KEY, lvNurBelegte?'1':'0'); }catch(err){}
+    renderLv();
+  };
+  // Der Papierkorb sitzt IN der anklickbaren Zeile — ohne `stopPropagation` würde
+  // derselbe Tipp zusätzlich die Detailansicht öffnen
+  document.querySelectorAll('[data-lvweg]').forEach(b=>b.onclick=e=>{
+    e.stopPropagation();
+    if(lvPositionLoeschen(b.dataset.lvweg)) renderAll();
+  });
   document.querySelectorAll('[data-lvdrill]').forEach(tr=>{
     tr.onclick=()=>{ lvDrill=tr.dataset.lvdrill; renderLv(); };
   });
@@ -9317,7 +9616,8 @@ function renderLvDetail(){
     </tr></thead><tbody>
     ${rows.map(a=>{
       const r=roomById(a.roomId);
-      const flags=[a.nutzGrund?'Grundfl.':null,a.nutzAnsicht?'Ansicht':null,a.nutzUmfang?'Umfang→L':null,
+      const flags=[a.nutzGrund?'Grundfl.':null,a.nutzAnsicht?'Ansicht':null,
+        a.nutzVolumen?'Raumvol.':null, a.nutzUmfang?'Umfang→L':null,
         a.autoL?'L↔Wand':null, a.autoH?'H↔Raum':null, a.autoObj?'L/B↔Objekt':null].filter(Boolean).join(', ')||'–';
       const res=lvCalc(a, g.alleNein);
       // Maße und Abschlag direkt in der Zeile: unauffälliges Feld, das erst beim Anfassen auffällt
@@ -9375,12 +9675,7 @@ function renderLvDetail(){
     save(); renderLv();
   });
   document.querySelectorAll('[data-lvdel]').forEach(b=>b.onclick=()=>{
-    const a=proj().attrs.find(x=>x.id===b.dataset.lvdel); if(!a) return;
-    const alt=abschlagVon(a)<proj().abschlag
-      ? `\n\nAchtung: gehört zum bereits abgeschlossenen Abschlag ${abschlagVon(a)}.` : '';
-    if(!confirm(`LV-Zuordnung „${a.lv}" (${lvZielText(a)}) löschen?${alt}`)) return;
-    fmMarkeLoeschen(a.fmMark);          // Fotoaufmaß: auch die Markierung im Bild
-    proj().attrs=proj().attrs.filter(x=>x.id!==b.dataset.lvdel); save(); renderLv();
+    if(lvZuordnungLoeschen(b.dataset.lvdel)) renderLv();
   });
 }
 
@@ -11707,7 +12002,8 @@ function exportCsv(){
   push(['','Anmerkung','Anmerkungen','Etage','Raum','Menge/Faktor/Stunden','Länge in m','Breite in m','Höhe in m',
         'Umfang in m','Durchmesser in m','Vorn','Oben','Links','Rechts','Hinten','Unten','Einheit',
         'Nutze Grundfläche als Fläche','Nutze Ansichtsfläche als Fläche','Nutze Umfang als Länge','Symbol',
-        'Abschlag']);
+        // Wie „Abschlag": hinten anhängen, damit die magicplan-Spalten davor stehen bleiben
+        'Abschlag','Nutze Raumvolumen']);
   const jn=b=>b?'Ja':'Nein';
   const num=v=>isFinite(v)?fmt3(v):'';
   p.attrs.forEach((a,i)=>{
@@ -11717,7 +12013,7 @@ function exportCsv(){
           fmt3(a.menge||0), num(a.laenge), num(a.breite), num(a.hoehe), num(a.umfang), num(a.durchm),
           jn(a.vorn), jn(a.oben), jn(a.links), jn(a.rechts), jn(a.hinten), jn(a.unten),
           a.einheit||'', jn(a.nutzGrund), jn(a.nutzAnsicht), jn(a.nutzUmfang),
-          lvZielText(a, true), String(abschlagVon(a))]);
+          lvZielText(a, true), String(abschlagVon(a)), jn(a.nutzVolumen)]);
   });
   if(!p.attrs.length){
     alert('Hinweis: Es sind noch keine LV-Positionen angelegt — der Attribute-Block der CSV bleibt leer.');
@@ -12157,10 +12453,15 @@ const LV_RAUMMASS=[
 ];
 /* Die Positionstabelle des Drucks — dieselbe unter dem Raum wie hinter einem Foto.
    Herausgeloest, damit beide Stellen wirklich gleich aussehen und nicht auseinanderlaufen. */
-function lvDruckTabelle(lvs, p){
+/* `alle` und `zebraAb` gibt es für die geteilte Raumtabelle: Welche Spalten aufgemacht
+   werden, muss die GANZE Tabelle entscheiden — sonst hätte Teil 1 eine Spalte
+   „Ansichtsfl.", Teil 2 nicht, und dieselbe Tabelle sähe auf zwei Blättern verschieden
+   aus. Der Zebra-Versatz führt das Streifenmuster über den Umbruch hinweg fort. */
+function lvDruckTabelle(lvs, p, alle, zebraAb){
   if(!lvs.length) return '<div style="color:#888; font-size:11px">Keine LV-Positionen zugeordnet.</div>';
-  const masse=lvMassSpalten(lvs);
-  const ansicht=lvs.some(hatAnsicht);      // Spalte nur bei vorhandenem Eintrag
+  const masse=lvMassSpalten(alle||lvs);
+  const ansicht=(alle||lvs).some(hatAnsicht);      // Spalte nur bei vorhandenem Eintrag
+  const z0=zebraAb||0;
   return `<table><thead><tr>
     <th>LV</th><th>Kurztext</th><th>Nummer</th><th class="num">Menge</th>
     ${masse.map(x=>`<th class="num">${x.t}</th>`).join('')}
@@ -12170,7 +12471,7 @@ function lvDruckTabelle(lvs, p){
   ${lvs.map((a,i)=>{
     const alleNein=lvGroupAlleNein((p.attrs||[]).filter(x=>x.lv===a.lv && imAbschlag(x)));
     const res=lvCalc(a, alleNein);
-    return `<tr class="${i%2?'zebra':''}"><td>${esc(a.lv)}</td>
+    return `<tr class="${(i+z0)%2?'zebra':''}"><td>${esc(a.lv)}</td>
       <td>${esc(kurzDruck(a.kurz||(p.lvTexts||{})[a.lv]||''))}</td>
       <td>${esc(nummerDruck(a))}</td>
       <td class="num">${fmt3(a.menge)}</td>
@@ -12179,6 +12480,88 @@ function lvDruckTabelle(lvs, p){
       <td class="num"><b>${fmt3(res.wert)}</b> ${res.sym}</td></tr>`;
   }).join('')}
   </tbody></table>`;
+}
+/* ---------- Wie hoch wird das auf dem Papier? ----------
+   `#printarea` ist am Bildschirm ausgeblendet und liefert deshalb keine Höhen. Diese
+   Sonde ist ein zweiter, gleich breiter Satzspiegel (186 mm) mit denselben Klassen,
+   der weit außerhalb des Bildes liegt. Gemessen wird in Millimetern, weil die ganze
+   Seitenrechnung in mm denkt.
+
+   Warum überhaupt messen und nicht wie bei den anderen Tabellen mit Konstanten rechnen:
+   Über der Raumtabelle steht Veränderliches — die Maßverweise neben der Mini-Etage und
+   der Anmerkungskasten wachsen mit dem Raum —, und ein langer Kurztext bricht in der
+   Zeile um. Beides ist keine Konstante, und ein zu großzügiger Schätzwert schnitte
+   wieder ab. Eine Messung je Raumseite kostet ein Layout; das fällt neben dem Zeichnen
+   der Pläne nicht auf. */
+let druckSonde=null, druckPxMm=0;
+function druckMessen(html, fn){
+  if(!druckSonde){
+    druckSonde=document.createElement('div');
+    druckSonde.className='psheet';
+    druckSonde.style.cssText='position:absolute; left:-10000px; top:0; width:210mm; '+
+      'height:auto; overflow:visible; box-shadow:none;';
+    druckSonde.innerHTML='<div class="pbody" style="position:static; width:186mm; height:auto"></div>';
+    document.body.appendChild(druckSonde);
+    const p=document.createElement('div');
+    p.style.cssText='height:100mm; position:absolute; visibility:hidden';
+    document.body.appendChild(p); druckPxMm=p.offsetHeight/100; p.remove();
+  }
+  const b=druckSonde.firstChild;
+  b.innerHTML=html;
+  try{ return fn(b, px=>px/druckPxMm); }
+  finally{ b.innerHTML=''; }                 // sonst hinge das letzte Blatt im Speicher
+}
+/* Die Positionstabelle eines Raums auf so viele Blätter verteilen, wie sie braucht.
+   Vorher schnitt `overflow:hidden` sie am Fuß einfach ab (Wunsch vom 6.8.2026).
+   Folgeblätter tragen Raum und Etage erneut, wiederholen die Kopfzeile der Tabelle und
+   zählen „Teil n von m" — den Plan gibt es nur einmal, ganz vorn. */
+function raumLvSeiten(kopfHtml, r, f, lvs, p){
+  const ueb = t => `<div style="font-weight:700; font-size:12px; margin-bottom:1.5mm">`+
+    `LV-Positionen in diesem Raum${t}</div>`;
+  /* Die Klasse ist zum Messen da: Über der Tabelle kann der Anmerkungskasten stehen,
+     und der bringt eine eigene `<table>` mit. Ein bloßes `querySelector('table')`
+     erwischt die — und stolpert über ihre fehlende Kopfzeile. */
+  const block = inner => `<div class="plvraum" style="margin-top:4mm">${inner}</div>`;
+  const fortKopf = `<div class="ptitle">▼ ${esc(r.name)}<small>${esc(f.name)} · Fortsetzung</small></div>`;
+  // Ohne Zuordnungen bleibt alles beim Alten: eine Seite, darauf der Hinweistext
+  if(!lvs.length) return [kopfHtml + block(ueb('') + lvDruckTabelle(lvs, p))];
+
+  // Einmal messen: was steht über der Tabelle, wie hoch sind Kopfzeile und jede Zeile
+  const tabelle=lvDruckTabelle(lvs, p);
+  const mass = (vor) => druckMessen(vor + block(ueb('') + tabelle), (b, mm)=>{
+    const t=b.querySelector('.plvraum table');
+    return {
+      oben: mm(t.getBoundingClientRect().top - b.getBoundingClientRect().top),
+      kopfzeile: mm(t.tHead.getBoundingClientRect().height),
+      zeilen: [...t.tBodies[0].rows].map(tr=>mm(tr.getBoundingClientRect().height))
+    };
+  });
+  const erste=mass(kopfHtml), folge=mass(fortKopf);
+  const zeilen=erste.zeilen;
+
+  // Aufteilen: greedy von oben, jede Zeile mit ihrer gemessenen Höhe
+  const teile=[]; let i=0, aufErster=true;
+  while(i<zeilen.length){
+    const platz=PLV_BODY - (aufErster?erste.oben:folge.oben) - (aufErster?erste.kopfzeile:folge.kopfzeile);
+    let h=0, n=0;
+    while(i+n<zeilen.length && h+zeilen[i+n]<=platz){ h+=zeilen[i+n]; n++; }
+    if(!n){
+      /* Unter dem Plan ist keine einzige Zeile mehr frei — dann fängt die Tabelle
+         gleich auf dem Folgeblatt an, statt eine Zeile über den Fuß zu schieben.
+         Auf dem Folgeblatt passt immer mindestens eine (dort steht nur der Titel). */
+      if(aufErster){ teile.push(null); aufErster=false; continue; }
+      n=1;
+    }
+    teile.push({von:i, n, erste:aufErster});
+    i+=n; aufErster=false;
+  }
+  const anzahl=teile.filter(Boolean).length;
+  return teile.map(t=>{
+    if(!t) return kopfHtml;                          // Blatt nur mit Plan
+    const zusatz = anzahl>1 ? ` (Teil ${teile.filter(Boolean).indexOf(t)+1} von ${anzahl})` : '';
+    return (t.erste?kopfHtml:fortKopf)
+      + block(ueb(zusatz) + lvDruckTabelle(lvs.slice(t.von, t.von+t.n), p, lvs, t.von));
+  });
 }
 function lvMassSpalten(rows){
   const sp=[];
@@ -12557,7 +12940,7 @@ function buildPrintIntern(){
         planMini=planSvg(rooms, {grau:true, highlight:r.id, namen:false, masse:false,
           objekte:false, boxW:28, boxH:36});
       } finally { plakettenAus=false; }
-      seiten.push(`
+      const raumKopf=`
         <div style="display:flex; justify-content:space-between; align-items:flex-start">
           <div class="ptitle">▼ ${esc(r.name)}<small>${esc(f.name)}</small></div>
           <div class="pstats">GRUNDFLÄCHE: ${fmt(st.area,2)} m² • UMFANG: ${fmt(st.per,2)} m • DECKENHÖHE: ${fmt(r.height,2)} m</div>
@@ -12569,11 +12952,9 @@ function buildPrintIntern(){
           </div>
           <div style="flex:1">${planGross}</div>
         </div>
-        ${anmerkungKasten(r, lvs)}
-        <div style="margin-top:4mm">
-          <div style="font-weight:700; font-size:12px; margin-bottom:1.5mm">LV-Positionen in diesem Raum</div>
-          ${lvDruckTabelle(lvs, p)}
-        </div>`);
+        ${anmerkungKasten(r, lvs)}`;
+      // Passt die Positionstabelle nicht mehr unters Blatt, läuft sie auf Folgeseiten weiter
+      raumLvSeiten(raumKopf, r, f, lvs, p).forEach(s=>seiten.push(s));
       /* 3) Fotoaufmaß: je Foto EINE ganze Seite. Bewusst nicht vier auf einer Seite wie
          bei den übrigen Bildern — hier stehen Maße im Bild, und die müssen lesbar sein.
          Unter dem Bild die Summen je Slot, damit die Seite für sich allein steht. */
