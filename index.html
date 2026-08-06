@@ -520,6 +520,7 @@
   .werkzeuge button.an{border-color:var(--accent); background:#eaf1ff;
     box-shadow:0 0 0 1px var(--accent);}
   .werkzeuge button.breit{grid-column:span 2;}
+  .werkzeuge.drei{grid-template-columns:repeat(3,1fr);}
   .werkzeuge button.loesch{color:var(--danger); border-color:#f0c4c4;}
   /* Kopfzeile mit den beiden Anwahl-Schaltern rechts */
   .panel h3.mitschalter{display:flex; align-items:center; justify-content:space-between; gap:8px;}
@@ -1015,7 +1016,15 @@
       <div class="row"><label class="sym">B</label><input id="lvB" class="laser"></div>
       <!-- Die beiden Raum-Knöpfe stehen jetzt an dem Feld, das sie füllen. -->
       <div class="row"><label class="sym">L</label><input id="lvL" class="laser">
-        <button class="btn small mini" id="lvUmfangRaum">▭</button></div>
+        <button class="btn small mini" id="lvUmfangRaum">▭</button>
+        <!-- Das U steht fuer „einmal umlaufend": beide Seiten plus die Stirnflaechen.
+             Nur an Bauteilen sichtbar, sonst gibt es nichts zu umlaufen. -->
+        <button class="btn small mini" id="lvEinfach"><svg viewBox="0 0 24 24" width="15" height="15"
+          fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
+          aria-hidden="true"><path d="M12 4v16"/></svg></button>
+        <button class="btn small mini" id="lvUmlauf"><svg viewBox="0 0 24 24" width="15" height="15"
+          fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
+          aria-hidden="true"><path d="M6.5 4v9.5a5.5 5.5 0 0 0 11 0V4"/></svg></button></div>
       <div class="row"><label class="sym">H</label><input id="lvH" class="laser">
         <button class="btn small mini" id="lvHoeheRaum">↕</button></div>
       <div class="row"><label class="sym">⌀</label><input id="lvD" class="laser"></div>
@@ -1717,6 +1726,161 @@ function polyUmlauf(pts){
 // Polygon in eine bestimmte Drehrichtung bringen — die Form bleibt dieselbe
 const polyDreh = (pts, positiv) => (polyUmlauf(pts)>0)===positiv ? pts : [...pts].reverse();
 function polyArea(pts){ return Math.abs(polyUmlauf(pts))/2; }
+/* ---------- Halbwände (seit 2026-08-06) ----------
+   Ein Wandvorsprung, der von einer Wand in den Raum ragt. Er steht bewusst **nicht**
+   in `r.points`: an den Indizes dort hängen Öffnungen, Wandnummern, Wandstärken,
+   Sperren und LV-Zuordnungen — vier Ecken einzuschieben würde jede einzelne davon
+   verschieben. Stattdessen liegt er als Objekt (`type:'hw'`) im Raum, und die
+   INNENKONTUR macht beim Zeichnen einen Umweg um ihn herum.
+
+   Aus diesem einen Kniff fällt alles Weitere von selbst:
+     · `wandRingD` zeichnet die Wand als Ring zwischen Außen- und Innenkontur — der
+       Vorsprung gehört damit zum Mauerwerk, sieht aus wie jede andere Wand und hat
+       keine Fuge, weil da gar keine Kante ist;
+     · `polyArea` der Innenkontur ist die Grundfläche schon ABZÜGLICH des Vorsprungs;
+     · `polyPerimeter` ist der Umfang schon EINSCHLIESSLICH seiner drei freien Seiten.
+   Nichts davon muss extra gerechnet werden. */
+const halbwaende = r => (r && r.objects || []).filter(g => g && g.type==='hw');
+const istHalbwand = g => !!(g && g.type==='hw');
+/* Die vier Eckpunkte eines Vorsprungs, dazu seine Achsen. `t` misst bis zur MITTE des
+   Vorsprungs, gemessen ab dem Wandanfang — so bleibt er beim Ändern der Stärke stehen,
+   statt nach einer Seite zu wandern. */
+/* ---------- Die Mittellinie einer Halbwand ----------
+   Gespeichert wird sie im System IHRER Wand: `a` läuft an der Wand entlang, `e` in den
+   Raum hinein, beides ab dem Fußpunkt. Nicht in Raumkoordinaten — sonst bliebe die
+   Halbwand stehen, wenn die Wand gezogen wird, und hinge in der Luft.
+
+   Die Punkte sind **frei ziehbar wie Raumecken** (Nutzerwunsch 6.8.2026). Vorher waren
+   es feste 90°-Knicke mit Längenfeldern; das war keine Ecke, sondern eine Eingabe. */
+function hwRelPunkte(g){
+  if(g && g.punkte && g.punkte.length) return g.punkte;
+  // Altbestand aus {laenge, knicke} — einmalig in Punkte umgerechnet
+  const l=Math.max(0.02, g && g.laenge || 0.5);
+  let a=0, e=l, dir={a:0, e:1};
+  const out=[{a, e}];
+  ((g && g.knicke) || []).forEach(k=>{
+    const vz=k.dreh<0?-1:1;
+    dir={a:vz*dir.e, e:-vz*dir.a};
+    const s=Math.max(0.02, k.laenge||0.3);
+    a+=dir.a*s; e+=dir.e*s;
+    out.push({a, e});
+  });
+  return out;
+}
+// Beim ersten Bearbeiten festschreiben — danach gibt es die alten Felder nicht mehr
+function hwPunkteSetzen(g){
+  if(!g.punkte || !g.punkte.length){
+    g.punkte=hwRelPunkte(g).map(q=>({a:mm(q.a), e:mm(q.e)}));
+    delete g.laenge; delete g.knicke;
+  }
+  return g.punkte;
+}
+const hwAbschnitte = g => {
+  const pts=[{a:0,e:0}].concat(hwRelPunkte(g));
+  const out=[];
+  for(let i=0;i<pts.length-1;i++)
+    out.push({laenge:Math.hypot(pts[i+1].a-pts[i].a, pts[i+1].e-pts[i].e)});
+  return out;
+};
+const hwGesamt = g => hwAbschnitte(g).reduce((s,a)=>s+a.laenge, 0);
+// Schnittpunkt zweier Geraden (Punkt + Richtung) — null, wenn sie (fast) parallel sind
+function geradenSchnitt(p1, d1, p2, d2){
+  const n=d1.x*d2.y-d1.y*d2.x;
+  if(Math.abs(n)<1e-9) return null;
+  const t=((p2.x-p1.x)*d2.y-(p2.y-p1.y)*d2.x)/n;
+  return {x:p1.x+d1.x*t, y:p1.y+d1.y*t};
+}
+function hwGeometrie(r, g){
+  if(!r || !g || g.wall==null || !(g.wall>=0 && g.wall<r.points.length)) return null;
+  const [A,B]=wallPoints(r, g.wall);
+  const L=dist(A,B);
+  if(L<0.005) return null;
+  const ux=(B.x-A.x)/L, uy=(B.y-A.y)/L;
+  // Normale nach INNEN — welche der beiden Seiten das ist, entscheidet der Umriss
+  let nx=-uy, ny=ux;
+  const m={x:A.x+ux*L/2, y:A.y+uy*L/2};
+  if(!pointInPoly({x:m.x+nx*0.02, y:m.y+ny*0.02}, r.points)){ nx=-nx; ny=-ny; }
+  const d=Math.max(0.02, Math.min(L, g.dicke||0.115));
+  const tm=Math.max(d/2, Math.min(L-d/2, (g.t!=null?g.t:L/2)));   // Fußpunkt auf der Wand
+  const t0=tm-d/2;
+  // Aus dem Wandsystem in den Plan: `a` entlang der Wand, `e` in den Raum
+  const W=q=>({x:A.x+ux*(tm+q.a)+nx*q.e, y:A.y+uy*(tm+q.a)+ny*q.e});
+  const rel=[{a:0,e:0}].concat(hwRelPunkte(g));
+  const mitten=rel.map(W);
+  if(mitten.length<2) return null;
+
+  /* Umriss: beide Seiten der Mittellinie um `Stärke/2` versetzen. An jeder Ecke
+     schneiden sich die beiden versetzten Geraden — das ist die Gehrung, und sie gilt
+     für JEDEN Winkel, nicht nur für den rechten. Läuft die Ecke fast gerade durch,
+     gibt es keinen Schnittpunkt; dann tut es der einfache Versatz. */
+  const richtungen=[];
+  for(let i=0;i<mitten.length-1;i++){
+    const dx=mitten[i+1].x-mitten[i].x, dy=mitten[i+1].y-mitten[i].y;
+    const ll=Math.hypot(dx,dy)||1;
+    richtungen.push({x:dx/ll, y:dy/ll});
+  }
+  // Vorzeichen so, dass die erste Seite bei t0 liegt (also gegen die Wandrichtung)
+  const q0={x:-richtungen[0].y, y:richtungen[0].x};
+  const vz=(q0.x*ux+q0.y*uy) < 0 ? 1 : -1;
+  const versatz=(k,vorz)=>({x:vorz*vz*-richtungen[k].y*d/2, y:vorz*vz*richtungen[k].x*d/2});
+  const seite=vorz=>{
+    const out=[];
+    const v0=versatz(0,vorz);
+    /* Der Fuß gehört auf die WANDLINIE, nicht neben sie: schneidet man die versetzte
+       Flanke mit der Wand, sitzt die Halbwand auch dann sauber in der Flucht, wenn ihr
+       erster Abschnitt schräg steht. Ohne das entstand dort ein feiner Keil. */
+    const fuss=geradenSchnitt({x:mitten[0].x+v0.x, y:mitten[0].y+v0.y}, richtungen[0],
+                              A, {x:ux, y:uy});
+    out.push(fuss || {x:mitten[0].x+v0.x, y:mitten[0].y+v0.y});
+    for(let k=1;k<richtungen.length;k++){
+      const a=versatz(k-1,vorz), b=versatz(k,vorz);
+      const q=geradenSchnitt({x:mitten[k].x+a.x, y:mitten[k].y+a.y}, richtungen[k-1],
+                             {x:mitten[k].x+b.x, y:mitten[k].y+b.y}, richtungen[k]);
+      out.push(q || {x:mitten[k].x+b.x, y:mitten[k].y+b.y});
+    }
+    const ve=versatz(richtungen.length-1,vorz), letzt=mitten[mitten.length-1];
+    out.push({x:letzt.x+ve.x, y:letzt.y+ve.y});
+    return out;
+  };
+  return {A, B, L, ux, uy, nx, ny, d, t0, tm, mitten, richtungen, rel,
+          spitze:mitten[mitten.length-1],
+          ecken:seite(1).concat(seite(-1).reverse()),
+          mitte:{x:(mitten[0].x+mitten[1].x)/2, y:(mitten[0].y+mitten[1].y)/2}};
+}
+/* Der Raumumriss, wie er wirklich aussieht: `r.points` mit dem Umweg um jede Halbwand.
+   ALLES, was Fläche, Umfang oder Mauerwerk zeichnet, muss hierüber gehen — `r.points`
+   allein ist nur noch die Liste der nummerierten Wände. */
+function innenPolygon(r){
+  const hw=halbwaende(r);
+  if(!hw.length || !r.points || r.points.length<3) return r.points;
+  const out=[];
+  for(let i=0;i<r.points.length;i++){
+    out.push(r.points[i]);
+    const dran=hw.filter(g=>g.wall===i)
+      .map(g=>({g, geo:hwGeometrie(r,g)})).filter(x=>x.geo)
+      .sort((x,y)=>x.geo.t0-y.geo.t0);
+    dran.forEach(x=>{ x.geo.ecken.forEach(pt=>out.push(pt)); });
+  }
+  return out;
+}
+// Einfache Länge (eine Flanke) und umlaufende Länge (beide Flanken + Stirnseite)
+/* Einfache Länge = eine Flanke, also die Mittellinie über alle Abschnitte.
+
+   Umlaufend = einmal außen herum: beide Flanken plus die Stirnseite. Die andere
+   Stirnseite steckt in der Wand und zählt nicht mit — deshalb der Abzug einer Stärke
+   vom Umfang des Umrisses. **Gerechnet wird aus dem echten Umriss**, nicht als
+   „2 × Gesamtlänge + Stärke": das stimmt nur bei rechten Winkeln, und seit die Ecken
+   frei ziehbar sind, sind sie oft keine. Bei schiefen Ecken legt die Gehrung außen mehr
+   zu, als sie innen wegnimmt. */
+const hwRaumVon = g => (proj().rooms||[]).find(r=>(r.objects||[]).some(o=>o.id===g.id));
+const hwLaenge = g => g ? hwGesamt(g) : 0;
+function hwUmlauf(g, r){
+  if(!g) return 0;
+  const raum=r || hwRaumVon(g);
+  const geo=raum?hwGeometrie(raum, g):null;
+  if(!geo) return 2*hwGesamt(g) + Math.max(0, g.dicke||0);     // Notnagel ohne Raum
+  return Math.max(0, polyPerimeter(geo.ecken) - geo.d);
+}
 function polyPerimeter(pts){
   let s=0;
   for(let i=0;i<pts.length;i++) s += dist(pts[i], pts[(i+1)%pts.length]);
@@ -2272,7 +2436,9 @@ function aussenPolygon(r){
   return aus;
 }
 function roomStats(r){
-  const area=polyArea(r.points), per=polyPerimeter(r.points);
+  // Über die Innenkontur: Halbwände ziehen Fläche ab und legen Umfang zu
+  const innen=innenPolygon(r);
+  const area=polyArea(innen), per=polyPerimeter(innen);
   let winA=0, doorA=0, laibA=0;
   (r.openings||[]).forEach(o=>{
     const a=(o.width||0)*(o.height||0);
@@ -2427,7 +2593,7 @@ function wandRingD(r){
   const aussen=aussenPolygon(r);
   if(!aussen.length) return '';
   const d=pts=>pts.map((p,i)=>(i?'L':'M')+p.x+' '+p.y).join(' ')+' Z';
-  return d(polyDreh(aussen, true))+' '+d(polyDreh(r.points, false));
+  return d(polyDreh(aussen, true))+' '+d(polyDreh(innenPolygon(r), false));
 }
 /* Alle Wände einer Etage als EINE Lage.
    Stoßen zwei verschieden dicke Wände aneinander, lägen sonst ihre Innenkanten als
@@ -2828,6 +2994,8 @@ function zoneMarks(r, lbl){
 function objMarks(r, lbl, interactive){
   let out='';
   (r.objects||[]).forEach(g=>{
+    // Halbwände sind schon im Mauerwerk gezeichnet — `hwMarks` legt nur die Trefferfläche darüber
+    if(istHalbwand(g)) return;
     const isSel = interactive && sel.objId===g.id;
     const ab=out.length;                                   // Startmarke für das Ausgrauen
     if(g.type==='rect'){
@@ -2868,9 +3036,12 @@ function objMarks(r, lbl, interactive){
       out+=objBadge(g, cx+rr+lbl*0.45, cy-rr-lbl*0.45, lbl, interactive);
     } else if(g.type==='sym'){
       const cx=g.x+g.w/2, cy=g.y+g.h/2;
-      const st=isSel?'#2f6fed':'#0e7d5c';
+    /* Bauteile tragen die Farbe des Mauerwerks, nicht das Grün der Schleusen — eine
+       Halbwand im Raum soll wie eine Wand aussehen und nicht wie ein Gerät. */
+      const st=isSel?'#2f6fed':(istBauteil(g)?'#3b4557':'#0e7d5c');
+      const fl=istBauteil(g) ? (isSel?'#e8f0fe':'#eef0f4') : '#e6f6ef';
       out+=`<g transform="rotate(${g.rot||0} ${cx} ${cy})">`;
-      out+=`<rect x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" fill="#e6f6ef" fill-opacity="0.9" stroke="${st}" stroke-width="${isSel?0.06:0.04}"${interactive?` data-obj="${g.id}" style="cursor:move"`:''}/>`;
+      out+=`<rect x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" fill="${fl}" fill-opacity="0.9" stroke="${st}" stroke-width="${isSel?0.06:0.04}"${interactive?` data-obj="${g.id}" style="cursor:move"`:''}/>`;
       if(g.sub==='rfa'){
         const rr=Math.min(g.w,g.h)*0.3;
         out+=`<circle cx="${cx}" cy="${cy}" r="${rr}" fill="none" stroke="${st}" stroke-width="0.035" style="pointer-events:none"/>`;
@@ -2898,6 +3069,25 @@ function objMarks(r, lbl, interactive){
         // Maßpfeil mit Endstrichen: hier wird gemessen
         out+=`<line x1="${a1.x}" y1="${a1.y}" x2="${a2.x}" y2="${a2.y}" ${stift(0.045)}/>`;
         [a1,a2].forEach(q=>{ out+=`<line x1="${q.x}" y1="${q.y-sw*0.06}" x2="${q.x}" y2="${q.y+sw*0.06}" ${stift(0.045)}/>`; });
+      } else if(g.sub==='treppe'){
+        /* Die Stufen kommen aus der Lauflänge, nicht aus einer gespeicherten Zahl:
+           zieht man die Treppe länger, kommen welche dazu. Der Pfeil zeigt die
+           Laufrichtung, der Punkt am Fuß den Antritt. */
+        const n=stufenZahl(g), strich=Math.min(g.w,g.h)*0.045;
+        for(let i=1;i<n;i++){
+          const xx=g.x+g.w*i/n;
+          out+=`<line x1="${xx}" y1="${g.y}" x2="${xx}" y2="${g.y+g.h}" stroke="${st}" stroke-width="${strich}" style="pointer-events:none"/>`;
+        }
+        const x0=g.x+g.w*0.07, x1=g.x+g.w*0.93, ph=Math.min(g.h*0.2, g.w*0.07);
+        const stift=`stroke="${st}" stroke-width="${strich*1.4}" fill="none" style="pointer-events:none"`;
+        out+=`<line x1="${x0}" y1="${cy}" x2="${x1}" y2="${cy}" ${stift}/>`;
+        out+=`<path d="M ${x1} ${cy} L ${x1-ph*1.7} ${cy-ph} M ${x1} ${cy} L ${x1-ph*1.7} ${cy+ph}" ${stift}/>`;
+        out+=`<circle cx="${x0}" cy="${cy}" r="${strich*1.6}" fill="${st}" style="pointer-events:none"/>`;
+      } else if(g.sub==='schacht'){
+        // Kreuz = Durchbruch/Schacht, so steht es im Plan
+        const sw=Math.min(g.w,g.h)*0.05;
+        out+=`<line x1="${g.x}" y1="${g.y}" x2="${g.x+g.w}" y2="${g.y+g.h}" stroke="${st}" stroke-width="${sw}" style="pointer-events:none"/>`;
+        out+=`<line x1="${g.x+g.w}" y1="${g.y}" x2="${g.x}" y2="${g.y+g.h}" stroke="${st}" stroke-width="${sw}" style="pointer-events:none"/>`;
       } else {
         const k=(SYMDEFS[g.sub]||{}).k||1;
         for(let i=1;i<k;i++){
@@ -3063,7 +3253,7 @@ function renderCanvas(){
   // sonst zerschneiden sich benachbarte Wandkörper gegenseitig mit ihren Konturen
   if(!fr){
     rooms.forEach(r=>{
-      const d = r.points.map((p,i)=>(i?'L':'M')+p.x+' '+p.y).join(' ')+' Z';
+      const d = innenPolygon(r).map((p,i)=>(i?'L':'M')+p.x+' '+p.y).join(' ')+' Z';
       out+=`<path d="${d}" fill="${r.id===sel.roomId?'#e8f0fe':'#fdfcf8'}" data-roomid="${r.id}"/>`;
       out+=raumFarbeSvg(r);                    // Sanierungsbereiche auch in der Übersicht
     });
@@ -3087,6 +3277,7 @@ function renderCanvas(){
     }
     out+=openingMarks(r, lbl);
     out+=wallMarks(r, lbl);
+    out+=hwMarks(r, lbl, !!(fr && selR));
     out+=objMarks(r, lbl, !!(fr && selR));
     if(!dim) out+=zoneMarks(r, lbl);
     /* Winkelbögen nur in der Raumansicht und nur, solange eine Ecke DIESES Raums in der
@@ -3705,10 +3896,44 @@ const SYMDEFS={
   '2k':{label:'2-K-Schleuse', w:2.0, h:1.0, k:2},
   '4k':{label:'4-K-Schleuse', w:4.0, h:1.0, k:4},
   'rfa':{label:'RFA', w:1.2, h:1.2, k:0},
+  /* Bauteile im Raum (seit 2026-08-06). Sie sitzen auf derselben Mechanik wie die
+     Schleusen — Rechteck mit Drehung, Eckgriffen und Nummer —, haben aber zwei
+     Eigenschaften mehr:
+       `bauteil` : rastet beim Ziehen an der nächsten Raumwand ein (rechtwinklig) und
+                   trägt einen UMLAUF, den eine LV-Zuordnung übernehmen kann.
+       `ohneLv`  : reines Zeichnungsobjekt — keine LV-Position, keine Nummer.
+     `masse` beschriftet die beiden Maßfelder im Panel: an einer Wand heißt `h` Dicke,
+     an einer Treppe Breite. Dieselbe Zahl, ein anderes Wort — und ohne das richtige
+     Wort trägt man das Falsche ein. */
+  'schacht':{label:'Schacht', w:0.80, h:0.60,  k:0, bauteil:true, masse:['Breite','Tiefe']},
+  'treppe': {label:'Treppe',  w:2.80, h:1.00,  k:0, bauteil:true, ohneLv:true,
+             masse:['Lauflänge','Breite']},
   'p360':{label:'360°-Aufnahme', w:0.6, h:0.6, k:0, foto360:true},
   'fotom':{label:'Fotoaufmaß', w:0.6, h:0.6, k:0, fotoMass:true}
 };
 const ist360 = g => g && g.type==='sym' && g.sub==='p360';
+const symDef      = g => (g && g.type==='sym') ? (SYMDEFS[g.sub]||{}) : {};
+const istBauteil  = g => !!symDef(g).bauteil;
+const ohneLvObjekt= g => !!symDef(g).ohneLv;
+/* Eine Stufe je 28 cm Lauflänge, mindestens zwei. Wird die Treppe länger gezogen,
+   kommen Stufen DAZU — sie werden nicht mitskaliert; genau darum geht es. */
+const STUFE_M=0.28;
+const stufenZahl = g => Math.max(2, Math.round((g.w||0)/STUFE_M));
+/* „Umlaufend" = einmal ums Bauteil herum: beide Seiten plus die beiden Stirnflächen.
+   Genau die Menge, die zählt, wenn an einer Halbwand rundum Putz abgeschlagen wird.
+   Für gezeichnete Flächen gilt dieselbe Rechnung, dort aber über die (ggf. von Hand
+   gesetzten) Maße statt über die Zeichnung. */
+function umlaufVon(g){
+  if(!g) return 0;
+  // Die Halbwand hat nur EINE freie Stirnseite — die andere steckt in der Wand
+  if(istHalbwand(g)) return hwUmlauf(g, roomById(lvRoomId));
+  if(g.type==='sym') return istBauteil(g) ? 2*((g.w||0)+(g.h||0)) : 0;
+  if(g.type==='rect'){
+    const L=objMass(g,'L'), B=objMass(g,'B');
+    return (Number.isFinite(L)&&Number.isFinite(B)) ? 2*(L+B) : 0;
+  }
+  return 0;
+}
 /* ---------- Fotoaufmaß (seit 2026-08-04) ----------
    Ein Punkt im Raum, an dem bis zu drei Fotos hängen. Auf jedem Foto wird direkt
    gemessen: Rechtecke für Flächen, Polylinien für Längen, Kreuze zum Zählen. Jede
@@ -4447,13 +4672,40 @@ svg.addEventListener('pointermove', e=>{
   } else if(drag.kind==='objmove'){
     const dx=mm(p.x-drag.start.x), dy=mm(p.y-drag.start.y);
     const g=drag.g, o=drag.orig;
+    if(istHalbwand(g)){
+      /* Eine Halbwand kann den Raum nicht verlassen — sie rutscht nur an IHRER Wand
+         entlang. Gerechnet wird als Projektion der Zeigerstelle auf die Wand. */
+      const geo=hwGeometrie(drag.room, g);
+      if(geo){
+        const t=(p.x-geo.A.x)*geo.ux + (p.y-geo.A.y)*geo.uy;
+        g.t=mm(Math.max(geo.d/2, Math.min(geo.L-geo.d/2, t)));
+        if(Math.abs(g.t-o.t)>0.0005) drag.moved=true;
+      }
+      renderCanvas(); return;
+    }
     if(g.points){ g.points=o.points.map(pt=>({x:pt.x+dx, y:pt.y+dy})); }
     else { g.x=o.x+dx; g.y=o.y+dy; }
+    bauteilRasten(g, drag.room);          // Wand, Schacht, Treppe an die Raumwand
     if(dx||dy) drag.moved=true;
     renderCanvas();
   } else if(drag.kind==='objh'){
     const g=drag.g;
     let q={x:mm(p.x), y:mm(p.y)};
+    if(istHalbwand(g)){
+      /* Zurück ins Wandsystem rechnen und dort ablegen. Rechtwinklig zum vorherigen
+         Abschnitt rastet es ein (`orthoSnap` wie bei Linienecken) — von Hand genau
+         senkrecht zu treffen ist auf dem Tablett aussichtslos. */
+      const geo=hwGeometrie(drag.room, g);
+      if(geo){
+        const pts=hwPunkteSetzen(g), k=drag.h;
+        const vorher = k>0 ? geo.mitten[k] : geo.mitten[0];
+        const z=orthoSnap(vorher, q);
+        const dx=z.x-geo.mitten[0].x, dy=z.y-geo.mitten[0].y;
+        pts[k]={a:mm(dx*geo.ux+dy*geo.uy), e:mm(Math.max(0.02, dx*geo.nx+dy*geo.ny))};
+        drag.moved=true;
+      }
+      renderCanvas(); return;
+    }
     if(g.type==='rect'){
       const corners=[[g.x,g.y],[g.x+g.w,g.y],[g.x+g.w,g.y+g.h],[g.x,g.y+g.h]];
       const opp=corners[(drag.h+2)%4];
@@ -4867,6 +5119,68 @@ function placeOpening(r, wallIdx, type, tWunsch){
   pushDoorToPartner(r,o);
   return o;
 }
+/* ---------- Bauteile an die Raumwand rasten (seit 2026-08-06) ----------
+   Erst die Drehung: die Längsachse legt sich in die Richtung der nächsten Wand, auf
+   volle 90° gerundet. Dann die Lage: das Bauteil setzt sich mit dem Rücken an die
+   Wandinnenkante. Beides nur bei eingeschaltetem Magnet — derselbe Schalter, an dem
+   auch Wände und Ecken hängen.
+
+   Gerechnet wird immer aus der ROHEN Zugposition (`g.x/g.y` kommen frisch aus
+   Ursprung + Verschiebung), nie aus der schon gerasteten. Sonst bliebe das Bauteil
+   nach dem ersten Einrasten für immer an der Wand kleben. */
+const RAST_M=0.30;                       // so nah muss der Rücken an die Wand
+function bauteilRasten(g, r){
+  if(!istBauteil(g) || !magnetAn() || !r || !r.points) return;
+  const c={x:g.x+g.w/2, y:g.y+g.h/2};
+  let best=null;
+  r.points.forEach((_,i)=>{
+    const [p1,p2]=wallPoints(r,i);
+    const vx=p2.x-p1.x, vy=p2.y-p1.y, L=Math.hypot(vx,vy);
+    if(L<0.01) return;
+    const t=Math.max(0, Math.min(1, ((c.x-p1.x)*vx+(c.y-p1.y)*vy)/(L*L)));
+    const q={x:p1.x+vx*t, y:p1.y+vy*t}, d=Math.hypot(c.x-q.x, c.y-q.y);
+    if(!best || d<best.d) best={d, q, ux:vx/L, uy:vy/L};
+  });
+  // Der RÜCKEN zählt, nicht die Mitte — sonst rastete ein tiefes Bauteil nie ein
+  if(!best || best.d-g.h/2 > RAST_M) return;
+  // Drehung: Längsachse in die Wandrichtung, auf 90° gerundet
+  const grad=Math.atan2(best.uy, best.ux)*180/Math.PI;
+  g.rot=((Math.round(grad/90)*90)%360+360)%360;
+  // Lage: Mitte um die halbe Tiefe von der Wand weg, auf die Seite, wo das Bauteil liegt
+  const nx=-best.uy, ny=best.ux;
+  const s=Math.sign((c.x-best.q.x)*nx+(c.y-best.q.y)*ny) || 1;
+  g.x=mm(best.q.x + nx*s*g.h/2 - g.w/2);
+  g.y=mm(best.q.y + ny*s*g.h/2 - g.h/2);
+}
+/* Halbwände zum Anfassen: eine unsichtbare Fläche über dem Vorsprung. Gezeichnet ist
+   er schon als Teil des Mauerwerks — hier geht es nur um Treffer und Auswahl. */
+function hwMarks(r, lbl, aktiv){
+  return halbwaende(r).map(g=>{
+    const geo=hwGeometrie(r,g); if(!geo) return '';
+    const d=geo.ecken.map((p,i)=>(i?'L':'M')+p.x+' '+p.y).join(' ')+' Z';
+    const an=sel.objId===g.id;
+    let out=`<path d="${d}" fill="${an?'#2f6fed':'transparent'}" fill-opacity="${an?0.25:1}"
+      stroke="${an?'#2f6fed':'none'}" stroke-width="${an?lbl*0.12:0}"
+      ${aktiv?`data-obj="${g.id}" style="cursor:move"`:'style="pointer-events:none"'}/>`;
+    /* Ein Griff auf JEDER Ecke der Mittellinie — der Fußpunkt an der Wand bleibt aus:
+       er sitzt auf der Wand und wird über „Abstand" bzw. durch Ziehen der ganzen
+       Halbwand bewegt. Bedienung wie bei Raumecken: erst antippen (Ring geht auf),
+       dann ziehen. */
+    if(an && aktiv) geo.mitten.forEach((q,k)=>{
+      if(!k) return;
+      const gewaehlt = sel.objH===k-1;
+      const hs=lbl*(gewaehlt?0.45:0.35), tr=lbl*(gewaehlt?2.6:1.2);
+      if(gewaehlt) out+=`<circle cx="${q.x}" cy="${q.y}" r="${tr}" fill="url(#ziehzone)" style="pointer-events:none"/>`;
+      out+=`<circle cx="${q.x}" cy="${q.y}" r="${hs}" fill="${gewaehlt?'#2f6fed':'#fff'}"
+        stroke="#2f6fed" stroke-width="${lbl*0.12}"
+        data-obj="${g.id}" data-objh="${k-1}" style="cursor:move"/>`;
+      out+=`<circle cx="${q.x}" cy="${q.y}" r="${tr}" fill="transparent"
+        data-obj="${g.id}" data-objh="${k-1}" style="cursor:move"/>`;
+    });
+    if(g.nr) out+=objBadge(g, geo.mitte.x, geo.mitte.y, lbl, aktiv);
+    return out;
+  }).join('');
+}
 /* Objekt gehört zu dem Raum, in dem es hauptsächlich liegt (Mittelpunkt entscheidet).
    Liegt es nach dem Verschieben in einem anderen Raum, wandert es dorthin — samt LV-Positionen. */
 function objCenter(g){
@@ -5063,6 +5377,11 @@ function wandRefsUmschreiben(r, mapFn){
     if(a.roomId!==r.id || a.wall==null) return;
     const n=mapFn(a.wall);
     if(n==null) delete a.wall; else a.wall=n;
+  });
+  // Halbwände hängen an einem Wandindex wie eine Öffnung — der muss mitwandern
+  halbwaende(r).forEach(g=>{
+    const n=mapFn(g.wall);
+    if(n==null) g.wall=null; else g.wall=n;
   });
   ['wallFotos','wallNr','wallDicke','wallLock'].forEach(k=>{
     if(!r[k]) return;
@@ -5408,6 +5727,12 @@ const ICONS = {
   hoehe:      '<path d="M4 4h16M4 20h16"/><path d="M12 7v10"/><path d="M9.5 9.5 12 7l2.5 2.5"/><path d="M9.5 14.5 12 17l2.5-2.5"/>',
   farbtopf:   '<path d="M5 10 12 3l7 7-7 7z"/><path d="M19 14.5c1.2 1.6 1.8 2.7 1.8 3.4a1.8 1.8 0 0 1-3.6 0c0-.7.6-1.8 1.8-3.4z"/>',
   objekte:    '<rect x="2.5" y="3.5" width="9" height="7" rx="1"/><circle cx="17.5" cy="7" r="3.6"/><path d="M7 21l-4.5-7h9z"/>',
+  /* Die drei Bauteile. Bewusst je EIN Merkmal, das schon bei 16 px trägt: die Treppe
+     ihre Stufen, der Schacht sein Kreuz (das Plansymbol für einen Durchbruch), die
+     Wand ihr ausgefüllter Riegel im Raumeck. */
+  treppe:     '<rect x="3.2" y="4.4" width="17.6" height="15.2" rx="1"/><path d="M3.2 9.5h17.6M3.2 14.5h17.6"/><path d="M12 18.4V6.6m0 0-2.3 2.5M12 6.6l2.3 2.5"/>',
+  schacht:    '<rect x="3.6" y="3.6" width="16.8" height="16.8" rx="1"/><path d="m3.6 3.6 16.8 16.8M20.4 3.6 3.6 20.4"/>',
+  wandstueck: '<path d="M3.2 3.6v16.8h16.8"/><rect x="7.4" y="8" width="11.4" height="3.2" rx="0.4" fill="currentColor" stroke="none"/>',
   einzelwahl: '<rect x="6" y="6" width="12" height="12" rx="1.5"/>',
   mehrwahl:   '<rect x="3" y="9" width="12" height="12" rx="1.5"/><path d="M9 6.5V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-1.5"/>',
   aufschlag: '<path d="M12 4v16"/><path d="M8 8l4-4 4 4"/><path d="M8 16l4 4 4-4"/>'
@@ -5624,13 +5949,53 @@ function panelObjekt(p, selObj){
           <button class="btn small" id="objdup">Duplizieren</button>
           <button class="btn danger small" id="objdel">Entfernen</button>
         </div>`;
-      const aktionen=`<div class="panel"><h3>Aktionen</h3>
-        <div class="row"><button class="btn green small" id="objlv" style="flex:1">${ico('liste')}LV-Position</button></div>
+      /* `mitLv=false` für Bauteile ohne Zuordnung (Treppe): Duplizieren und Löschen
+         bleiben, nur die LV-Position fällt weg. */
+      const objAktionen=(mitLv)=>`<div class="panel"><h3>Aktionen</h3>
+        ${mitLv?`<div class="row"><button class="btn green small" id="objlv" style="flex:1">${ico('liste')}LV-Position</button></div>`:''}
         <div class="row">
           <button class="btn small" id="objdup" style="flex:1">${ico('kopie')}Duplizieren</button>
           <button class="btn danger small" id="objdel" style="flex:1">${ico('papierkorb')}Löschen</button>
         </div></div>`;
-      if(selObj.type==='rect'){
+      const aktionen=objAktionen(true);
+      if(istHalbwand(selObj)){
+        // `panelObjekt` bekommt den Raum nicht durchgereicht — er hängt am Objekt
+        const hwR=roomById(selObj.roomId) || roomById(focusRoomId)
+          || (p.rooms||[]).find(x=>(x.objects||[]).some(o=>o.id===selObj.id));
+        const geo=hwR?hwGeometrie(hwR, selObj):null;
+        const wandL=geo?geo.L:0;
+        html+=`<div class="panel"><h3>Halbwand${nrTxt}</h3>
+          ${hwR?sperrZeile(hwR.floorId):''}
+          <div style="height:8px"></div>
+          <div class="row"><label>Name</label><input type="text" id="objname" value="${esc(selObj.name||'')}"></div>
+          ${hwAbschnitte(selObj).map((seg,i)=>`<div class="row">
+            <label>${i?`Abschnitt ${i+1} (m)`:'Länge (m)'}</label>
+            <input class="laser hwseg" data-i="${i}" value="${fmt(seg.laenge,3)}"></div>`).join('')}
+          <div class="row">
+            <button class="btn small" id="hwecke" style="flex:1"
+              title="Teilt den letzten Abschnitt — die neue Ecke lässt sich dann frei ziehen">${ico('ecke')}Ecke einfügen</button>
+            <button class="btn small danger" id="hweckedel" style="flex:1"
+              ${hwRelPunkte(selObj).length>1?'':'disabled title="Es gibt keine Ecke"'}>${ico('papierkorb')}Ecke löschen</button>
+          </div>
+          <div class="row"><label>Stärke (m)</label><input class="laser hwfld" data-f="dicke" value="${fmt(selObj.dicke,3)}">
+            <button class="btn small" id="hwdickewand" title="Stärke der Wand übernehmen, an der sie hängt"
+              >${ico('nachbar')}${wandDicke(hwR, selObj.wall)?fmt(wandDicke(hwR, selObj.wall),3):'Wand'}</button></div>
+          <div class="row"><label></label><input id="hwdickereg" type="range" min="8" max="100" step="0.5"
+            value="${Math.max(8, Math.min(100, (selObj.dicke||0.115)*100))}" style="flex:1${
+              dickeImBereich(selObj.dicke) ? '' : '; accent-color:var(--danger)'}"
+            title="Stärke stufenlos von 0,08 bis 1,00 m — außerhalb wird der Regler rot"></div>
+          <div class="row"><label>Abstand (m)</label><input class="laser hwfld" data-f="t" value="${fmt(selObj.t,3)}"></div>
+          <div class="stat"><span>sitzt auf</span><b>Wand ${selObj.wall!=null?selObj.wall+1:'–'}${
+            wandL?` (${fmt(wandL,3)} m)`:''}</b></div>
+          <div class="stat"><span>Gesamtlänge</span><b>${fmt(hwGesamt(selObj),3)} m</b></div>
+          <div class="stat"><span>umlaufend</span><b>${fmt(hwUmlauf(selObj, hwR),3)} m</b></div>
+          <p class="hint">Sie gehört zum Mauerwerk: der Umfang wächst um zweimal ihre Länge,
+            die Grundfläche schrumpft um Länge × Stärke. <b>Abstand</b> ist die Strecke vom
+            Wandanfang bis zu ihrer Mitte — Ziehen verschiebt sie an der Wand entlang, der
+            <b>Griffe auf den Ecken</b> ziehen sie in Form — erst antippen, dann ziehen,
+            wie bei Raumecken. Rechte Winkel rasten ein.</p></div>
+          ${aktionen}`;
+      } else if(selObj.type==='rect'){
         html+=`<div class="panel"><h3>Fläche${nrTxt}</h3>
           <div class="row"><label>Name</label><input type="text" id="objname" value="${esc(selObj.name||'')}"></div>
           <div class="row"><label>Länge (m)</label>${koppelKnopf(selObj,'L')}<input class="laser objdim" data-f="L" value="${fmt(objMass(selObj,'L'),3)}"></div>
@@ -5700,14 +6065,23 @@ function panelObjekt(p, selObj){
             Die Seitenansichten schlägt die App der Wand zu, auf die sie schauen — du bestätigst vorher.</p></div>
           ${aktionen}`;
       } else if(selObj.type==='sym'){
-        html+=`<div class="panel"><h3>${esc((SYMDEFS[selObj.sub]||{}).label||'Symbol')}${nrTxt}</h3>
+        const def=SYMDEFS[selObj.sub]||{};
+        const [labL, labB]=def.masse || ['Breite','Tiefe'];
+        html+=`<div class="panel"><h3>${esc(def.label||'Symbol')}${nrTxt}</h3>
           <div class="row"><label>Name</label><input type="text" id="objname" value="${esc(selObj.name||'')}"></div>
-          <div class="row"><label>Breite (m)</label><input class="laser objdim" data-f="w" value="${fmt(selObj.w,3)}"></div>
-          <div class="row"><label>Tiefe (m)</label><input class="laser objdim" data-f="h" value="${fmt(selObj.h,3)}"></div>
+          <div class="row"><label>${esc(labL)} (m)</label><input class="laser objdim" data-f="w" value="${fmt(selObj.w,3)}"></div>
+          <div class="row"><label>${esc(labB)} (m)</label><input class="laser objdim" data-f="h" value="${fmt(selObj.h,3)}"></div>
+          ${selObj.sub==='treppe'?`<div class="stat"><span>Stufen</span><b>${stufenZahl(selObj)}</b></div>`:''}
+          <!-- Der Umlauf steht nur da, wo er auch abgerechnet werden kann. An der
+               Treppe wäre er eine Zahl ohne Verwendung. -->
+          ${(!ohneLvObjekt(selObj)&&umlaufVon(selObj))?`<div class="stat"><span>Umlaufend</span><b>${fmt(umlaufVon(selObj),3)} m</b></div>`:''}
           <div class="stat"><span>Drehung</span><b>${selObj.rot||0}°</b></div>
           <div class="row"><button class="btn small" id="objrot" style="flex:1">${ico('drehen')}Drehen 90°</button></div>
-          <p class="hint">Ziehen verschiebt das Symbol. Entf = löschen, Esc = abwählen.</p></div>
-          ${aktionen}`;
+          <p class="hint">${istBauteil(selObj)
+            ? 'Ziehen verschiebt. Bei eingeschaltetem Magnet legt sich das Bauteil rechtwinklig an die nächste Raumwand.'
+            : 'Ziehen verschiebt das Symbol.'}${
+            selObj.sub==='treppe' ? ' Die Stufen ergeben sich aus der Lauflänge.' : ''} Entf = löschen, Esc = abwählen.</p></div>
+          ${ohneLvObjekt(selObj)?objAktionen(false):aktionen}`;
       } else {
         const L=lineLen(selObj);
         html+=`<div class="panel"><h3>Linie${nrTxt}</h3>
@@ -5726,7 +6100,8 @@ function panelObjekt(p, selObj){
           ${aktionen}`;
       }
       html+=fotoPanel(selObj.fotos, 'objfoto')
-        + lvPanel(p.attrs.filter(a=>a.objId===selObj.id));
+        // Die Treppe trägt keine Zuordnungen — dann steht dort auch keine leere Liste
+        + (ohneLvObjekt(selObj) ? '' : lvPanel(p.attrs.filter(a=>a.objId===selObj.id)));
   return html;
 }
 
@@ -5940,9 +6315,14 @@ function panelWand(p, r){
     <div class="row">
       <button class="btn small" id="wopdoor" style="flex:1"${zu}>${ico('tuer')}Tür</button>
       <button class="btn small" id="wopwin" style="flex:1"${zu}>${ico('fenster')}Fenster</button>
+    </div>
+    <div class="row">
       <button class="btn small" id="wallsplit" style="flex:1"${zu} title="${merk!=null
         ? 'Teilt die Wand an der gemerkten Stelle'
         : 'Teilt diese Wand in der Mitte — vorher auf die Wand tippen bestimmt die Stelle'}">${ico('ecke')}Ecke</button>
+      <button class="btn small" id="wallhw" style="flex:1"${zu} title="${merk!=null
+        ? 'Setzt an der gemerkten Stelle einen Wandvorsprung im rechten Winkel in den Raum'
+        : 'Setzt in der Wandmitte einen Wandvorsprung im rechten Winkel in den Raum — vorher auf die Wand tippen bestimmt die Stelle'}">${ico('wandstueck')}Halbwand</button>
     </div>
     ${rueckkehrPunkt?`<div class="row"><button class="btn small danger" id="rueckkehr" style="flex:1"
       title="Stellt den Stand vor diesem Eingriff wieder her">${ico('zurueck')}Zurück vor „${esc(rueckkehrPunkt.was)}"</button></div>`:''}
@@ -6008,6 +6388,14 @@ function panelRaum(p, r, objs, ops){
       ${wz('2-K', mode==='objsym'&&pendingSym==='2k', 'data-sym="2k"', '2-Kammer-Schleuse', 'symbtn')}
       ${wz('4-K', mode==='objsym'&&pendingSym==='4k', 'data-sym="4k"', '4-Kammer-Schleuse', 'symbtn')}
       ${wz('RFA', mode==='objsym'&&pendingSym==='rfa', 'data-sym="rfa"', 'RFA', 'symbtn')}
+    </div>
+    <!-- Bauteile im Raum. Sie stehen ÜBER der Reihe mit 360° und Fotoaufmaß: das hier
+         ist Gebautes, jenes sind Aufnahmepunkte — zwei verschiedene Dinge. -->
+    <div class="werkzeuge">
+      ${wz(ico('schacht')+'Schacht', mode==='objsym'&&pendingSym==='schacht',
+        'data-sym="schacht"', 'Schacht im Raum — rastet an der nächsten Raumwand ein', 'symbtn')}
+      ${wz(ico('treppe')+'Treppe', mode==='objsym'&&pendingSym==='treppe',
+        'data-sym="treppe"', 'Treppe — die Stufen ergeben sich aus der Lauflänge; keine LV-Zuordnung', 'symbtn')}
     </div>
     <div class="werkzeuge">
       ${wz(ico('rundum')+'360°', mode==='objsym'&&pendingSym==='p360',
@@ -6419,6 +6807,20 @@ function wireWand(on, r){
     /* `#walldesel` hat bewusst KEINEN Handler mehr: Er schloss nur die Wandansicht,
        während er „Löschen" heißt. Der Knopf ist ausgegraut, bis das echte Löschen da
        ist — bekäme er den alten Handler zurück, täte er wieder das Falsche. */
+    /* Halbwand an der gemerkten Stelle. Sie steht rechtwinklig zur Wand — das ergibt
+       sich daraus, dass `hwGeometrie` von der Wandnormalen aus rechnet, sie muss also
+       nirgends gedreht werden. Stärke wie die Wand, an der sie hängt. */
+    on('#wallhw','onclick',()=>{
+      const [wa,wb]=wallPoints(r, sel.wall);
+      const L=dist(wa,wb);
+      const t=merkFuerWand(r, sel.wall);
+      const g={id:uid(), type:'hw', name:'Halbwand', wall:sel.wall,
+        t:(t!=null?t:L/2), laenge:Math.min(1.0, Math.max(0.3, L/3)),
+        dicke:wandDicke(r, sel.wall)};
+      r.objects=r.objects||[]; r.objects.push(g);
+      sel={roomId:r.id, wall:null, vertex:null, objId:g.id};
+      merkPunkt=null; save(); renderAll();
+    });
     on('#wallsplit','onclick',()=>{                       // Wand teilen → neue Ecke
       if(eckeEinfuegen(r, sel.wall, merkFuerWand(r, sel.wall))){
         merkPunkt=null;                                   // verbraucht
@@ -6466,6 +6868,65 @@ function wireObjekt(on, r){
     const selObj = sel.objId ? (r.objects||[]).find(o=>o.id===sel.objId) : null;
     if(selObj){
       on('#objname','onchange',e=>{ selObj.name=e.target.value; save(); renderAll(); });
+      const hwJetzt=()=>(r.objects||[]).find(x=>x.id===sel.objId && x.type==='hw');
+      /* Ein Längenfeld zieht seinen Abschnitt auf das Maß — in SEINER Richtung, und
+         alle dahinter liegenden Ecken wandern starr mit. Sonst würde das Eintragen
+         einer Zahl die ganze Form verziehen. */
+      document.querySelectorAll('.hwseg').forEach(inp=>{
+        inp.onchange=()=>{
+          const v=parseNum(inp.value), g=hwJetzt();
+          if(!g || !Number.isFinite(v) || v<=0){ renderAll(); return; }
+          const pts=hwPunkteSetzen(g), alle=[{a:0,e:0}].concat(pts), i=+inp.dataset.i;
+          const von=alle[i], nach=alle[i+1];
+          const len=Math.hypot(nach.a-von.a, nach.e-von.e) || 1;
+          const da=(nach.a-von.a)/len*v - (nach.a-von.a);
+          const de=(nach.e-von.e)/len*v - (nach.e-von.e);
+          for(let k=i;k<pts.length;k++){ pts[k]={a:mm(pts[k].a+da), e:mm(pts[k].e+de)}; }
+          save(); renderAll();
+        };
+      });
+      // Neue Ecke in der MITTE des letzten Abschnitts — von dort zieht man sie weg
+      on('#hwecke','onclick',()=>{
+        const g=hwJetzt(); if(!g) return;
+        const pts=hwPunkteSetzen(g), alle=[{a:0,e:0}].concat(pts);
+        const i=alle.length-2, von=alle[i], nach=alle[i+1];
+        pts.splice(i, 0, {a:mm((von.a+nach.a)/2), e:mm((von.e+nach.e)/2)});
+        sel={...sel, objH:i};
+        save(); renderAll();
+      });
+      on('#hweckedel','onclick',()=>{
+        const g=hwJetzt(); if(!g) return;
+        const pts=hwPunkteSetzen(g);
+        if(pts.length<2) return;
+        const k=(sel.objH!=null && sel.objH<pts.length-1) ? sel.objH : pts.length-2;
+        pts.splice(k,1);
+        sel={...sel, objH:null};
+        save(); renderAll();
+      });
+      on('#hwdickewand','onclick',()=>{
+        const g=hwJetzt(); if(!g) return;
+        const d=wandDicke(r, g.wall);
+        if(d) { g.dicke=d; save(); renderAll(); }
+      });
+      // Regler wie an der Wand: beim Schieben nur zeichnen, gespeichert wird am Ende
+      const hwReg=$('#hwdickereg');
+      if(hwReg){
+        hwReg.oninput=()=>{ const g=hwJetzt(); if(!g) return;
+          g.dicke=mm(+hwReg.value/100); renderCanvas(); };
+        hwReg.onchange=()=>{ const g=hwJetzt(); if(!g) return;
+          g.dicke=mm(+hwReg.value/100); save(); renderAll(); };
+      }
+      document.querySelectorAll('.hwfld').forEach(inp=>{
+        inp.onchange=()=>{
+          const v=parseNum(inp.value);
+          if(!Number.isFinite(v)) { renderAll(); return; }
+          const g=(r.objects||[]).find(x=>x.id===sel.objId); if(!g) return;
+          const geo=hwGeometrie(r,g), L=geo?geo.L:99;
+          if(inp.dataset.f==='t') g.t=Math.max(0, Math.min(L, v));
+          else                    g.dicke=Math.max(0.02, Math.min(L, v));
+          save(); renderAll();
+        };
+      });
       document.querySelectorAll('.objdim').forEach(inp=>{
         inp.onchange=()=>{
           const v=parseNum(inp.value); if(!isFinite(v)||v<=0) return;
@@ -6828,6 +7289,23 @@ function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
   $('#lvUmfangRaum').title = lvAnOeffnung
     ? 'Umfang der Öffnung (2 × Breite + 2 × Höhe) in die Länge'
     : 'Umfang des Raums in die Länge';
+  /* ▭ holt nur noch den Umfang einer ÖFFNUNG. Den Raumumfang gab es hier bis
+     2026-08-06 auch — er ist raus (Nutzerwunsch): an einer Wand oder am Raum war er
+     fast nie das gesuchte Maß und stand nur im Weg. */
+  $('#lvUmfangRaum').style.display = lvAnOeffnung ? '' : 'none';
+  /* An der Halbwand die Wahl: einfache Länge (eine Flanke) oder umlaufend (beide
+     Flanken plus Stirnseite) — je nachdem, ob nur eine Seite oder rundum abgerechnet
+     wird. An Schacht und Fläche gibt es nur den Umlauf. */
+  const gU=lvObjId ? ((roomById(lvRoomId)||{}).objects||[]).find(x=>x.id===lvObjId) : null;
+  const uWert=umlaufVon(gU);
+  $('#lvUmlauf').style.display = uWert ? '' : 'none';
+  $('#lvUmlauf').title = uWert
+    ? `Umlaufend: ${fmt3(uWert)} m${istHalbwand(gU)?' — beide Flanken plus die Stirnseite':' — einmal ums Bauteil herum'}`
+    : '';
+  $('#lvEinfach').style.display = istHalbwand(gU) ? '' : 'none';
+  $('#lvEinfach').title = istHalbwand(gU)
+    ? `Einfache Länge: nur eine Flanke (${fmt3(hwLaenge(gU))} m)` : '';
+  if(!a && istHalbwand(gU) && !$('#lvL').value) $('#lvL').value=fmt3(hwLaenge(gU));
   // Neu an Tür oder Fenster: die gekoppelten Maße stehen sofort da, sonst wären die
   // Häkchen an und die Felder leer
   if(!a && lvAnOeffnung){
@@ -8783,6 +9261,26 @@ $('#lvUmfangRaum').onclick=()=>{
   $('#lvAutoL').checked=false;
   lvRaummassLoesen();
   lvErgebnisZeigen();        // die Knöpfe tragen selbst ein und lösen kein `input` aus
+};
+/* Umlaufende Menge des Bauteils in die LÄNGE — z. B. Putz auf beiden Seiten einer
+   Halbwand. Löst wie die anderen Knöpfe jede Kopplung: die Zahl ist von Hand gesetzt,
+   sonst zöge sie das nächste Speichern gleich wieder zurück. */
+$('#lvEinfach').onclick=()=>{
+  const r=roomById(lvRoomId); if(!r) return;
+  const g=(r.objects||[]).find(x=>x.id===lvObjId);
+  if(!istHalbwand(g)) return;
+  $('#lvL').value=fmt3(hwLaenge(g));
+  $('#lvAutoL').checked=false; $('#lvAutoObj').checked=false;
+  lvRaummassLoesen(); lvErgebnisZeigen();
+};
+$('#lvUmlauf').onclick=()=>{
+  const r=roomById(lvRoomId); if(!r) return;
+  const u=umlaufVon((r.objects||[]).find(x=>x.id===lvObjId));
+  if(!u) return;
+  $('#lvL').value=fmt3(u);
+  $('#lvAutoL').checked=false; $('#lvAutoObj').checked=false;
+  lvRaummassLoesen();
+  lvErgebnisZeigen();
 };
 // Alle Felder des Dialogs als Datensatz — von „Speichern" wie vom Kopieren genutzt
 function lvDialogDaten(){
