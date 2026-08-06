@@ -67,6 +67,15 @@
   #tbmehr{display:flex; align-items:center; gap:8px;}
   #tbmehrbtn{display:none;}
   #sidebar{flex:1; min-height:0; overflow-y:auto; padding:10px;}
+  /* Werkzeugspalte ein- und ausklappen (seit 2026-08-06).
+     Der Knopf sitzt im PLAN, nicht in der Spalte -- so verschwindet er nicht mit ihr
+     und braucht kein zweites Gegenstueck. Bei offener Spalte steht er an deren rechter
+     Kante (unten rechts, wie in der Vorlage), eingeklappt rutscht er an den linken
+     Bildrand und holt sie zurueck. */
+  #blattzu{position:absolute; left:10px; bottom:10px; z-index:5;
+    width:34px; height:34px; padding:0; border:1px solid var(--line); background:#fff;
+    border-radius:9px; color:var(--accent); box-shadow:0 1px 4px rgba(0,0,0,.10);}
+  #layout.ohneblatt #blatt{width:0; min-width:0; overflow:hidden; border-right:none;}
   .panel{border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:10px; background:#fff;}
   .panel h3{font-size:12px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin-bottom:8px;}
   .row{display:flex; gap:6px; align-items:center; margin-bottom:6px; flex-wrap:wrap;}
@@ -244,6 +253,21 @@
   .btn.danger{background:#fff; border-color:#f0c4c4; color:var(--danger);}
   .btn.small{padding:3px 8px; font-size:12px;}
   .btn.active{outline:2px solid var(--accent);}
+  /* ---------- Symbole (seit 2026-08-06) ----------
+     Statt Emoji: gezeichnete Striche, die `currentColor` erben. Damit stimmt die Farbe
+     von allein — blau auf hellen Knöpfen, weiß auf dem grünen, rot auf dem Papierkorb —
+     und es gibt keine Zeichen mehr, die je nach Gerät anders aussehen oder bunt sind.
+     Bewusst KEIN `display:flex` auf `.btn`: mehrere Knöpfe leben von `text-align:left`. */
+  .ico{width:16px; height:16px; vertical-align:-3px; margin-right:5px; fill:none;
+    stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round;}
+  .ico.allein{margin-right:0;}
+  /* Schlösser sind überall gleich: grün offen, rot zu. Keine anderen Farben. */
+  .btn.auf{background:#eef7f3; border-color:#9fd8c2; color:var(--accent2);}
+  .btn.zu{background:#fdeceb; border-color:#f0b3b1; color:var(--danger);}
+  .btn.auf.active, .btn.zu.active{outline:none;}
+  /* Eine `.merkzeile` sagte hier bis 2026-08-06, wo Tür, Fenster und Ecke landen
+     werden. Wieder raus: der grüne Punkt steht ja im Plan auf der Wand, und die Zeile
+     wiederholte nur, was dort schon zu sehen ist. */
   .stat{display:flex; justify-content:space-between; font-size:13px; padding:2px 0;}
   .stat b{font-variant-numeric:tabular-nums;}
   .biglaser{font-size:26px; font-weight:700; text-align:center; padding:4px 0; font-variant-numeric:tabular-nums;}
@@ -353,6 +377,7 @@
        bis unter die Kopfleiste — ein halber Zwischenschritt war beim Aufmessen nur
        ein zusaetzlicher Tipp. */
     #blatt.zu{height:auto;}
+    #blattzu{display:none;}
     #blatt.zu #sidebar{display:none;}
     #blatt.zieht #sidebar{display:block;}
     #blatt.auf{height:auto; max-height:calc(100vh - 46px); max-height:calc(100dvh - 46px);}
@@ -413,6 +438,29 @@
   }
   @media (hover:none){ #lvtip{max-width:min(430px,88vw);} }
   /* Türtypen: Symbolknöpfe statt Auswahlmenü — man sieht, was man bekommt */
+  /* Werkzeugkacheln im Raum (seit 2026-08-06). Vorher waren es vier Reihen fast
+     gleich aussehender Knöpfe — man las jedes Mal alle zehn Beschriftungen. Jetzt
+     ein Raster: Fläche, Linie, Tür und Fenster tragen nur ihr Symbol, die übrigen
+     ihren Kurznamen, weil es für „1-K" oder „RFA" kein Bild gibt, das schneller
+     wäre als das Wort. */
+  .werkzeuge{display:grid; grid-template-columns:repeat(4,1fr); gap:5px; margin-top:5px;}
+  .werkzeuge button{height:44px; padding:2px 4px; border:1px solid var(--line);
+    background:#fff; border-radius:8px; color:var(--accent); font-size:12px;
+    line-height:1.2; min-width:0;}
+  .werkzeuge button.an{border-color:var(--accent); background:#eaf1ff;
+    box-shadow:0 0 0 1px var(--accent);}
+  .werkzeuge button.breit{grid-column:span 2;}
+  .werkzeuge button.loesch{color:var(--danger); border-color:#f0c4c4;}
+  /* Eine Karte, deren Überschrift zugleich der Auf-und-zu-Schalter ist: das `<details>`
+     TRÄGT die Klasse `.panel`, statt eines zu enthalten. Spart die doppelte Umrandung
+     und eine Zeile Höhe. */
+  .panelkopf{font-size:12px; text-transform:uppercase; letter-spacing:.6px;
+    color:var(--muted); font-weight:600; cursor:pointer; list-style:none;
+    display:flex; justify-content:space-between; align-items:center;}
+  .panelkopf::-webkit-details-marker{display:none;}
+  .panelkopf::after{content:'⌄'; font-size:14px;}
+  details[open] > .panelkopf{margin-bottom:8px;}
+  details[open] > .panelkopf::after{content:'⌃';}
   .tuerrow{gap:5px; flex-wrap:nowrap; margin-top:5px;}
   .tuerrow button{flex:1 1 0; min-width:0; height:36px; padding:3px 4px; border-radius:6px;
     border:1px solid var(--line); background:#fff; cursor:pointer;}
@@ -739,6 +787,7 @@
   </div>
   <div id="main">
     <svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg>
+    <button id="blattzu" title="Werkzeuge ausblenden"></button>
     <div id="crumb"></div>
     <div id="zoombar">
       <button id="zin" title="Vergrößern">＋</button>
@@ -1858,10 +1907,13 @@ function objMass(g, welch){
 }
 // Kette = folgt der Form, offenes Schloss = eigener Wert. Steht VOR dem Eingabefeld.
 const objFest = (g,w) => w==='B' ? !!g.festB : !!g.festL;
-const koppelKnopf = (g,w) => `<button class="btn small koppel${objFest(g,w)?' frei':''}" data-mf="${w}"
+/* Gruen = folgt der Zeichnung (Kette), rot = eigener Wert, festgehalten. Dieselben
+   zwei Farben wie bei jedem Schloss in der App. */
+const koppelKnopf = (g,w) => `<button class="btn small koppel${objFest(g,w)?' frei zu':' auf'}" data-mf="${w}"
   title="${objFest(g,w)
     ? 'Eigener Wert — die Form ändert ihn nicht mehr. Klicken koppelt wieder an die Zeichnung.'
-    : 'Folgt der gezeichneten Form. Klicken (oder eine eigene Zahl eintragen) löst die Kopplung.'}">${objFest(g,w)?'🔓':'🔗'}</button>`;
+    : 'Folgt der gezeichneten Form. Klicken (oder eine eigene Zahl eintragen) löst die Kopplung.'}">${
+    ico(objFest(g,w)?'schlossZu':'kette', true)}</button>`;
 const koppelHinweis = g => (g.festL||g.festB)
   ? '<b>Eigene Maße eingetragen</b> — die Form ändert sie nicht mehr; das Schloss koppelt wieder an.'
   : 'Länge und Breite folgen der Form, bis du selbst eine Zahl einträgst.';
@@ -2139,12 +2191,16 @@ function sperreVereinheitlichen(){
   });
 }
 /* Der eine Griff, der sperrt und öffnet — von der Etagenansicht wie aus dem Raum.
-   Die Auswahl wird zurückgesetzt: eine gewählte Ecke etwa hat im gesperrten Stockwerk
-   keine Bedeutung mehr, und ihre Bedienelemente wären ausgegraut. */
+   **Die Auswahl bleibt stehen.** Bis 2026-08-06 wurde sie hier zurückgesetzt; seit die
+   Zeile auch im Wand-Panel steht, warf einen das aus der Wand-Ansicht, sobald man das
+   Schloss antippte. Eine gewählte Wand behält auch gesperrt ihren Sinn: LV-Position
+   und Fotos hängen daran, abgeschaltet ist nur das Umformen. Um die gewählte ECKE
+   kümmert sich `renderSidebar` — die lässt sie im gesperrten Stockwerk ohnehin fallen,
+   weil es an ihr nichts auszufüllen gibt. */
 function etageSperreUmschalten(fid, raumId){
   const f=(proj().floors||[]).find(f=>f.id===fid); if(!f) return;
   if(f.gesperrt) delete f.gesperrt; else f.gesperrt=true;
-  sel={roomId:raumId||null, wall:null, vertex:null};
+  if(!raumId) sel={roomId:null, wall:null, vertex:null};   // aus der Etagenansicht
   save(); renderAll();
   const n=(proj().rooms||[]).filter(r=>r.floorId===fid).length;
   melde(f.gesperrt
@@ -2271,25 +2327,34 @@ const TUER_TYPEN=[
   {id:'glasschiebe', label:'Schiebetür aus Glas', art:'schiebe', glas:true}
 ];
 const tuerTyp = o => TUER_TYPEN.find(t=>t.id===(o.tuerTyp||'tuer')) || TUER_TYPEN[0];
-/* Kleines Vorschausymbol je Türtyp für die Auswahlknöpfe — dieselbe Bildsprache wie
-   im Plan (Blatt + Schwenkbogen, Glas in Fensterblau), nur stark vereinfacht. */
+/* Vorschausymbol je Türtyp für die Auswahlknöpfe.
+   **Ansicht, nicht Grundriss** (seit 2026-08-06). Bis dahin stand hier dasselbe
+   Zeichen wie im Plan — Blatt plus Schwenkbogen. Im Plan ist das richtig, auf einem
+   36 Pixel hohen Knopf aber unlesbar: vier Varianten sahen aus wie vier Striche mit
+   Bögen. Jetzt eine kleine Tür von vorn, so wie man sie ansieht: Zarge, Blatt, Griff.
+   Glas bleibt hellblau gefüllt, damit Glastür und Holztür auf einen Blick auseinander
+   liegen. Der Plan zeichnet weiter das Grundrisszeichen — das ist `tuerBlatt`. */
 function tuerIcon(t){
-  const bl=t.glas?'#4d90d6':'#4a5468', bo=t.glas?'#9cc6ea':'#95a0b2';
-  // Wandstücke links/rechts, dazwischen die Öffnung
-  let s=`<svg viewBox="0 0 26 22" width="100%" height="100%" style="display:block">`+
-    `<path d="M 0 6 L 4 6 M 20 6 L 26 6" stroke="#aab2c0" stroke-width="3" stroke-linecap="butt"/>`;
+  const rand='#2f6fed', glas=t.glas?'#dbeafe':'#fff';
+  const blatt=(x,w)=>`<rect x="${x}" y="4" width="${w}" height="16" rx="0.8"
+    fill="${glas}" stroke="${rand}" stroke-width="1.4"/>`;
+  let s=`<svg viewBox="0 0 24 24" width="100%" height="100%"
+      preserveAspectRatio="xMidYMid meet" style="display:block">`+
+    `<path d="M2 21.4h20" stroke="#aab2c0" stroke-width="1.4" stroke-linecap="round"/>`;
   if(t.art==='offen'){
-    s+=`<path d="M 4 3 L 4 9 M 20 3 L 20 9" stroke="#aab2c0" stroke-width="1.4"/>`;
+    // Durchgang ohne Blatt: nur die Zarge
+    s+=`<path d="M5 20.6V5a1.2 1.2 0 0 1 1.2-1.2h11.6A1.2 1.2 0 0 1 19 5v15.6"
+      fill="none" stroke="${rand}" stroke-width="1.4" stroke-linecap="round"/>`;
   } else if(t.art==='doppel'){
-    s+=`<path d="M 4 6 L 4 14 M 20 6 L 20 14" stroke="${bl}" stroke-width="2"/>`+
-      `<path d="M 12 6 A 8 8 0 0 1 4 14" fill="none" stroke="${bo}" stroke-width="1.1" stroke-dasharray="2 1.6"/>`+
-      `<path d="M 12 6 A 8 8 0 0 0 20 14" fill="none" stroke="${bo}" stroke-width="1.1" stroke-dasharray="2 1.6"/>`;
+    s+=blatt(4.5,7.4)+blatt(12.1,7.4)
+      +`<circle cx="10.8" cy="12.6" r="0.85" fill="${rand}"/>`
+      +`<circle cx="13.2" cy="12.6" r="0.85" fill="${rand}"/>`;
   } else if(t.art==='schiebe'){
-    s+=`<path d="M 4 11 L 20 11" stroke="${bl}" stroke-width="2.4"/>`+
-      `<path d="M 8 16 L 18 16 M 15 13.5 L 18 16 L 15 18.5" fill="none" stroke="${bo}" stroke-width="1.1"/>`;
+    s+=blatt(4.5,15)
+      +`<path d="M8 12.4h7.4M13.2 10.1l2.4 2.3-2.4 2.3" fill="none" stroke="${rand}"
+        stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>`;
   } else {
-    s+=`<path d="M 4 6 L 4 20" stroke="${bl}" stroke-width="2"/>`+
-      `<path d="M 18 6 A 14 14 0 0 1 4 20" fill="none" stroke="${bo}" stroke-width="1.1" stroke-dasharray="2 1.6"/>`;
+    s+=blatt(4.5,15)+`<circle cx="16.7" cy="12.6" r="0.95" fill="${rand}"/>`;
   }
   return s+'</svg>';
 }
@@ -2300,13 +2365,19 @@ const FEN_TYPEN=[
   {id:'dreifach', label:'Dreifachfenster', n:3}
 ];
 const fenTyp = o => FEN_TYPEN.find(t=>t.id===(o.fenTyp||'einfach')) || FEN_TYPEN[0];
+/* Auch hier Ansicht statt Grundriss: ein Fenster von vorn mit so vielen Feldern, wie
+   es Flügel hat. Vorher war es ein waagerechter Strich mit Sprossen — im Plan richtig,
+   auf dem Knopf nicht zu erkennen. */
 function fenIcon(t){
-  let s=`<svg viewBox="0 0 26 22" width="100%" height="100%" style="display:block">`+
-    `<path d="M 0 11 L 4 11 M 20 11 L 26 11" stroke="#aab2c0" stroke-width="3"/>`+
-    `<path d="M 4 11 L 20 11" stroke="#4d90d6" stroke-width="3"/>`;
+  const rand='#2f6fed';
+  let s=`<svg viewBox="0 0 24 24" width="100%" height="100%"
+      preserveAspectRatio="xMidYMid meet" style="display:block">`+
+    `<rect x="3.5" y="4.5" width="17" height="14" rx="1" fill="#e6f1fb"
+      stroke="${rand}" stroke-width="1.4"/>`+
+    `<path d="M2 20.4h20" stroke="#aab2c0" stroke-width="1.5" stroke-linecap="round"/>`;
   for(let i=1;i<t.n;i++){
-    const x=4+16*i/t.n;
-    s+=`<path d="M ${x} 6 L ${x} 16" stroke="#4d90d6" stroke-width="1.4"/>`;
+    const x=(3.5+17*i/t.n).toFixed(2);
+    s+=`<path d="M${x} 4.5v14" stroke="${rand}" stroke-width="1.2"/>`;
   }
   return s+'</svg>';
 }
@@ -5092,6 +5163,49 @@ function deleteRoom(id){
 }
 
 /* ================= Sidebar ================= */
+/* ---------- Symbolsatz (seit 2026-08-06) ----------
+   Alle Symbole der linken Spalte werden gezeichnet, nicht getippt. Emoji sahen auf
+   jedem Gerät anders aus, brachten fremde Farben mit und ließen sich nicht einfärben.
+   Diese hier erben `currentColor`, also die Farbe des Knopfes, in dem sie stehen.
+
+   Ein Symbol ist der Inhalt eines 24×24-Feldes, mehr nicht — Strichstärke, Größe und
+   Farbe stehen einmal in `.ico` im CSS. Neue Symbole gehören hier hinein und nirgends
+   sonst; wer eines woanders zusammenbaut, hat später zwei Stellen zu pflegen. */
+const ICONS = {
+  plus:      '<path d="M12 5v14M5 12h14"/>',
+  schlossAuf:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7.5a4 4 0 0 1 8 0"/>',
+  schlossZu: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/>',
+  tuer:      '<rect x="6" y="3" width="11" height="18" rx="1"/><circle cx="14" cy="12" r="1.1" fill="currentColor" stroke="none"/><path d="M17 21a18 18 0 0 0 4.5-4.5" stroke-dasharray="2.5 2"/>',
+  fenster:   '<rect x="4" y="5" width="16" height="14" rx="1.5"/><path d="M12 5v14M4 12h16"/>',
+  ecke:      '<path d="M5 19V9l9-4"/><circle cx="5" cy="19" r="2" fill="currentColor" stroke="none"/>',
+  magnet:    '<path d="M6 4v8a6 6 0 0 0 12 0V4"/><path d="M6 9h4M14 9h4"/>',
+  nachbar:   '<rect x="3" y="7" width="8" height="11" rx="1"/><rect x="13" y="7" width="8" height="11" rx="1"/><path d="M11 12.5h2"/>',
+  zurueck:   '<path d="M9 14 4 9l5-5"/><path d="M4 9h9a7 7 0 0 1 0 14h-3"/>',
+  pfeilLinks:'<path d="M11 6l-6 6 6 6"/><path d="M5 12h14"/>',
+  schliessen:'<path d="M6 6l12 12M18 6L6 18"/>',
+  liste:     '<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="5" cy="6" r="1.3" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="5" cy="18" r="1.3" fill="currentColor" stroke="none"/>',
+  foto:      '<rect x="3" y="7" width="18" height="13" rx="2.5"/><path d="M9 7l1.5-2.5h3L15 7"/><circle cx="12" cy="13.5" r="3.5"/>',
+  papierkorb:'<path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6.5 7l1 13h9l1-13"/>',
+  kopie:     '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/>',
+  stift:     '<path d="M4 20h4L18 10l-4-4L4 16z"/>',
+  flaeche:   '<rect x="3" y="6" width="18" height="12" rx="1.5"/>',
+  linie:     '<path d="M3 19 10 6l11 6"/>',
+  rundum:    '<ellipse cx="12" cy="12" rx="9" ry="5"/><circle cx="12" cy="12" r="3"/>',
+  fotomass:  '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 15l4-5 3 3 3-4"/>',
+  bild:      '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.6"/><path d="M4 17l5-5 4 4 3-2 4 3"/>',
+  haken:     '<path d="M5 12.5 10 17.5 19 7"/>',
+  anschlag:  '<path d="M4 12h16"/><path d="M8 8l-4 4 4 4"/><path d="M16 8l4 4-4 4"/>',
+  wolke:     '<path d="M7.5 18.5a4.2 4.2 0 0 1 .4-8.4 5.6 5.6 0 0 1 10.7 1.6 3.6 3.6 0 0 1-1 6.8z"/>',
+  massstab:  '<rect x="2" y="8.5" width="20" height="7" rx="1.5"/><path d="M7 8.5v3M12 8.5v4M17 8.5v3"/>',
+  drehen:    '<path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v4h-4"/>',
+  kette:     '<path d="M10 14a4 4 0 0 1 0-5.7l2-2a4 4 0 0 1 5.7 5.7l-1 1"/><path d="M14 10a4 4 0 0 1 0 5.7l-2 2a4 4 0 0 1-5.7-5.7l1-1"/>',
+  winkelLinks: '<path d="M15 5l-7 7 7 7"/>',
+  winkelRechts:'<path d="M9 5l7 7-7 7"/>',
+  aufschlag: '<path d="M12 4v16"/><path d="M8 8l4-4 4 4"/><path d="M8 16l4 4 4-4"/>'
+};
+/* `allein` heißt: ohne Beschriftung daneben, dann fällt der rechte Abstand weg. */
+const ico = (n, allein) => `<svg class="ico${allein?' allein':''}" viewBox="0 0 24 24"
+  aria-hidden="true">${ICONS[n]||''}</svg>`;
 /* Anmerkung am Raum — freier Text, der im Ausdruck unter dem Raumplan landet (nicht in
    der Positionstabelle, so war es gewünscht). Dieselbe Eingabe in beiden Raum-Panels. */
 /* Schloss-Zeile im Raum-Panel. Sie ist die einzige Stelle, an der sich die Sperre von
@@ -5100,17 +5214,24 @@ function deleteRoom(id){
    beiden Fassungen sowohl „offen" als auch „sperren" — auf dem Telefon war nicht zu
    sehen, was der Knopf gerade tut. `data-kurzsym`/`data-kurztxt` geben dem Kurzbefehl
    unten dieselbe Auskunft; so gibt es nur EINE Stelle, die den Zustand kennt. */
+/* Seit 2026-08-06 trägt die Zeile das gezeichnete Schloss und **nur zwei Farben**:
+   grün heißt offen, rot heißt gesperrt. Das gilt für jedes Schloss in der App — auch
+   für die Wandlänge —, damit man den Zustand an der Farbe erkennt und nicht am Text.
+   `data-kurzsym` bleibt ein Zeichen: die Kurzbefehlsleiste am Handy stellt Text dar,
+   keine Grafik. */
 const sperrZeile = fid => etageOffen(fid)
-  ? `<div class="row" style="margin-top:6px"><button class="btn small" id="rsperr" style="flex:1"
+  ? `<div class="row" style="margin-top:6px"><button class="btn small auf" id="rsperr" style="flex:1"
       data-kurzsym="🔓" data-kurztxt="Sperren"
-      title="Wände, Ecken, Türen und Fenster dieser Etage festsetzen">🔓 ${
+      title="Wände, Ecken, Türen und Fenster dieser Etage festsetzen">${ico('schlossAuf')}${
         esc(floorName(fid))} offen · Sperren</button></div>`
-  : `<div class="row" style="margin-top:6px"><button class="btn small active" id="rsperr" style="flex:1"
+  : `<div class="row" style="margin-top:6px"><button class="btn small zu" id="rsperr" style="flex:1"
       data-kurzsym="🔒" data-kurztxt="Öffnen"
-      title="Wände, Ecken, Türen und Fenster dieser Etage wieder freigeben">🔒 ${
+      title="Wände, Ecken, Türen und Fenster dieser Etage wieder freigeben">${ico('schlossZu')}${
         esc(floorName(fid))} gesperrt · Öffnen</button></div>`;
-const anmerkungFeld = r => `<div style="margin-top:6px">
-  <label class="hint" style="display:block; margin-bottom:2px">Anmerkung — erscheint im Druck unter dem Plan</label>
+/* `ohneTitel` für die Stellen, an denen die Karte schon „Anmerkung" heißt — sonst
+   stünde das Wort zweimal übereinander. */
+const anmerkungFeld = (r, ohneTitel) => `<div style="margin-top:6px">
+  ${ohneTitel?'':`<label class="hint" style="display:block; margin-bottom:2px">Anmerkung — erscheint im Druck unter dem Plan</label>`}
   <textarea id="ranm" rows="2" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:6px"
     placeholder="z. B. Zugang nur über Treppenhaus B, Estrich lose">${esc(r.anmerkung||'')}</textarea></div>`;
 /* Liste verknüpfter LV-Positionen (LV-Nummer + Kurztext, Klick = bearbeiten) */
@@ -5167,23 +5288,28 @@ function lvListHtml(list){
         a.anmerkung?` <span title="${esc(a.anmerkung)}">📝</span>`:''}</span>
       <b style="font-weight:600; color:var(--muted); white-space:nowrap; margin-left:8px">AZ ${n}</b></div>`;
   };
-  return `<div style="margin-top:8px; border-top:1px solid var(--line); padding-top:6px">
-    <h3>Verknüpfte LV-Positionen</h3>${gruppen.map((g,i)=>`
+  return gruppen.map((g,i)=>`
       <div style="font-size:11px; font-weight:700; color:var(--muted); letter-spacing:.02em;
         margin:${i?'8px':'2px'} 0 2px">${esc(g.h.titel)}</div>
       ${[...g.list].sort((a,b)=>
           (abschlagVon(a)===akt?0:1)-(abschlagVon(b)===akt?0:1)
           || abschlagVon(b)-abschlagVon(a)
-          || lvCmp(a.lv,b.lv)).map(zeile).join('')}`).join('')}</div>`;
+          || lvCmp(a.lv,b.lv)).map(zeile).join('')}`).join('');
+}
+/* Eigene Karte, ganz unten (seit 2026-08-06). Die Liste hing bis dahin unten in der
+   Foto-Karte -- zwei Dinge in einem Kasten, die nichts miteinander zu tun haben, und
+   je nach Raum wurde daraus die laengste Karte des Panels. Leer bleibt sie weg. */
+function lvPanel(lvs){
+  const inhalt=lvListHtml(lvs||[]);
+  return inhalt ? `<div class="panel"><h3>Verknüpfte LV-Positionen (${lvs.length})</h3>${inhalt}</div>` : '';
 }
 /* Eigener Kasten für Fotos und die verknüpften LV-Positionen — steht bei Raum, Wand,
    Objekt und Tür/Fenster gleich aussehend am Fuß der Seitenleiste. Beides wird beim
    Aufmessen seltener gebraucht als Maße und gehört deshalb unter das Bearbeiten-Panel. */
-function fotoPanel(fotos, id, lvs){
+function fotoPanel(fotos, id){
   return `<div class="panel"><h3>Fotos</h3>
     <div class="row">${fotoBtn(fotos, id)}</div>
-    ${fotoStrip(fotos)}
-    ${lvListHtml(lvs)}</div>`;
+    ${fotoStrip(fotos)}</div>`;
 }
 /* Farbwahl des Raums: zwei Reihen à 8 Felder — 15 Farben, unten rechts der
    Bearbeiten-Knopf für die Teilfläche. Die aktive Farbe noch einmal antippen
@@ -5233,37 +5359,45 @@ function panelEtage(p){
     const wr=etagenWahl?roomById(etagenWahl):null;
     if(wr){
       html+=`<div class="panel"><h3>Raum angewählt — ${esc(wr.name)}</h3>
+        ${sperrZeile(wr.floorId)}
+        <div style="height:8px"></div>
         <div class="row"><label>Name</label><input type="text" id="rname" value="${esc(wr.name)}"></div>
         <div class="row"><label>Raumhöhe (m)</label><input class="laser" id="rheight" value="${fmt3(wr.height)}"></div>
-        <div class="row" style="margin-top:4px">
-          <button class="btn green small" id="rlv">＋ LV-Position</button>
-          <button class="btn small" id="rdup">Duplizieren</button>
-          <button class="btn danger small" id="rdel">Löschen</button>
-        </div>
-        ${sperrZeile(wr.floorId)}
-        ${anmerkungFeld(wr)}
+        <div style="height:12px"></div>
         ${farbReihen(wr, true)}
-        ${lvListHtml(p.attrs.filter(a=>a.roomId===wr.id && !a.objId && a.wall==null))}
         <p class="hint" style="margin-top:8px"><b>Solange die Anwahl steht, lassen sich Räume ziehen.</b>
           Anderen Raum antippen wechselt die Anwahl,
           <b>${esc(wr.name)}</b> noch einmal antippen öffnet die Raumansicht,
           ein Tipp neben die Räume beendet die Anwahl.</p>
-      </div>`;
+      </div>
+
+      <div class="panel"><h3>Aktionen</h3>
+      <div class="row"><button class="btn green small" id="rlv" style="flex:1">${ico('liste')}LV-Position</button></div>
+      <div class="row">
+        <button class="btn small" id="rdup" style="flex:1">${ico('kopie')}Duplizieren</button>
+        <button class="btn danger small" id="rdel" style="flex:1">${ico('papierkorb')}Löschen</button>
+      </div></div>
+
+      <div class="panel"><h3>Anmerkung</h3>${anmerkungFeld(wr, true)}</div>`;
+      html+=lvPanel(p.attrs.filter(a=>a.roomId===wr.id && !a.objId && a.wall==null));
     }
     html+=`<div class="panel"><h3>Etage</h3>
+      ${sperrZeile(activeFloorId)}
+      <div style="height:8px"></div>
       <div class="row">
         <select id="floorsel" style="flex:1">${p.floors.map(f=>`<option value="${f.id}" ${f.id===activeFloorId?'selected':''}>${esc(f.name)}</option>`).join('')}</select>
-        <button class="btn small" id="flooradd" title="Neue Etage">＋</button>
-        <button class="btn small" id="floorren" title="Umbenennen">✎</button>
-        <button class="btn small" id="floordup" title="Etage duplizieren">⧉</button>
-        <button class="btn small danger" id="floordel" title="Etage löschen">🗑</button>
       </div>
-      ${sperrZeile(activeFloorId)}</div>`;
+      <div class="werkzeuge">
+        <button id="flooradd" title="Neue Etage">${ico('plus',true)}</button>
+        <button id="floorren" title="Etage umbenennen">${ico('stift',true)}</button>
+        <button id="floordup" title="Etage duplizieren">${ico('kopie',true)}</button>
+        <button id="floordel" class="loesch" title="Etage löschen">${ico('papierkorb',true)}</button>
+      </div></div>`;
 
     html+=`<div class="panel"><h3>Neuer Raum</h3>
       <div class="row">
-        <button class="btn ${mode==='draw'?'active':''}" id="modedraw" style="flex:1">✏️ Frei zeichnen</button>
-        <button class="btn" id="modetpl" style="flex:1">▭ Vorlage</button>
+        <button class="btn ${mode==='draw'?'active':''}" id="modedraw" style="flex:1">${ico('stift')}Frei zeichnen</button>
+        <button class="btn" id="modetpl" style="flex:1">${ico('flaeche')}Vorlage</button>
       </div></div>`;
 
     html+=planPanel();
@@ -5296,24 +5430,33 @@ function panelObjekt(p, selObj){
   let html='';
       /* Objekt im Fokus */
       const nrTxt=selObj.nr?` #${selObj.nr}`:'';
+      /* `btns` ist die alte Knopfzeile INNERHALB des Panels. Sie steht nur noch dem
+         Fotoaufmaß zur Verfügung, das getrennt umgebaut wird; alle anderen Objektarten
+         hängen `aktionen` als eigene Karte an — Reihenfolge wie überall sonst. */
       const btns=`<div class="row">
           <button class="btn green small" id="objlv">＋ LV-Position</button>
           <button class="btn small" id="objdup">Duplizieren</button>
           <button class="btn danger small" id="objdel">Entfernen</button>
         </div>`;
+      const aktionen=`<div class="panel"><h3>Aktionen</h3>
+        <div class="row"><button class="btn green small" id="objlv" style="flex:1">${ico('liste')}LV-Position</button></div>
+        <div class="row">
+          <button class="btn small" id="objdup" style="flex:1">${ico('kopie')}Duplizieren</button>
+          <button class="btn danger small" id="objdel" style="flex:1">${ico('papierkorb')}Löschen</button>
+        </div></div>`;
       if(selObj.type==='rect'){
-        html+=`<div class="panel"><h3>▭ Fläche${nrTxt} — ausgewählt</h3>
+        html+=`<div class="panel"><h3>Fläche${nrTxt}</h3>
           <div class="row"><label>Name</label><input type="text" id="objname" value="${esc(selObj.name||'')}"></div>
           <div class="row"><label>Länge (m)</label>${koppelKnopf(selObj,'L')}<input class="laser objdim" data-f="L" value="${fmt(objMass(selObj,'L'),3)}"></div>
           <div class="row"><label>Breite (m)</label>${koppelKnopf(selObj,'B')}<input class="laser objdim" data-f="B" value="${fmt(objMass(selObj,'B'),3)}"></div>
           <div class="stat"><span>Fläche</span><b>${fmt(objMass(selObj,'L')*objMass(selObj,'B'),3)} m²</b></div>
           <div class="stat"><span>Umfang</span><b>${fmt(2*(objMass(selObj,'L')+objMass(selObj,'B')),3)} m</b></div>
           ${(selObj.festL||selObj.festB)?`<div class="stat"><span style="color:var(--muted)">gezeichnet</span><b style="color:var(--muted)">${fmt(selObj.w,3)} × ${fmt(selObj.h,3)} m</b></div>`:''}
-          ${btns}
-          <p class="hint">Ziehen verschiebt, Eckgriffe ändern die Größe. ${koppelHinweis(selObj)} Entf = löschen, Esc = abwählen.</p></div>`;
+          <p class="hint">Ziehen verschiebt, Eckgriffe ändern die Größe. ${koppelHinweis(selObj)} Entf = löschen, Esc = abwählen.</p></div>
+          ${aktionen}`;
       } else if(istFotoMass(selObj)){
         const sl=fmSlots(selObj), fo=selObj.fotos||[];
-        html+=`<div class="panel"><h3>📐 Fotoaufmaß${nrTxt} — ausgewählt</h3>
+        html+=`<div class="panel"><h3>Fotoaufmaß${nrTxt} — noch im alten Aufbau</h3>
           <div class="row"><label>Name</label><input type="text" id="objname" value="${esc(selObj.name||'')}"></div>
           <p class="hint">Fünf Farben, fünf LV-Positionen. Auf dem Foto wird je nach Einheit ein
             <b>Rechteck</b> (Fläche), eine <b>Linie</b> (Länge) oder ein <b>Kreuz</b> (Stück) gesetzt —
@@ -5336,7 +5479,7 @@ function panelObjekt(p, selObj){
           </div>
         <div class="panel"><h3>Fotos (${fo.length} von ${FM_MAX_FOTOS})</h3>
           <div class="row">
-            <button class="btn small" id="fmFotoAdd" ${fo.length>=FM_MAX_FOTOS?'disabled title="Mehr als drei Fotos gehen nicht"':''}>📷 ＋ Foto</button>
+            <button class="btn small" id="fmFotoAdd" ${fo.length>=FM_MAX_FOTOS?'disabled title="Mehr als drei Fotos gehen nicht"':''}>${ico('foto')}＋ Foto</button>
           </div>
           ${fo.length?`<div class="row" style="gap:6px; flex-wrap:wrap">${fo.map((f,k)=>`
             <button class="btn small" data-fmfoto="${k}" title="Foto ${k+1} — zum Messen antippen"
@@ -5347,12 +5490,12 @@ function panelObjekt(p, selObj){
           <p class="hint">Ein Tipp aufs Foto öffnet das Messen — dort wird auch gelöscht.</p></div>`;
       } else if(ist360(selObj)){
         const dir=selObj.rot||0;
-        html+=`<div class="panel"><h3>📷 360°-Aufnahme${nrTxt} — ausgewählt</h3>
+        html+=`<div class="panel"><h3>360°-Aufnahme${nrTxt}</h3>
           <div class="row"><label>Name</label><input type="text" id="objname" value="${esc(selObj.name||'')}"></div>
           <div class="row"><label>Blickrichtung</label>
             <input id="p360grad" type="number" min="0" max="359" step="1" value="${Math.round(dir)}" style="width:70px; flex:0 0 auto">
             <span class="hint" style="flex:0 0 auto">°</span>
-            <button class="btn small" id="p360dreh" title="Um 90° weiterdrehen">⟳ 90°</button></div>
+            <button class="btn small" id="p360dreh" title="Um 90° weiterdrehen">${ico('drehen')}90°</button></div>
           <div class="row"><input id="p360schieber" type="range" min="0" max="359" step="1" value="${Math.round(dir)}" style="flex:1"></div>
           <p class="hint" style="margin-bottom:6px">Der Pfeil im Plan zeigt, wohin die <b>Vorderseite der Kamera</b>
             gerichtet war. 0° = nach oben im Plan.</p>
@@ -5365,76 +5508,99 @@ function panelObjekt(p, selObj){
               <option value="fisch" ${p360Proj()==='fisch'?'selected':''}>Fischauge — ruhige Ecken, weiter Winkel</option>
             </select></div>
           <p class="hint" style="margin-bottom:6px" id="p360winkelInfo"></p>
-          <div class="row"><button class="btn primary small" id="p360laden" style="flex:1">🖼️ 360°-Bild einlesen</button></div>
+          <div class="row"><button class="btn primary small" id="p360laden" style="flex:1">${ico('bild')}360°-Bild einlesen</button></div>
           <p class="hint" id="p360info"></p>
-          ${btns}
           <p class="hint">Aus der Aufnahme entstehen sechs Einzelbilder: vier Seitenansichten, Decke und Boden.
-            Die Seitenansichten schlägt die App der Wand zu, auf die sie schauen — du bestätigst vorher.</p></div>`;
+            Die Seitenansichten schlägt die App der Wand zu, auf die sie schauen — du bestätigst vorher.</p></div>
+          ${aktionen}`;
       } else if(selObj.type==='sym'){
-        html+=`<div class="panel"><h3>▣ ${esc((SYMDEFS[selObj.sub]||{}).label||'Symbol')}${nrTxt} — ausgewählt</h3>
+        html+=`<div class="panel"><h3>${esc((SYMDEFS[selObj.sub]||{}).label||'Symbol')}${nrTxt}</h3>
           <div class="row"><label>Name</label><input type="text" id="objname" value="${esc(selObj.name||'')}"></div>
           <div class="row"><label>Breite (m)</label><input class="laser objdim" data-f="w" value="${fmt(selObj.w,3)}"></div>
           <div class="row"><label>Tiefe (m)</label><input class="laser objdim" data-f="h" value="${fmt(selObj.h,3)}"></div>
           <div class="stat"><span>Drehung</span><b>${selObj.rot||0}°</b></div>
-          <div class="row"><button class="btn small" id="objrot">Drehen ⟳ 90°</button></div>
-          ${btns}
-          <p class="hint">Ziehen verschiebt das Symbol. Entf = löschen, Esc = abwählen.</p></div>`;
+          <div class="row"><button class="btn small" id="objrot" style="flex:1">${ico('drehen')}Drehen 90°</button></div>
+          <p class="hint">Ziehen verschiebt das Symbol. Entf = löschen, Esc = abwählen.</p></div>
+          ${aktionen}`;
       } else {
         const L=lineLen(selObj);
-        html+=`<div class="panel"><h3>╱ Linie${nrTxt} — ausgewählt</h3>
+        html+=`<div class="panel"><h3>Linie${nrTxt}</h3>
           <div class="row"><label>Name</label><input type="text" id="objname" value="${esc(selObj.name||'')}"></div>
           <div class="row"><label>Gesamtlänge (m)</label>${koppelKnopf(selObj,'L')}<input class="laser objdim" data-f="L" value="${fmt(objMass(selObj,'L'),3)}"></div>
           ${selObj.festL?`<div class="stat"><span style="color:var(--muted)">gezeichnet</span><b style="color:var(--muted)">${fmt(L,3)} m</b></div>`:''}
           <div class="stat"><span>Punkte</span><b>${selObj.points.length}</b></div>
           <div class="row">
-            <button class="btn small" id="ptadd" title="${merkFuerLinie(selObj)
+            <button class="btn small" id="ptadd" style="flex:1" title="${merkFuerLinie(selObj)
               ? 'Neue Ecke an der angetippten Stelle (grüner Ring)'
-              : 'Neue Ecke — im längsten Abschnitt bzw. neben der gewählten Ecke. Auf die Linie tippen bestimmt die Stelle.'}">＋ Ecke einfügen</button>
-            <button class="btn small danger" id="ptdel" ${sel.objH==null?'disabled title="Erst eine Ecke anklicken"':''}>Ecke löschen</button>
+              : 'Neue Ecke — im längsten Abschnitt bzw. neben der gewählten Ecke. Auf die Linie tippen bestimmt die Stelle.'}">${ico('ecke')}Ecke einfügen</button>
+            <button class="btn small danger" id="ptdel" style="flex:1" ${sel.objH==null?'disabled title="Erst eine Ecke anklicken"':''}>${ico('papierkorb')}Ecke löschen</button>
           </div>
-          <p class="hint">${sel.objH!=null?`Ecke ${sel.objH+1} von ${selObj.points.length} ausgewählt — nochmal anfassen zum Ziehen. Die neue Ecke entsteht daneben.`:'Auf die Linie ziehen verschiebt sie. „＋ Ecke einfügen“ teilt den längsten Abschnitt; Ecke anklicken zum Auswählen.'}</p>
-          ${btns}
-          <p class="hint">Ziehen auf der Linie verschiebt sie. Ecken ziehen rastet auf 45°, die Längeneingabe skaliert die ganze Linie. Entf = Objekt löschen, Esc = abwählen.</p></div>`;
+          <p class="hint">${sel.objH!=null?`Ecke ${sel.objH+1} von ${selObj.points.length} ausgewählt — nochmal anfassen zum Ziehen. Die neue Ecke entsteht daneben.`:'Auf die Linie ziehen verschiebt sie. „Ecke einfügen“ teilt den längsten Abschnitt; Ecke anklicken zum Auswählen.'}</p>
+          <p class="hint">Ziehen auf der Linie verschiebt sie. Ecken ziehen rastet auf 45°, die Längeneingabe skaliert die ganze Linie. Entf = Objekt löschen, Esc = abwählen.</p></div>
+          ${aktionen}`;
       }
-      html+=fotoPanel(selObj.fotos, 'objfoto', p.attrs.filter(a=>a.objId===selObj.id));
+      html+=fotoPanel(selObj.fotos, 'objfoto')
+        + lvPanel(p.attrs.filter(a=>a.objId===selObj.id));
   return html;
 }
 
 // Tuer oder Fenster im Fokus.
+/* ---------- Tür und Fenster (Aufbau wie die Wand, seit 2026-08-06) ----------
+   Dieselbe Ordnung: Zustand, Eigenschaften, Aktionen. Die **Typenwahl gehört zu den
+   Eigenschaften** — welche Tür es ist, ist eine Angabe über sie, keine Handlung; das
+   gilt auch für Anschlag und Aufschlag, die nur sagen, wohin sie sich öffnet.
+
+   Die Typenbilder (`tuerIcon`, `fenIcon`) bleiben, wie sie sind: Sie zeichnen den
+   Grundriss der Tür, nicht ein Sinnbild, und sind darum bewusst nicht einfarbig —
+   Glas ist blau, Mauerwerk grau, genau wie im Plan. Die Regel „alles blau" gilt für
+   Bedienelemente, nicht für Vorschauen des Gezeichneten. */
 function panelOeffnung(p, r, selOp){
-  let html='';
-      /* Tür/Fenster im Fokus (sind Objekte) */
-      const nrTxt=selOp.nr?` #${selOp.nr}`:'';
-      // Raum gesperrt: Maße festgesetzt, LV-Position und Fotos bleiben bedienbar
-      const zu = raumOffen(r) ? '' : ' disabled';
-      html+=`<div class="panel"><h3>${selOp.type==='door'?'🚪 '+esc(tuerTyp(selOp).label):'🪟 '+esc(fenTyp(selOp).label)}${nrTxt} — ausgewählt</h3>
-        <div class="row"><label>Breite (m)</label><input class="laser opfld"${zu} id="opwidth" data-op="${selOp.id}" data-f="width" value="${fmt(selOp.width,3)}"></div>
-        <div class="row"><label>Höhe (m)</label><input class="laser opfld"${zu} data-op="${selOp.id}" data-f="height" value="${fmt(selOp.height,3)}"></div>
-        <div class="row"><label>Abstand (m)</label><input class="laser opfld"${zu} data-op="${selOp.id}" data-f="offset" value="${fmt(selOp.offset,3)}"></div>
-        ${selOp.type==='window'?`<div class="row"><label>Brüstung (m)</label><input class="laser opfld"${zu} data-op="${selOp.id}" data-f="sill" value="${fmt(selOp.sill,3)}"></div>
-        <div class="row tuerrow">${FEN_TYPEN.map(t=>
-          `<button data-fentyp="${t.id}" class="${(selOp.fenTyp||'einfach')===t.id?'an':''}"
-            title="${esc(t.label)}">${fenIcon(t)}</button>`).join('')}</div>`:''}
-        ${selOp.type==='door'?`<div class="row">
-          <button class="btn small ophinge" data-op="${selOp.id}" title="Angelpunkt ans andere Ende">Anschlag ⇄</button>
-          <button class="btn small opswing" data-op="${selOp.id}" title="Öffnet zur anderen Seite">Aufschlag ⇅</button>
-        </div>
-        <div class="row tuerrow">${TUER_TYPEN.slice(0,4).map(t=>
-          `<button data-tuertyp="${t.id}" class="${(selOp.tuerTyp||'tuer')===t.id?'an':''}"
-            title="${esc(t.label)}">${tuerIcon(t)}</button>`).join('')}</div>
-        <div class="row tuerrow">${TUER_TYPEN.slice(4).map(t=>
-          `<button data-tuertyp="${t.id}" class="${(selOp.tuerTyp||'tuer')===t.id?'an':''}"
-            title="${esc(t.label)}">${tuerIcon(t)}</button>`).join('')}<span style="flex:1 1 0"></span></div>`:''}
-        <div class="row">
-          <button class="btn green small" id="objlv">＋ LV-Position</button>
-          <button class="btn small" id="opdup"${zu}>Duplizieren</button>
-          <button class="btn danger small opdel" data-op="${selOp.id}"${zu}>Entfernen</button>
-        </div>
-        <p class="hint">Ziehen verschiebt entlang der Wand. Für die Breite einen <b>Endgriff anklicken</b> —
-          er wird gefüllt und bekommt eine grüne Ziehzone, dann noch einmal anfassen und ziehen
-          (wie bei Flächen und Linien). Esc = abwählen.</p>
-      </div>`;
-      html+=fotoPanel(selOp.fotos, 'opfoto', p.attrs.filter(a=>a.objId===selOp.id));
+  const tuer = selOp.type==='door';
+  const nr = selOp.nr ? ' '+selOp.nr : '';
+  // Raum gesperrt: Maße festgesetzt, LV-Position und Fotos bleiben bedienbar
+  const zu = raumOffen(r) ? '' : ' disabled';
+  const feld = (f, lab, wert, id) => `<div class="row"><label>${lab}</label>
+    <input class="laser opfld"${zu}${id?' id="'+id+'"':''} data-op="${selOp.id}"
+      data-f="${f}" value="${fmt(wert,3)}"></div>`;
+  const typKnopf = (t, attr, aktiv, bild) => `<button data-${attr}="${t.id}"
+    class="${aktiv?'an':''}" title="${esc(t.label)}">${bild}</button>`;
+  let html=`<div class="panel"><h3>${tuer?'Tür':'Fenster'}${nr} — ${
+      esc(tuer ? tuerTyp(selOp).label : fenTyp(selOp).label)}</h3>
+    ${sperrZeile(r.floorId)}
+    <div style="height:8px"></div>
+    ${feld('width','Breite (m)', selOp.width, 'opwidth')}
+    ${feld('height','Höhe (m)', selOp.height)}
+    ${feld('offset','Abstand (m)', selOp.offset)}
+    ${tuer?'':feld('sill','Brüstung (m)', selOp.sill)}
+    ${tuer?`<div class="row tuerrow">${TUER_TYPEN.slice(0,4).map(t=>
+        typKnopf(t,'tuertyp',(selOp.tuerTyp||'tuer')===t.id, tuerIcon(t))).join('')}</div>
+      <div class="row tuerrow">${TUER_TYPEN.slice(4).map(t=>
+        typKnopf(t,'tuertyp',(selOp.tuerTyp||'tuer')===t.id, tuerIcon(t))).join('')
+        }<span style="flex:1 1 0"></span></div>
+      <div class="row">
+        <button class="btn small ophinge" data-op="${selOp.id}" style="flex:1"${zu}
+          title="Angelpunkt ans andere Ende">${ico('anschlag')}Anschlag</button>
+        <button class="btn small opswing" data-op="${selOp.id}" style="flex:1"${zu}
+          title="Öffnet zur anderen Seite">${ico('aufschlag')}Aufschlag</button>
+      </div>`
+      :`<div class="row tuerrow">${FEN_TYPEN.map(t=>
+        typKnopf(t,'fentyp',(selOp.fenTyp||'einfach')===t.id, fenIcon(t))).join('')}</div>`}
+    ${zu?`<p class="hint" style="color:var(--danger)"><b>Gesperrt:</b> Die Maße sind
+      festgesetzt. LV-Positionen und Fotos lassen sich weiter anhängen — zum Ändern das
+      Schloss oben öffnen, es gilt für die ganze Etage.</p>`:''}
+    </div>
+
+    <div class="panel"><h3>Aktionen</h3>
+    <div class="row"><button class="btn green small" id="objlv" style="flex:1">${ico('liste')}LV-Position</button></div>
+    <div class="row">
+      <button class="btn small" id="opdup" style="flex:1"${zu}>${ico('kopie')}Duplizieren</button>
+      <button class="btn danger small opdel" data-op="${selOp.id}" style="flex:1"${zu}>${ico('papierkorb')}Löschen</button>
+    </div>
+    <p class="hint">Ziehen verschiebt entlang der Wand. Für die Breite einen <b>Endgriff anklicken</b> —
+      er wird gefüllt und bekommt eine grüne Ziehzone, dann noch einmal anfassen und ziehen
+      (wie bei Flächen und Linien). Esc = abwählen.</p>
+    </div>`;
+  html+=fotoPanel(selOp.fotos, 'opfoto') + lvPanel(p.attrs.filter(a=>a.objId===selOp.id));
   return html;
 }
 
@@ -5455,119 +5621,164 @@ function panelEcke(r){
 }
 
 // Wand im Fokus: Laenge, Staerke, Oeffnungen, Magnet, LV.
+/* ---------- Wand (Aufbau nach der Vorlage vom 6.8.2026) ----------
+   Reihenfolge überall gleich: **Zustand, Eigenschaften, Aktionen.** Was etwas ändert,
+   steht unter dem, was es ändert — vorher lagen Öffnungen, Magnet und LV-Knopf
+   zwischen den Maßfeldern verstreut.
+
+   Drei Dinge sind neu, alle drei sind Auskunft statt Bedienung:
+   - die **Etagenzeile** ganz oben (vorher merkte man die Sperre nur an grauen Feldern),
+   - die **gemerkte Stelle**, die sagt, wo Tür, Fenster und Ecke landen werden,
+   - der **Rückkehrpunkt**, der ohnehin nur nach einem größeren Eingriff auftaucht.
+
+   Und eine Umbenennung: „Entfernen" hieß der Knopf, der nur die Ansicht schließt —
+   rot, mit Papierkorb, direkt neben Panels, in denen dasselbe Rot wirklich löscht.
+   Jetzt „Auswahl aufheben", neutral. */
 function panelWand(p, r){
-  let html='';
-      /* Wand im Fokus */
-      const [a,b]=wallPoints(r,sel.wall);
-      const gesperrt=wandGesperrt(r, sel.wall);
-      /* Raum gesperrt: **ausfüllen ja, umformen nein.** LV-Position, Fotos und die
-         Wandliste bleiben bedienbar — nur was die Geometrie ändert, ist abgeschaltet. */
-      const zu = raumOffen(r) ? '' : ' disabled';
-      html+=`<div class="panel"><h3>Wand ${sel.wall+1}${gesperrt?' 🔒':''}</h3>
-        <div class="row"><label>Länge (m)</label><input class="laser" id="wlen" value="${fmt(dist(a,b),3)}"${zu}>
-          <button class="btn small ${gesperrt?'active':''}" id="wlock"
-            data-kurzsym="${gesperrt?'🔒':'🔓'}" data-kurztxt="${gesperrt?'Länge frei':'Länge fest'}"
-            title="${gesperrt?'Gesperrt — die Länge ändert sich nicht mehr nebenbei. Klicken zum Freigeben.'
-                             :'Länge sperren: andere Wände können sie dann nicht mehr mitverschieben.'}"
-            >${gesperrt?'🔒 fest':'🔓 frei'}</button></div>
-        <div class="row"><label>Stärke (m)</label><input id="wdicke" type="text" inputmode="decimal" value="${fmt(wandDicke(r,sel.wall),3)}"${zu}>
-          <button class="btn small" id="wdickeall"${zu} title="Diese Stärke auf alle Wände des Raums übertragen">alle</button></div>
-        <div class="row"><label></label><input id="wdickereg" type="range" min="8" max="100" step="0.5"
-          value="${Math.max(8, Math.min(100, wandDicke(r,sel.wall)*100))}" style="flex:1${
-            dickeImBereich(wandDicke(r,sel.wall)) ? '' : '; accent-color:var(--danger)'}"
-          title="Stärke stufenlos von 0,08 bis 1,00 m — außerhalb wird der Regler rot"${zu}></div>
-        <div class="row">${wandFortsetzung(r, sel.wall).map((f,k)=>
-          `<button class="btn small" id="wdickevon${k}" style="flex:1" ${f.treffer&&!zu?'':'disabled'}
-            title="${f.treffer
-              ? `Wand läuft in „${esc(f.treffer.raum)}“ weiter — dort ${fmt(f.treffer.dicke,3)} m stark`
-              : `Auf dieser Seite läuft die Wand in keinem Nachbarraum weiter`}"
-            >Stärke von ${f.seite}${f.treffer?` (${fmt(f.treffer.dicke,3)})`:''}</button>`).join('')}</div>
-        <div class="row">
-          <button class="btn small" id="wopdoor"${zu}>🚪 ＋ Tür</button>
-          <button class="btn small" id="wopwin"${zu}>🪟 ＋ Fenster</button>
-        </div>
-        <div class="row">
-          <button class="btn small" id="wallsplit"${zu} title="${merkFuerWand(r, sel.wall)!=null
-            ? 'Teilt die Wand an der angetippten Stelle (grüner Ring)'
-            : 'Teilt diese Wand in der Mitte — tippe vorher auf die Wand, um die Stelle zu bestimmen'}">＋ Ecke einfügen</button>
-        </div>
-        <div class="row">
-          <button class="btn small ${magnetAn()?'active':''}" id="magnettoggle" style="flex:1"
-            title="Wände und Ecken rasten beim Ziehen an Nachbarräumen ein">${magnetAn()?'🧲 Magnet an':'🧲 Magnet aus'}</button>
-          <button class="btn small" id="wandverbinden" style="flex:1"${zu}
-            title="Wandstärke so setzen, dass die Wand den Nachbarraum erreicht — der Raum selbst bleibt unverändert">🔗 Mit Nachbar verbinden</button>
-        </div>
-        ${rueckkehrPunkt?`<div class="row"><button class="btn small danger" id="rueckkehr" style="flex:1"
-          title="Stellt den Stand vor diesem Eingriff wieder her">↩ Zurück vor „${esc(rueckkehrPunkt.was)}"</button></div>`:''}
-        <div class="row">
-          <button class="btn green small" id="walllv">＋ LV-Position</button>
-          <button class="btn small" id="walldesel" title="Schließt nur die Wand-Ansicht — Raum und Wand bleiben erhalten">Entfernen</button>
-        </div>
-        ${zu?`<p class="hint" style="color:var(--danger)"><b>Gesperrt:</b> Maße und Form aller Räume sind
-          festgesetzt. LV-Positionen und Fotos lassen sich weiter anhängen — zum Umformen den
-          Schloss oben im Raum-Panel öffnen — es gilt für alle Räume.</p>`:''}
-        <p class="hint">${merkFuerWand(r, sel.wall)!=null
-          ? `<b>Stelle gemerkt</b> (grüner Ring, ${fmt(merkFuerWand(r, sel.wall),2)} m ab dem Wandanfang) — „＋ Ecke einfügen“, „+ Tür“ und „+ Fenster“ setzen genau dort an. Woanders hintippen verschiebt die Stelle.`
-          : 'Auf die Wand tippen merkt sich die Stelle — „＋ Ecke einfügen“, „+ Tür“ und „+ Fenster“ setzen dann genau dort an, sonst mittig bzw. in der größten Lücke.'}</p>
-        <p class="hint">Nochmal anfassen und ziehen verschiebt die Wand parallel — die Nachbarwände behalten ihre Richtung und werden nur länger oder kürzer. <b>„＋ Ecke einfügen“ und dann eine Hälfte ziehen ergibt einen rechtwinkligen Vor- oder Rücksprung.</b> Wandlänge ändern verschiebt die nachfolgenden Ecken mit. „Entfernen“ schließt nur diese Ansicht (Esc geht auch).</p></div>`;
-      html+=fotoPanel((r.wallFotos||{})[sel.wall], 'wfoto',
-        p.attrs.filter(a=>a.roomId===r.id && a.wall===sel.wall));
+  const [a,b]=wallPoints(r,sel.wall);
+  const gesperrt=wandGesperrt(r, sel.wall);
+  /* Raum gesperrt: **ausfüllen ja, umformen nein.** LV-Position, Fotos und die
+     Wandliste bleiben bedienbar — nur was die Geometrie ändert, ist abgeschaltet. */
+  const zu = raumOffen(r) ? '' : ' disabled';
+  const merk = merkFuerWand(r, sel.wall);
+  let html=`<div class="panel"><h3>Wand ${sel.wall+1}</h3>
+    ${sperrZeile(r.floorId)}
+    <div class="row" style="margin-top:8px"><label>Länge (m)</label>
+      <input class="laser" id="wlen" value="${fmt(dist(a,b),3)}"${zu}>
+      <button class="btn small ${gesperrt?'zu':'auf'}" id="wlock"
+        data-kurzsym="${gesperrt?'🔒':'🔓'}" data-kurztxt="${gesperrt?'Länge frei':'Länge fest'}"
+        title="${gesperrt?'Gesperrt — die Länge ändert sich nicht mehr nebenbei. Klicken zum Freigeben.'
+                         :'Länge sperren: andere Wände können sie dann nicht mehr mitverschieben.'}"
+        >${ico(gesperrt?'schlossZu':'schlossAuf')}${gesperrt?'fest':'frei'}</button></div>
+    <div class="row"><label>Stärke (m)</label><input id="wdicke" type="text" inputmode="decimal" value="${fmt(wandDicke(r,sel.wall),3)}"${zu}>
+      <button class="btn small" id="wdickeall"${zu} title="Diese Stärke auf alle Wände des Raums übertragen">alle</button></div>
+    <div class="row"><label></label><input id="wdickereg" type="range" min="8" max="100" step="0.5"
+      value="${Math.max(8, Math.min(100, wandDicke(r,sel.wall)*100))}" style="flex:1${
+        dickeImBereich(wandDicke(r,sel.wall)) ? '' : '; accent-color:var(--danger)'}"
+      title="Stärke stufenlos von 0,08 bis 1,00 m — außerhalb wird der Regler rot"${zu}></div>
+    <div class="row">${wandFortsetzung(r, sel.wall).map((f,k)=>
+      `<button class="btn small" id="wdickevon${k}" style="flex:1" ${f.treffer&&!zu?'':'disabled'}
+        title="${f.treffer
+          ? `Wand läuft in „${esc(f.treffer.raum)}“ weiter — dort ${fmt(f.treffer.dicke,3)} m stark`
+          : `Auf dieser Seite läuft die Wand in keinem Nachbarraum weiter`}"
+        >Stärke von ${f.seite}${f.treffer?` (${fmt(f.treffer.dicke,3)})`:''}</button>`).join('')}</div>
+    <div class="row">
+      <button class="btn small ${magnetAn()?'auf':'zu'}" id="magnettoggle" style="flex:1"
+        title="Wände und Ecken rasten beim Ziehen an Nachbarräumen ein">${ico('magnet')}${magnetAn()?'Magnet an':'Magnet aus'}</button>
+      <button class="btn small" id="wandverbinden" style="flex:1"${zu}
+        title="Wandstärke so setzen, dass die Wand den Nachbarraum erreicht — der Raum selbst bleibt unverändert">${ico('nachbar')}Nachbar</button>
+    </div>
+    ${zu?`<p class="hint" style="color:var(--danger)"><b>Gesperrt:</b> Maße und Form aller Räume sind
+      festgesetzt. LV-Positionen und Fotos lassen sich weiter anhängen — zum Umformen das
+      Schloss oben öffnen, es gilt für die ganze Etage.</p>`:''}
+    </div>
+
+    <div class="panel"><h3>Aktionen</h3>
+    <div class="row">
+      <button class="btn small" id="wopdoor" style="flex:1"${zu}>${ico('tuer')}Tür</button>
+      <button class="btn small" id="wopwin" style="flex:1"${zu}>${ico('fenster')}Fenster</button>
+      <button class="btn small" id="wallsplit" style="flex:1"${zu} title="${merk!=null
+        ? 'Teilt die Wand an der gemerkten Stelle'
+        : 'Teilt diese Wand in der Mitte — vorher auf die Wand tippen bestimmt die Stelle'}">${ico('ecke')}Ecke</button>
+    </div>
+    ${rueckkehrPunkt?`<div class="row"><button class="btn small danger" id="rueckkehr" style="flex:1"
+      title="Stellt den Stand vor diesem Eingriff wieder her">${ico('zurueck')}Zurück vor „${esc(rueckkehrPunkt.was)}"</button></div>`:''}
+    <div class="row"><button class="btn green small" id="walllv" style="flex:1">${ico('liste')}LV-Position</button></div>
+    <!-- ACHTUNG, der Knopf hält noch nicht, was er verspricht: er schließt bislang nur
+         die Wand-Ansicht. Die Beschriftung ist auf Wunsch schon die künftige — geplant
+         ist, die Wand wirklich zu löschen und den Raum an der Stelle offen zu zeigen.
+         Bis dahin sagt der Tooltip, was tatsächlich passiert. -->
+    <div class="row"><button class="btn small danger" id="walldesel" style="flex:1"
+      title="Schließt bislang nur die Wand-Ansicht — Raum und Wand bleiben erhalten">${ico('papierkorb')}Löschen</button></div>
+    <p class="hint">Nochmal anfassen und ziehen verschiebt die Wand parallel — die Nachbarwände behalten ihre Richtung und werden nur länger oder kürzer. <b>Ecke einfügen und dann eine Hälfte ziehen ergibt einen rechtwinkligen Vor- oder Rücksprung.</b> Wandlänge ändern verschiebt die nachfolgenden Ecken mit.</p>
+    </div>`;
+  html+=fotoPanel((r.wallFotos||{})[sel.wall], 'wfoto')
+    + lvPanel(p.attrs.filter(a=>a.roomId===r.id && a.wall===sel.wall));
   return html;
 }
 
 // Raum im Fokus -- der Normalfall ohne weitere Auswahl.
+/* ---------- Raum (Aufbau nach der Vorlage, seit 2026-08-06) ----------
+   Drei Karten statt zwei, in der überall gleichen Ordnung:
+
+   1. **Der Raum selbst** — Zustand (Etagenschloss) und alles Beschreibende: Name,
+      Höhe, Anmerkung, Farbe, und die Statistik zugeklappt am Ende. Acht Zahlen, die
+      man beim Aufmessen so gut wie nie braucht, standen bisher dauerhaft offen.
+   2. **Aktionen** — was mit diesem Raum geschieht.
+   3. **Neues Objekt** — die Werkzeuge. Sie kommen zuletzt, weil sie nichts über den
+      Raum aussagen, sondern etwas Neues anlegen. */
 function panelRaum(p, r, objs, ops){
-  let html='';
-      /* Raum im Fokus */
-      const st=roomStats(r);
-      html+=`<div class="panel"><h3>Raum — ${esc(floorName(r.floorId))}</h3>
-        <div class="row"><button class="btn small" id="backfloor" style="flex:1">← Zurück zur Etage</button></div>
-        <div class="row"><label>Name</label><input type="text" id="rname" value="${esc(r.name)}"></div>
-        <div class="row"><label>Raumhöhe (m)</label><input class="laser" id="rheight" value="${fmt3(r.height)}"></div>
-        <div class="row" style="margin-top:4px">
-          <button class="btn green small" id="rlv">＋ LV-Position</button>
-          <button class="btn small" id="rdup">Duplizieren</button>
-          <button class="btn danger small" id="rdel">Löschen</button>
-        </div>
-        ${sperrZeile(r.floorId)}
-        ${anmerkungFeld(r)}
-        ${farbReihen(r)}
-        <details id="rstats"${statsOpen?' open':''}><summary class="hint" style="cursor:pointer">Statistik anzeigen</summary>
-          <div class="stat"><span>Bodenfläche</span><b>${fmt(st.area,3)} m²</b></div>
-          <div class="stat"><span>Umfang</span><b>${fmt(st.per,3)} m</b></div>
-          <div class="stat"><span>Wandfläche (o. Öffn.)</span><b>${fmt(st.wallA,3)} m²</b></div>
-          <div class="stat"><span>Fensterflächen</span><b>${fmt(st.winA,3)} m²</b></div>
-          <div class="stat"><span>Türflächen</span><b>${fmt(st.doorA,3)} m²</b></div>
-          <div class="stat"><span>Volumen</span><b>${fmt(st.vol,3)} m³</b></div>
-          <div class="stat"><span>Laibungen</span><b>${fmt(st.laibA,3)} m²</b></div>
-          <div class="stat"><span>Wandvolumen</span><b>${fmt(st.wandVol,3)} m³</b></div>
-        </details></div>`;
+  const st=roomStats(r);
+  const n=objs.length+ops.length;
+  /* Die Klasse wird HIER zusammengesetzt und nicht in `attr` mitgegeben: zwei
+     `class`-Attribute an einem Knopf sind kein Fehler im Sinne des Parsers, das zweite
+     wird nur stillschweigend verworfen — und mit ihm `symbtn`, an dem die Verdrahtung
+     der Symbolknöpfe hängt. */
+  const wz=(inhalt, an, attr, titel, kl) => `<button class="${kl||''}${an?' an':''}" ${attr}
+    ${titel?`title="${esc(titel)}"`:''}>${inhalt}</button>`;
+  let html=`<div class="panel"><h3>${esc(r.name)} — ${esc(floorName(r.floorId))}</h3>
+    ${sperrZeile(r.floorId)}
+    <div style="height:8px"></div>
+    <div class="row"><label>Name</label><input type="text" id="rname" value="${esc(r.name)}"></div>
+    <div class="row"><label>Raumhöhe (m)</label><input class="laser" id="rheight" value="${fmt3(r.height)}"></div>
+    <div style="height:12px"></div>
+    ${farbReihen(r)}</div>
 
-      html+=`<div class="panel"><h3>Objekte (${objs.length+ops.length})</h3>
-        <div class="row">
-          <button class="btn small ${mode==='objrect'?'active':''}" id="objrectbtn" style="flex:1">▭ Fläche</button>
-          <button class="btn small ${mode==='objline'?'active':''}" id="objlinebtn" style="flex:1">╱ Linie</button>
-        </div>
-        <div class="row">
-          <button class="btn small symbtn ${mode==='objsym'&&pendingSym==='1k'?'active':''}" data-sym="1k" title="1-Kammer-Schleuse" style="flex:1">1-K</button>
-          <button class="btn small symbtn ${mode==='objsym'&&pendingSym==='2k'?'active':''}" data-sym="2k" title="2-Kammer-Schleuse" style="flex:1">2-K</button>
-          <button class="btn small symbtn ${mode==='objsym'&&pendingSym==='4k'?'active':''}" data-sym="4k" title="4-Kammer-Schleuse" style="flex:1">4-K</button>
-          <button class="btn small symbtn ${mode==='objsym'&&pendingSym==='rfa'?'active':''}" data-sym="rfa" title="RFA" style="flex:1">RFA</button>
-        </div>
-        <div class="row">
-          <button class="btn small ${mode==='addopen'&&pendingOpenType==='door'?'active':''}" id="opdoorbtn" style="flex:1">🚪 Tür</button>
-          <button class="btn small ${mode==='addopen'&&pendingOpenType==='window'?'active':''}" id="opwinbtn" style="flex:1">🪟 Fenster</button>
-        </div>
-        <div class="row">
-          <button class="btn small symbtn ${mode==='objsym'&&pendingSym==='p360'?'active':''}" data-sym="p360" title="Standort einer 360°-Aufnahme — Pfeil zeigt die Blickrichtung" style="flex:1">📷 360°-Aufnahme</button>
-        </div>
-        <div class="row">
-          <button class="btn small symbtn ${mode==='objsym'&&pendingSym==='fotom'?'active':''}" data-sym="fotom" title="Auf Fotos messen: fünf farbige Slots mit LV-Positionen, Flächen/Längen/Kreuze direkt im Bild" style="flex:1">📐 Fotoaufmaß</button>
-        </div>
-        <p class="hint">Objekt-Typ wählen, dann im Raum aufziehen bzw. platzieren (Tür/Fenster: Wand anklicken). Auswahl per Klick im Plan.</p>
-      </div>`;
+    <div class="panel"><h3>Aktionen</h3>
+    <div class="row"><button class="btn green small" id="rlv" style="flex:1">${ico('liste')}LV-Position</button></div>
+    <div class="row">
+      <button class="btn small" id="rdup" style="flex:1">${ico('kopie')}Duplizieren</button>
+      <button class="btn danger small" id="rdel" style="flex:1">${ico('papierkorb')}Löschen</button>
+    </div>
+    <div class="row"><button class="btn small" id="backfloor" style="flex:1">${ico('pfeilLinks')}Zurück zur Etage</button></div>
+    </div>
 
-      html+=fotoPanel(r.fotos, 'rfoto', p.attrs.filter(a=>a.roomId===r.id));
+    <div class="panel"><h3>Neues Objekt${n?` — ${n} im Raum`:''}</h3>
+    <div class="werkzeuge">
+      ${wz(ico('flaeche',true), mode==='objrect', 'id="objrectbtn"', 'Fläche aufziehen')}
+      ${wz(ico('linie',true),   mode==='objline', 'id="objlinebtn"', 'Linie zeichnen')}
+      ${wz(ico('tuer',true),    mode==='addopen'&&pendingOpenType==='door', 'id="opdoorbtn"', 'Tür — dazu eine Wand antippen')}
+      ${wz(ico('fenster',true), mode==='addopen'&&pendingOpenType==='window', 'id="opwinbtn"', 'Fenster — dazu eine Wand antippen')}
+    </div>
+    <div class="werkzeuge">
+      ${wz('1-K', mode==='objsym'&&pendingSym==='1k', 'data-sym="1k"', '1-Kammer-Schleuse', 'symbtn')}
+      ${wz('2-K', mode==='objsym'&&pendingSym==='2k', 'data-sym="2k"', '2-Kammer-Schleuse', 'symbtn')}
+      ${wz('4-K', mode==='objsym'&&pendingSym==='4k', 'data-sym="4k"', '4-Kammer-Schleuse', 'symbtn')}
+      ${wz('RFA', mode==='objsym'&&pendingSym==='rfa', 'data-sym="rfa"', 'RFA', 'symbtn')}
+    </div>
+    <div class="werkzeuge">
+      ${wz(ico('rundum')+'360°', mode==='objsym'&&pendingSym==='p360',
+        'data-sym="p360"', 'Standort einer 360°-Aufnahme — der Pfeil zeigt die Blickrichtung', 'symbtn breit')}
+      ${wz(ico('fotomass')+'Fotoaufmaß', mode==='objsym'&&pendingSym==='fotom',
+        'data-sym="fotom"', 'Auf Fotos messen: fünf farbige Slots mit LV-Positionen, Flächen, Längen und Kreuze direkt im Bild', 'symbtn breit')}
+    </div>
+    <p class="hint">Typ wählen, dann im Raum aufziehen bzw. platzieren. Tür und Fenster
+      brauchen eine angetippte Wand. Auswahl per Klick im Plan.</p>
+    </div>`;
+  html+=fotoPanel(r.fotos, 'rfoto');
+  /* Anmerkung und Statistik stehen GANZ UNTEN, hinter Fotos und LV-Positionen
+     (Nutzerwunsch). Beides wird beim Aufmessen selten angefasst: die Anmerkung schreibt
+     man einmal, die acht Zahlen liest man am Ende. Weiter oben schoben sie das weg,
+     womit man wirklich arbeitet. Die Statistik-Karte ist selbst das `<details>` — ihre
+     Überschrift ist zugleich der Schalter, das spart eine Zeile. */
+  html+=`<div class="panel"><h3>Anmerkung</h3>${anmerkungFeld(r, true)}
+    <p class="hint">Erscheint im Ausdruck <b>unter dem Raumplan</b> in einem eigenen
+      Kasten — nicht in der Positionstabelle.</p></div>
+
+    <details id="rstats" class="panel"${statsOpen?' open':''}>
+      <summary class="panelkopf">Statistik</summary>
+      <div class="stat"><span>Bodenfläche</span><b>${fmt(st.area,3)} m²</b></div>
+      <div class="stat"><span>Umfang</span><b>${fmt(st.per,3)} m</b></div>
+      <div class="stat"><span>Wandfläche (o. Öffn.)</span><b>${fmt(st.wallA,3)} m²</b></div>
+      <div class="stat"><span>Fensterflächen</span><b>${fmt(st.winA,3)} m²</b></div>
+      <div class="stat"><span>Türflächen</span><b>${fmt(st.doorA,3)} m²</b></div>
+      <div class="stat"><span>Volumen</span><b>${fmt(st.vol,3)} m³</b></div>
+      <div class="stat"><span>Laibungen</span><b>${fmt(st.laibA,3)} m²</b></div>
+      <div class="stat"><span>Wandvolumen</span><b>${fmt(st.wandVol,3)} m³</b></div>
+    </details>`;
+  // Ganz unten, hinter allem anderen — es ist die längste Karte und die, die man
+  // beim Aufmessen liest statt bedient.
+  html+=lvPanel(p.attrs.filter(a=>a.roomId===r.id));
   return html;
 }
 
@@ -7669,7 +7880,7 @@ dlgFotoRolle.addEventListener('keydown', e=>{
 }
 function fotoBtn(list, id){
   const n=(list||[]).length;
-  return `<button class="btn small" id="${id}">📷 Fotos${n?' ('+n+')':''}</button>`;
+  return `<button class="btn small" id="${id}" style="flex:1">${ico('foto')}Fotos${n?' ('+n+')':''}</button>`;
 }
 /* Button + Thumbnails eines Trägers verdrahten (ent[key] ist das Foto-Array) */
 function wireFotos(btnId, ent, key){
@@ -9295,8 +9506,8 @@ function planPanel(){
   const pl=planVon();
   if(!pl) return `<div class="panel"><h3>Plan als Hintergrund</h3>
     <div class="row">
-      <button class="btn small primary" id="planat" style="flex:1">☁️ Aus Airtable</button>
-      <button class="btn small" id="planadd" style="flex:1">🖼️ Aus Datei</button>
+      <button class="btn small primary" id="planat" style="flex:1">${ico('wolke')}Aus Airtable</button>
+      <button class="btn small" id="planadd" style="flex:1">${ico('bild')}Aus Datei</button>
     </div>
     <div id="planListe"></div>
     <p class="hint" style="margin-top:6px">Pläne liegen bei der Baustelle im Feld <b>Aufmaß Pläne</b>.
@@ -9309,13 +9520,14 @@ function planPanel(){
     <div class="row"><label>Deckkraft Plan</label><input id="plandeck" type="range" min="10" max="100" value="${Math.round(pl.deckkraft*100)}" style="flex:1"></div>
     <div class="row"><label>Deckkraft Zeichnung</label><input id="plandurch" type="range" min="15" max="100" value="${Math.round(planDurchsicht()*100)}" style="flex:1"></div>
     <div class="row">
-      <button class="btn small" id="plankalib" style="flex:1">📏 Maßstab setzen</button>
-      <button class="btn small" id="planlock" style="flex:1">${pl.gesperrt?'🔒 Gesperrt':'🔓 Beweglich'}</button>
+      <button class="btn small" id="plankalib" style="flex:1">${ico('massstab')}Maßstab setzen</button>
+      <button class="btn small ${pl.gesperrt?'zu':'auf'}" id="planlock" style="flex:1">${
+        ico(pl.gesperrt?'schlossZu':'schlossAuf')}${pl.gesperrt?'Gesperrt':'Beweglich'}</button>
     </div>
     <div class="row">
-      <button class="btn small" id="planat" style="flex:1">☁️ Airtable</button>
-      <button class="btn small" id="planadd" style="flex:1">🖼️ Datei</button>
-      <button class="btn small danger" id="plandel">Entfernen</button>
+      <button class="btn small" id="planat" style="flex:1">${ico('wolke')}Airtable</button>
+      <button class="btn small" id="planadd" style="flex:1">${ico('bild')}Datei</button>
+      <button class="btn small danger" id="plandel">${ico('papierkorb')}Entfernen</button>
     </div>
     <div id="planListe"></div>
     <p class="hint" style="margin-top:6px">${pl.gesperrt
@@ -12681,6 +12893,20 @@ function blattTitel(){
   const h=$('#sidebar .panel h3');
   $('#blatttitel').textContent = h ? h.textContent.replace(/\s+/g,' ').trim() : 'Werkzeuge';
 }
+/* Zustand ueberlebt das Neuladen -- wer die Spalte zumacht, will Platz fuer den Plan
+   und nicht bei jedem Oeffnen wieder klicken. Gespeichert wird wie beim Magneten
+   geraetweise, nicht im Aufmass: es ist eine Ansichtssache, keine Messung. */
+const BLATT_KEY='grundriss-blatt-zu';
+function blattSpalte(zu){
+  $('#layout').classList.toggle('ohneblatt', zu);
+  const b=$('#blattzu');
+  b.innerHTML=ico(zu?'winkelRechts':'winkelLinks', true);
+  b.title = zu ? 'Werkzeuge einblenden' : 'Werkzeuge ausblenden';
+  try{ localStorage.setItem(BLATT_KEY, zu?'1':'0'); }catch(_){}
+  if(view==='plan') renderCanvas();
+}
+$('#blattzu').onclick=()=>blattSpalte(!$('#layout').classList.contains('ohneblatt'));
+blattSpalte(localStorage.getItem(BLATT_KEY)==='1');
 $('#tbmehrbtn').onclick=()=>$('#tbmehr').classList.toggle('auf');
 document.addEventListener('pointerdown', e=>{
   const m=$('#tbmehr');
