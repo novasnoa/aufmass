@@ -97,6 +97,27 @@
   #leiste button.gruen{color:#fff; background:var(--accent2); border-color:var(--accent2);}
   #leiste svg{width:30px; height:30px; display:block; margin:0 auto; stroke-width:1.7;}
   #leiste .trenner{flex:0 0 auto; width:34px; height:1px; background:var(--line); margin:2px 0;}
+  /* Eingabefelder in der Leiste: kleines Symbol, darunter der Wert */
+  #leiste button.feld{display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:1px;}
+  #leiste button.feld svg{width:19px; height:19px;}
+  #leiste button.feld .wert{font-size:11px; font-weight:600; color:var(--ink);}
+  /* Aufklappmenüs der Leiste. Hängen am `body`, weil die Leiste scrollt und sie sonst
+     an ihrem Rand abgeschnitten würden. */
+  #leisteklapp{position:fixed; z-index:60; display:grid; gap:6px; padding:10px;
+    background:#fff; border:1px solid var(--line); border-radius:12px;
+    box-shadow:0 8px 24px rgba(0,0,0,.16);}
+  #leisteklapp.farbe{grid-template-columns:repeat(3,1fr);}
+  #leisteklapp.gross{grid-template-columns:repeat(2,1fr);}
+  #leisteklapp.farbe button{width:38px; height:38px; border:1px solid rgba(0,0,0,.15);
+    border-radius:9px; padding:0;}
+  #leisteklapp.gross button{width:64px; height:52px; border:1px solid var(--line);
+    background:#fff; border-radius:10px; color:var(--accent); font-size:13px; padding:3px;}
+  /* Die Typbilder bringen ihre eigene Größe mit (`width="100%"`), die Symbole aus
+     `ICONS` nicht — darum beides getrennt. */
+  #leisteklapp.gross button > svg[viewBox="0 0 24 24"]{width:24px; height:24px; display:block; margin:0 auto;}
+  #leisteklapp.gross button > svg:not([viewBox="0 0 24 24"]){height:100%; display:block;}
+  #leisteklapp button.an{box-shadow:0 0 0 2px var(--accent);}
   #blattzu{position:absolute; left:10px; bottom:10px; z-index:5;
     width:34px; height:34px; padding:0; border:1px solid var(--line); background:#fff;
     border-radius:9px; color:var(--accent); box-shadow:0 1px 4px rgba(0,0,0,.10);}
@@ -476,6 +497,16 @@
     box-shadow:0 0 0 1px var(--accent);}
   .werkzeuge button.breit{grid-column:span 2;}
   .werkzeuge button.loesch{color:var(--danger); border-color:#f0c4c4;}
+  /* Kopfzeile mit den beiden Anwahl-Schaltern rechts */
+  .panel h3.mitschalter{display:flex; align-items:center; justify-content:space-between; gap:8px;}
+  .panel h3 .modus{display:flex; gap:4px;}
+  .panel h3 .modus button{width:30px; height:26px; padding:0; border:1px solid var(--line);
+    background:#fff; border-radius:7px; color:var(--muted);}
+  .panel h3 .modus button.an{border-color:var(--accent); background:#eaf1ff; color:var(--accent);}
+  .panel h3 .modus svg{width:16px; height:16px; margin:0 auto; display:block;}
+  .raumtitel{font-size:11px; font-weight:700; color:var(--ink); letter-spacing:.02em;
+    margin:12px 0 2px; padding-top:6px; border-top:1px solid var(--line);}
+  .raumtitel:first-child{margin-top:2px; padding-top:0; border-top:none;}
   /* Eine Karte, deren Überschrift zugleich der Auf-und-zu-Schalter ist: das `<details>`
      TRÄGT die Klasse `.panel`, statt eines zu enthalten. Spart die doppelte Umrandung
      und eine Zeile Höhe. */
@@ -2908,7 +2939,7 @@ function angleMarks(r, lbl, zeigen){
   return out ? `<g style="pointer-events:none">${out}</g>` : '';
 }
 function focusRoom(id){
-  focusRoomId=id; etagenWahl=null;           // Anwahl gilt nur der Etagenansicht
+  focusRoomId=id; etagenWahl=[];             // Anwahl gilt nur der Etagenansicht
   sel={roomId:id, wall:null, vertex:null};
   if(zoneEdit!==id) zoneEdit=null;          // Farbzonen-Bearbeitung gilt nur dem eigenen Raum
   mode='select';
@@ -2955,9 +2986,10 @@ function renderCanvas(){
     });
     out+=wandLage(rooms);
     // Angewählter Raum im Anwahlmodus: kräftiger Rahmen, damit die Wahl eindeutig ist
-    const wr=etagenWahl?rooms.find(r=>r.id===etagenWahl):null;
-    if(wr) out+=`<path d="${polyD(wr.points)}" fill="none" stroke="#2f6fed"`+
-      ` stroke-width="${Math.max(0.03, vb.w/260)}" stroke-linejoin="miter" style="pointer-events:none"/>`;
+    rooms.filter(r=>wahlHat(r.id)).forEach(wr=>{
+      out+=`<path d="${polyD(wr.points)}" fill="none" stroke="#2f6fed"`+
+        ` stroke-width="${Math.max(0.03, vb.w/260)}" stroke-linejoin="miter" style="pointer-events:none"/>`;
+    });
   }
 
   rooms.forEach(r=>{
@@ -2983,8 +3015,12 @@ function renderCanvas(){
       <tspan x="${c.x}" dy="-0.1">${esc(r.name)}</tspan>
       <tspan x="${c.x}" dy="${lbl*1.25}" fill="#6b7484" font-size="${lbl*0.85}">${fmt(st.area,2)} m²</tspan></text>`;
     if(dim){ out+='</g>'; return; }
-    // Im Farbzonen-Modus keine Wand-/Eckgriffe zeichnen — sie wären ohnehin gesperrt
-    if(selR && !zoneEdit){
+    /* Nur in der RAUMANSICHT (`fr`) gibt es Wand- und Eckgriffe samt Maßketten. In der
+       Etagenansicht ist ein Raum zwar anwählbar, aber als Ganzes: dort verschiebt man
+       ihn, man formt ihn nicht um. Die Maße daneben waren nur Gestrüpp — und bei
+       mehreren angewählten Räumen erst recht.
+       Im Farbzonen-Modus ebenfalls nicht: die Griffe wären ohnehin gesperrt. */
+    if(selR && !zoneEdit && fr){
       /* Gesperrter Raum: **anwählen ja, bewegen nein.** Wände und Öffnungen lassen sich
          weiter antippen — man will ja LV-Positionen und Fotos daran hängen —, aber sie
          zeigen keine blaue Linie (die verspricht „jetzt ziehbar") und der zweite Griff
@@ -3446,17 +3482,50 @@ function deleteOpeningEverywhere(r,opId){
 
    Seit 2026-08-03 ist der Modus zugleich die **einzige** Möglichkeit, Räume zu
    verschieben — ohne ihn schiebt derselbe Zug die Ansicht (siehe pointerdown). */
-let etagenWahl=null;                 // Raum-ID im Anwahlmodus (nur Etagenansicht)
+/* Seit 2026-08-06 ist die Anwahl eine **Liste**: man kann mehrere Räume zugleich
+   wählen und dann Höhe, Farbe oder eine LV-Position in einem Zug auf alle anwenden.
+   `wahlModus` sagt, was ein Tipp bedeutet — umschalten statt ersetzen. */
+let etagenWahl=[];                   // Raum-IDs im Anwahlmodus (nur Etagenansicht)
+let wahlModus='einzel';              // 'einzel' | 'mehr'
+const wahlAn     = () => etagenWahl.length>0;
+const wahlHat    = id => etagenWahl.indexOf(id)>=0;
+const wahlRaeume = () => etagenWahl.map(roomById).filter(Boolean);
+/* Wohin eine Änderung geht: im Anwahlmodus an ALLE gewählten Räume, sonst an den
+   einen, den das Panel gerade zeigt. Die eine Stelle, die den Unterschied kennt. */
+const zielRaeume = r => (!focusRoomId && wahlAn()) ? wahlRaeume() : (r ? [r] : []);
+/* In den Raum kommt man je nach Modus anders hinein — und das muss so sein:
+   **Einzeln** bedeutet ein Tipp = ein anderer Raum, ein Tipp auf den schon gewählten
+   hat also nichts anderes zu tun und öffnet ihn. **Mehrfach** dagegen braucht den
+   einfachen Tipp zum Dazunehmen und Wegnehmen; dort öffnet erst der Doppeltipp.
+   `DOPPEL_MS` ist die übliche Spanne — kürzer trifft man auf der Baustelle nicht. */
+const DOPPEL_MS=400;
+let letzterTipp={id:null, zeit:0};
+function wahlTippen(id){
+  const jetzt=Date.now();
+  const doppel = letzterTipp.id===id && jetzt-letzterTipp.zeit<DOPPEL_MS;
+  letzterTipp={id, zeit:jetzt};
+  if(wahlModus==='mehr'){
+    if(doppel){ etagenWahl=[]; focusRoom(id); return; }
+    const i=etagenWahl.indexOf(id);
+    if(i>=0) etagenWahl.splice(i,1); else etagenWahl.push(id);
+  } else if(wahlHat(id)){                 // derselbe noch einmal = hinein
+    etagenWahl=[]; focusRoom(id); return;
+  } else etagenWahl=[id];
+  sel={roomId:etagenWahl[0]||null, wall:null, vertex:null};
+  renderAll();
+}
 let haltenTimer=null;
-const HALTEN_MS=1000;                // kurz genug zum flüssigen Arbeiten, lang genug
-                                     // gegen versehentliches Auslösen beim Antippen
+const HALTEN_MS=500;                 // kurz genug zum fluessigen Arbeiten, lang genug
+                                     // gegen versehentliches Ausloesen beim Antippen
 function haltenStarten(id){
   clearTimeout(haltenTimer);
   haltenTimer=setTimeout(()=>{
     haltenTimer=null;
     if(drag && drag.moved) return;   // wer schiebt, will nicht auswählen
     cancelDrag(); drag=null;
-    etagenWahl=id; renderAll();
+    if(!wahlHat(id)) etagenWahl = wahlModus==='mehr' ? etagenWahl.concat(id) : [id];
+    sel={roomId:etagenWahl[0]||null, wall:null, vertex:null};
+    renderAll();
     melde('Anwahl — jetzt lässt sich der Raum ziehen. Antippen wechselt, noch einmal öffnet die Raumansicht, daneben beendet.');
   }, HALTEN_MS);
 }
@@ -4104,7 +4173,7 @@ svg.addEventListener('pointerdown', e=>{
        Ohne Anwahl schiebt derselbe Zug die Ansicht — sonst rutschten Räume beim bloßen
        Navigieren aus ihrer eingemessenen Lage, und über einem Plan fällt das erst
        hinterher auf. Der Tipp ohne Bewegung zoomt weiterhin hinein (`pendingRoom`). */
-    if(etagenWahl){
+    if(wahlHat(r.id)){
       drag={kind:'room', start:p, orig:r.points.map(q=>({...q})),
         origObjs:JSON.parse(JSON.stringify(r.objects||[])), room:r, moved:false};
     } else {
@@ -4389,17 +4458,19 @@ svg.addEventListener('pointerup', e=>{
   if(drag){
     if(drag.kind==='room' && !drag.moved && mode==='select'){
       const id=drag.room.id; drag=null;
-      if(etagenWahl){
-        // Im Anwahlmodus: anderer Raum = umwählen, derselbe noch einmal = hinein
-        if(etagenWahl===id){ etagenWahl=null; focusRoom(id); }
-        else { etagenWahl=id; sel={roomId:id, wall:null, vertex:null}; renderAll(); }
-        return;
-      }
+      if(wahlAn()){ wahlTippen(id); return; }
       focusRoom(id); return;
     }
     if(drag.kind==='pan' && drag.gesperrt){ drag=null; return; }   // Farbzonen-Modus: kein Klick wirkt
     if(drag.kind==='pan' && !drag.moved && mode==='select'){
-      if(drag.pendingRoom){ const id=drag.pendingRoom; drag=null; focusRoom(id); return; }
+      /* Ein kurzer Tipp auf einen Raum: **ohne** Anwahl geht es hinein, **mit** Anwahl
+         wählt er ihn dazu bzw. um. Das ist der Sinn des Modus — in ihn kommt man durch
+         Halten, danach reicht der kurze Klick. Vorher sprang dieser Zweig auch bei
+         stehender Anwahl in den Raum, weil er nur den Fall „nichts gewählt" kannte:
+         Räume, die schon gewählt sind, laufen über `drag.kind==='room'` weiter oben. */
+      if(drag.pendingRoom){ const id=drag.pendingRoom; drag=null;
+        if(wahlAn()) wahlTippen(id); else focusRoom(id);
+        return; }
       const t=document.elementFromPoint(e.clientX,e.clientY);
       const ds=(t&&t.dataset)?t.dataset:{};
       // Klick auf die Fläche des fokussierten Raums zählt als "ins Leere im Raum"
@@ -4416,7 +4487,7 @@ svg.addEventListener('pointerup', e=>{
           sel={roomId:focusRoomId, wall:null, vertex:null}; renderAll();
         }
         // Etagenansicht: Tipp neben die Räume beendet den Anwahlmodus
-        else if(!ds.roomid){ etagenWahl=null; sel={roomId:null, wall:null, vertex:null}; renderAll(); }
+        else if(!ds.roomid){ etagenWahl=[]; sel={roomId:null, wall:null, vertex:null}; renderAll(); }
       }
     }
     if(drag && (drag.kind==='newrect'||drag.kind==='newline')){
@@ -4546,7 +4617,10 @@ function closeDraft(){
   const r={id:uid(), floorId:activeFloorId, name:'Raum '+(proj().rooms.length+1), height:lastHeight,
     points:draft.points, openings:[]};
   proj().rooms.push(r); save();
-  cancelModes(); focusRoom(r.id);
+  /* Neu gezeichnete Räume beginnen in der Anwahl statt in der Raumansicht: direkt
+     danach setzt man Höhe, Farbe und LV-Position — und kann gleich weitere Räume
+     dazunehmen. Hineinzoomen ist ein Tipp mehr, Herauszoomen wäre einer. */
+  cancelModes(); etagenWahl=[r.id]; sel={roomId:r.id, wall:null, vertex:null}; renderAll();
 }
 function updateDrawHint(){
   const h=$('#drawhint');
@@ -4601,7 +4675,7 @@ document.addEventListener('keydown', e=>{
   }
   if(e.key==='Escape'){
     if(zoneEdit){ zoneEdit=null; sel.zoneH=null; renderAll(); return; }
-    if(etagenWahl){ etagenWahl=null; renderAll(); return; }
+    if(wahlAn()){ etagenWahl=[]; renderAll(); return; }
     if(mode!=='select') cancelModes();
     else if(sel.wall!=null||sel.vertex!=null||sel.openId||sel.objId){ sel={roomId:focusRoomId, wall:null, vertex:null}; renderAll(); }
     else if(focusRoomId) exitRoom();
@@ -4645,7 +4719,9 @@ function commitPlace(p){
     height:placing.height||2.5, points:pts, openings:[]};
   proj().rooms.push(r); save();
   lastHeight=r.height;
-  cancelModes(); focusRoom(r.id);
+  // Aus der Vorlage genau wie beim Freihandzeichnen: der Raum steht da und ist
+  // angewählt. Höhe, Farbe und LV-Position sitzen dann gleich unter dem Finger.
+  cancelModes(); etagenWahl=[r.id]; sel={roomId:r.id, wall:null, vertex:null}; renderAll();
 }
 
 /* ---------- Öffnungen: Platz, Grenzen, Wandwechsel ---------- */
@@ -5177,14 +5253,17 @@ function punktLoeschen(g, k){
   g.points.splice(k, 1);
   return true;
 }
-function deleteRoom(id){
+/* `stumm` überspringt die Rückfrage und das Neuzeichnen — beim Löschen mehrerer Räume
+   aus der Anwahl heraus wird EINMAL gefragt und EINMAL neu gezeichnet, nicht fünfmal. */
+function deleteRoom(id, stumm){
   const r=roomById(id); if(!r) return;
-  if(!confirm(`Raum „${r.name}“ wirklich löschen? Zugehörige LV-Positionen werden mit gelöscht.`)) return;
+  if(!stumm && !confirm(`Raum „${r.name}“ wirklich löschen? Zugehörige LV-Positionen werden mit gelöscht.`)) return;
   const p=proj();
   p.rooms=p.rooms.filter(x=>x.id!==id);
   p.attrs=p.attrs.filter(a=>a.roomId!==id);
+  etagenWahl=etagenWahl.filter(x=>x!==id);
+  if(stumm) return;
   focusRoomId=null; sel={roomId:null,wall:null,vertex:null};
-  if(etagenWahl===id) etagenWahl=null;
   save(); renderAll(); zoomFit();
 }
 
@@ -5243,6 +5322,11 @@ const ICONS = {
     + '<path d="M10.8 14.6 12 13.4l1.2 1.2"/><path d="M10.8 17.4 12 18.6l1.2-1.2"/>'
     + '<path d="M12 8.5V3"/><path d="M9.5 5.5 12 3l2.5 2.5"/>',
   winkelRechts:'<path d="M9 5l7 7-7 7"/>',
+  hoehe:      '<path d="M4 4h16M4 20h16"/><path d="M12 7v10"/><path d="M9.5 9.5 12 7l2.5 2.5"/><path d="M9.5 14.5 12 17l2.5-2.5"/>',
+  farbtopf:   '<path d="M5 10 12 3l7 7-7 7z"/><path d="M19 14.5c1.2 1.6 1.8 2.7 1.8 3.4a1.8 1.8 0 0 1-3.6 0c0-.7.6-1.8 1.8-3.4z"/>',
+  objekte:    '<rect x="2.5" y="3.5" width="9" height="7" rx="1"/><circle cx="17.5" cy="7" r="3.6"/><path d="M7 21l-4.5-7h9z"/>',
+  einzelwahl: '<rect x="6" y="6" width="12" height="12" rx="1.5"/>',
+  mehrwahl:   '<rect x="3" y="9" width="12" height="12" rx="1.5"/><path d="M9 6.5V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-1.5"/>',
   aufschlag: '<path d="M12 4v16"/><path d="M8 8l4-4 4 4"/><path d="M8 16l4 4 4-4"/>'
 };
 /* `allein` heißt: ohne Beschriftung daneben, dann fällt der rechte Abstand weg. */
@@ -5395,34 +5479,11 @@ function farbReihen(r, ohneZone){
 function panelEtage(p){
   let html='';
     /* ---------- Etagenansicht ---------- */
-    /* Anwahlmodus (Raum 1 s halten): der gewählte Raum lässt sich bearbeiten, ohne
-       hineinzuzoomen — deshalb ganz oben. Bewusst dieselben Felder wie in der
-       Raumansicht, nur ohne Objekte/Fotos: die brauchen den großen Plan. */
-    const wr=etagenWahl?roomById(etagenWahl):null;
-    if(wr){
-      html+=`<div class="panel"><h3>Raum angewählt — ${esc(wr.name)}</h3>
-        ${sperrZeile(wr.floorId)}
-        <div style="height:8px"></div>
-        <div class="row"><label>Name</label><input type="text" id="rname" value="${esc(wr.name)}"></div>
-        <div class="row"><label>Raumhöhe (m)</label><input class="laser" id="rheight" value="${fmt3(wr.height)}"></div>
-        <div style="height:12px"></div>
-        ${farbReihen(wr, true)}
-        <p class="hint" style="margin-top:8px"><b>Solange die Anwahl steht, lassen sich Räume ziehen.</b>
-          Anderen Raum antippen wechselt die Anwahl,
-          <b>${esc(wr.name)}</b> noch einmal antippen öffnet die Raumansicht,
-          ein Tipp neben die Räume beendet die Anwahl.</p>
-      </div>
-
-      <div class="panel"><h3>Aktionen</h3>
-      <div class="row"><button class="btn green small" id="rlv" style="flex:1">${ico('liste')}LV-Position</button></div>
-      <div class="row">
-        <button class="btn small" id="rdup" style="flex:1">${ico('kopie')}Duplizieren</button>
-        <button class="btn danger small" id="rdel" style="flex:1">${ico('papierkorb')}Löschen</button>
-      </div></div>
-
-      <div class="panel"><h3>Anmerkung</h3>${anmerkungFeld(wr, true)}</div>`;
-      html+=lvPanel(p.attrs.filter(a=>a.roomId===wr.id && !a.objId && a.wall==null));
-    }
+    /* Steht eine Anwahl, gehört die Spalte ihr **allein**: Etagenwahl, „Neuer Raum",
+       Hintergrundplan und Raumliste verschwinden. Sie gehören zur Etage, nicht zu den
+       gewählten Räumen — und weiter unten weggeschoben zu werden hilft niemandem.
+       Zurück kommt alles mit einem Tipp neben die Räume oder mit Esc. */
+    if(wahlAn()) return panelWahl(p, wahlRaeume());
     html+=`<div class="panel"><h3>Etage</h3>
       ${sperrZeile(activeFloorId)}
       <div style="height:8px"></div>
@@ -5663,6 +5724,82 @@ function panelEcke(r){
 }
 
 // Wand im Fokus: Laenge, Staerke, Oeffnungen, Magnet, LV.
+/* ---------- Anwahl in der Etagenansicht (seit 2026-08-06) ----------
+   Eigenes Panel, weil hier etwas anderes gilt als in der Raumansicht: Man sieht den
+   Grundriss von oben und arbeitet an einem oder an MEHREREN Räumen zugleich.
+
+   Was bei mehreren wegfällt, fällt weg, weil es dort keinen Sinn ergibt: **ein Name**
+   für fünf Räume, **Duplizieren** (was wäre die Kopie?), **Fotos** und die
+   **Anmerkung** hängen je an einem Raum. Was bleibt, wirkt auf alle: Höhe, Farbe,
+   LV-Position, Löschen. Die Statistik zeigt dann Summen, die LV-Positionen stehen
+   nach Räumen getrennt.
+
+   Der Werkzeugkasten „Neues Objekt" fehlt hier ganz — Objekte brauchen den großen
+   Plan der Raumansicht. */
+function panelWahl(p, rs){
+  if(!rs.length) return '';
+  const eins = rs.length===1, r=rs[0];
+  const st = rs.map(roomStats);
+  const summe = k => st.reduce((a,x)=>a+(x[k]||0), 0);
+  const kopf = `<h3 class="mitschalter">${eins ? esc(r.name) : rs.length+' Räume angewählt'}
+    <span class="modus">
+      <button id="wahlEinzel" class="${wahlModus==='einzel'?'an':''}"
+        title="Einzeln anwählen — ein Tipp wechselt den Raum">${ico('einzelwahl',true)}</button>
+      <button id="wahlMehr" class="${wahlModus==='mehr'?'an':''}"
+        title="Mehrfach anwählen — ein Tipp nimmt dazu oder weg">${ico('mehrwahl',true)}</button>
+    </span></h3>`;
+  let html=`<div class="panel">${kopf}
+    ${sperrZeile(r.floorId)}
+    <div style="height:8px"></div>
+    ${eins?`<div class="row"><label>Name</label><input type="text" id="rname" value="${esc(r.name)}"></div>`:''}
+    <div class="row"><label>Raumhöhe (m)</label><input class="laser" id="rheight"
+      value="${eins||rs.every(x=>x.height===r.height) ? fmt3(r.height) : ''}"
+      placeholder="${eins?'':'verschieden'}"></div>
+    <div style="height:12px"></div>
+    ${farbReihen(r, true)}
+    <p class="hint" style="margin-top:8px">${eins
+      ? `<b>Solange die Anwahl steht, lassen sich Räume ziehen.</b> Anderen Raum antippen
+         wechselt, <b>${esc(r.name)}</b> noch einmal antippen öffnet die Raumansicht,
+         ein Tipp neben die Räume beendet die Anwahl.`
+      : `<b>Höhe, Farbe, LV-Position und Löschen gelten für alle ${rs.length} Räume.</b>
+         Antippen nimmt einen Raum dazu oder wieder weg.`}</p>
+    </div>
+
+    <div class="panel"><h3>Aktionen</h3>
+    <div class="row"><button class="btn green small" id="rlv" style="flex:1">${ico('liste')}LV-Position${
+      eins?'':' für alle'}</button></div>
+    <div class="row">
+      ${eins?`<button class="btn small" id="rdup" style="flex:1">${ico('kopie')}Duplizieren</button>`:''}
+      <button class="btn danger small" id="rdel" style="flex:1">${ico('papierkorb')}Löschen${
+        eins?'':' ('+rs.length+')'}</button>
+    </div></div>`;
+  if(eins) html+=`<div class="panel"><h3>Anmerkung</h3>${anmerkungFeld(r, true)}</div>`;
+  if(eins) html+=fotoPanel(r.fotos, 'rfoto');
+  html+=`<details id="rstats" class="panel"${statsOpen?' open':''}>
+    <summary class="panelkopf">Statistik${eins?'':' — Summe'}</summary>
+    <div class="stat"><span>Bodenfläche</span><b>${fmt(summe('area'),3)} m²</b></div>
+    <div class="stat"><span>Umfang</span><b>${fmt(summe('per'),3)} m</b></div>
+    <div class="stat"><span>Wandfläche (o. Öffn.)</span><b>${fmt(summe('wallA'),3)} m²</b></div>
+    <div class="stat"><span>Fensterflächen</span><b>${fmt(summe('winA'),3)} m²</b></div>
+    <div class="stat"><span>Türflächen</span><b>${fmt(summe('doorA'),3)} m²</b></div>
+    <div class="stat"><span>Volumen</span><b>${fmt(summe('vol'),3)} m³</b></div>
+    <div class="stat"><span>Laibungen</span><b>${fmt(summe('laibA'),3)} m²</b></div>
+    <div class="stat"><span>Wandvolumen</span><b>${fmt(summe('wandVol'),3)} m³</b></div>
+  </details>`;
+  if(eins) html+=lvPanel(p.attrs.filter(a=>a.roomId===r.id));
+  else {
+    /* Bei mehreren nach Räumen getrennt — sonst stünden gleiche Positionen aus fünf
+       Räumen untereinander und man wüsste nicht, welche wohin gehört. */
+    const teile=rs.map(x=>{
+      const l=lvListHtml(p.attrs.filter(a=>a.roomId===x.id));
+      return l ? `<div class="raumtitel">${esc(x.name)}</div>${l}` : '';
+    }).filter(Boolean);
+    const n=p.attrs.filter(a=>rs.some(x=>x.id===a.roomId)).length;
+    if(teile.length) html+=`<div class="panel"><h3>Verknüpfte LV-Positionen (${n})</h3>${teile.join('')}</div>`;
+  }
+  return html;
+}
+
 /* ---------- Wand (Aufbau nach der Vorlage vom 6.8.2026) ----------
    Reihenfolge überall gleich: **Zustand, Eigenschaften, Aktionen.** Was etwas ändert,
    steht unter dem, was es ändert — vorher lagen Öffnungen, Magnet und LV-Knopf
@@ -5865,7 +6002,7 @@ function renderSidebar(){
   if(typeof blattTitel==='function'){ handyOrdnung(); blattTitel(); blattKurz(); }
   if(typeof leisteBauen==='function') leisteBauen();
   // In der Etagen-Anwahl gelten dieselben Raum-Handler wie in der Raumansicht
-  wireSidebar(fr || (etagenWahl?roomById(etagenWahl):null));
+  wireSidebar(fr || wahlRaeume()[0] || null);
 }
 
 /* ================= Seitenleiste: je Ort ein Verdrahter =================
@@ -6013,20 +6150,46 @@ function wireRaum(on, r){
       if(t) r.anmerkung=t; else delete r.anmerkung;
       save();
     });
-    on('#rheight','onchange',e=>{ const v=parseNum(e.target.value); if(isFinite(v)&&v>0){r.height=v; lastHeight=v; save(); renderAll();} });
-    on('#rlv','onclick',()=>openLvDialog(null, r.id));
-    on('#rdel','onclick',()=>deleteRoom(r.id));
+    on('#rheight','onchange',e=>{ const v=parseNum(e.target.value);
+      if(isFinite(v)&&v>0){ zielRaeume(r).forEach(x=>x.height=v); lastHeight=v; save(); renderAll(); } });
+    /* Aus der Mehrfachanwahl heraus wird die Position nach dem Speichern in alle
+       gewählten Räume kopiert — `lvFuerRaeume` merkt sich, welche das sind. */
+    on('#rlv','onclick',()=>{
+      const rs=zielRaeume(r);
+      lvFuerRaeume = rs.length>1 ? rs.map(x=>x.id) : null;
+      openLvDialog(null, (rs[0]||r).id);
+    });
+    on('#rdel','onclick',()=>{
+      const rs=zielRaeume(r);
+      if(rs.length>1){
+        if(!confirm(`${rs.length} Räume löschen?\n\n${rs.map(x=>x.name).join(', ')}`)) return;
+        rs.slice().forEach(x=>deleteRoom(x.id, true));
+        etagenWahl=[]; sel={roomId:null, wall:null, vertex:null}; save(); renderAll();
+        melde(`${rs.length} Räume gelöscht.`);
+        return;
+      }
+      deleteRoom(r.id);
+    });
     /* ---- Raumfarbe ---- */
     document.querySelectorAll('[data-farbe]').forEach(b=>{
       b.onclick=()=>{
-        const c=b.dataset.farbe;
-        if(r.farbe===c){                        // dieselbe Farbe noch einmal = wieder entfernen
-          delete r.farbe; delete r.farbZone;
-          if(zoneEdit===r.id){ zoneEdit=null; sel.zoneH=null; }
-        } else r.farbe=c;
+        const c=b.dataset.farbe, weg = r.farbe===c;   // dieselbe Farbe noch einmal = weg
+        zielRaeume(r).forEach(x=>{
+          if(weg){
+            delete x.farbe; delete x.farbZone;
+            if(zoneEdit===x.id){ zoneEdit=null; sel.zoneH=null; }
+          } else x.farbe=c;
+        });
         save(); renderAll();
       };
     });
+    /* Die beiden Anwahl-Schalter. Beim Zurückschalten auf „einzeln" bleibt der zuerst
+       gewählte Raum stehen — irgendeiner muss es sein, und der erste ist der, den man
+       zuerst im Sinn hatte. */
+    on('#wahlEinzel','onclick',()=>{ wahlModus='einzel';
+      if(etagenWahl.length>1) etagenWahl=[etagenWahl[0]];
+      sel={roomId:etagenWahl[0]||null, wall:null, vertex:null}; renderAll(); });
+    on('#wahlMehr','onclick',()=>{ wahlModus='mehr'; renderAll(); });
     on('#rzone','onclick',()=>{
       if(zoneEdit===r.id){ zoneEdit=null; sel.zoneH=null; save(); renderAll(); return; }
       if(!r.farbe){ melde('Erst eine Farbe wählen, dann den Bereich festlegen.', true); return; }
@@ -6068,7 +6231,7 @@ function wireRaum(on, r){
         if(g.points){ g.points.forEach(pt=>pt.x+=sx); } else { g.x+=sx; } });
       proj().rooms.push(nr); save();
       // Aus der Etagen-Anwahl heraus nicht hineinzoomen — die Kopie einfach anwählen
-      if(etagenWahl){ etagenWahl=nr.id; sel={roomId:nr.id, wall:null, vertex:null}; renderAll(); return; }
+      if(wahlAn()){ etagenWahl=[nr.id]; sel={roomId:nr.id, wall:null, vertex:null}; renderAll(); return; }
       focusRoom(nr.id);
     });
     on('#rstats','ontoggle',e=>{ statsOpen=e.target.open; });
@@ -6481,6 +6644,7 @@ let lvPresetWall=null; // Wand-Index, wenn der Dialog aus dem Wand-Panel geöffn
    angezeigt, nicht ausgewählt. Zwei Auswahlmenüs, die man praktisch nie umstellt,
    haben beim Aufmessen mehr verwirrt als geholfen. */
 let lvRoomId=null, lvObjId=null;
+let lvFuerRaeume=null;      // aus der Mehrfachanwahl: in diese Räume kopieren
 /* Über „＋ Neue LV-Position" im LV-Tab angelegt: die Position gehört keinem Bauteil,
    sondern dem Projekt. Sie liegt technisch trotzdem in einem Raum (die Rechnung
    braucht ihn für Grundfläche und Umfang) — angezeigt wird aber „Projekt". */
@@ -8496,6 +8660,20 @@ function lvSpeichern(){
   if(!data.autoH) delete ziel.autoH;
   if(!data.autoObj) delete ziel.autoObj;
   lvNummerVergeben(ziel);
+  /* Aus der Mehrfachanwahl: dieselbe Position in die übrigen gewählten Räume. Die
+     Kopien bekommen eigene IDs und Nummern, aber keine Fotos — die hängen am Original.
+     Das Merkzettelchen wird dabei verbraucht, damit ein zweites Speichern nicht noch
+     einmal kopiert. */
+  if(lvFuerRaeume && lvFuerRaeume.length>1){
+    const andere=lvFuerRaeume.filter(id=>id!==ziel.roomId);
+    lvFuerRaeume=null;
+    andere.forEach(id=>{
+      const k={...ziel, id:uid(), roomId:id};
+      delete k.fotos; delete k.nr;
+      p.attrs.push(k); lvNummerVergeben(k);
+    });
+    if(andere.length) melde(`Position in ${andere.length+1} Räume eingetragen.`);
+  }
   letzteLv={lv:data.lv, kurz:data.kurz||''};   // Voreingabe für die nächste neue Zuordnung
   assignLvColors(p);
   // Paar LV-Nummer ↔ Kurztext projektweit merken (letzter Stand gewinnt)
@@ -12945,36 +13123,124 @@ function blattTitel(){
    Knöpfe (etwa alle Türtypen), bekommt jeder seinen Platz. `'-'` zieht einen Strich.
    Was es an einem Ort nicht gibt oder was abgeschaltet ist, fällt weg. */
 const LEISTE = {
+  /* Die Anwahl in der Etagenansicht. Die Ausschlüsse bei Mehrfachauswahl regeln sich
+     von selbst: `#rdup` und `#rfoto` stehen dann gar nicht erst im Panel, und was es
+     nicht gibt, nimmt die Leiste nicht auf. */
+  wahl:  ['#wahlEinzel','#wahlMehr','-','#rheight','farbe','-',
+          '#rlv','#rdup','#rdel','-','#rfoto'],
   etage: ['#flooradd','#floorren','#floordup','#floordel','-','#modedraw','#modetpl'],
-  raum:  ['#rlv','#rdup','#rdel','-',
-          '#objrectbtn','#objlinebtn','#opdoorbtn','#opwinbtn','.symbtn','-','#rfoto'],
+  /* Zehn Werkzeuge und fünfzehn Farben stecken jetzt in zwei Aufklappmenüs — aus
+     vierzehn Kacheln werden sechs. */
+  raum:  ['#rlv','#rdup','#rdel','-','farbe','objekte','-','#rfoto'],
   wand:  ['#wlock','#magnettoggle','#wandverbinden','#wdickevon0','#wdickevon1','-',
           '#wopdoor','#wopwin','#wallsplit','-','#walllv','#walldesel','#wfoto'],
-  oeffnung: ['[data-tuertyp]','[data-fentyp]','-',
+  /* Sieben Türtypen untereinander wären sieben Kacheln — sie stecken jetzt in einem
+     Menü, dessen Knopf den gewählten Typ zeigt. Von den beiden Einträgen greift immer
+     nur einer: an einer Tür gibt es keine Fenstertypen und umgekehrt. */
+  oeffnung: ['tuertyp','fenstertyp','-',
              '#objlv','#opdup','.opdel','#opfoto'],
   objekt: ['#objrot','#p360dreh','#p360laden','#ptadd','#ptdel','-',
            '#objlv','#objdup','#objdel','#objfoto']
 };
+/* Aufklappmenüs der Leiste. Manche Gruppen sind zu groß für je einen Knopf: fünfzehn
+   Farbfelder oder zehn Objektwerkzeuge wären fünfzehn bzw. zehn Kacheln untereinander,
+   und die Spalte wäre wieder das, was sie ersetzen soll. Ein Knopf klappt sie auf.
+
+   Auch sie **spiegeln nur**: die Einträge drücken die echten Knöpfe der verborgenen
+   Spalte. Das Menü hängt am `<body>` und nicht in der Leiste — die scrollt und würde
+   es an ihrem Rand abschneiden. */
+const KLAPP = {
+  farbe:      {q:'#sidebar [data-farbe]',      titel:'Farbe wählen', ico:'farbtopf'},
+  objekte:    {q:'#sidebar .werkzeuge button', titel:'Neues Objekt', ico:'objekte'},
+  /* `spiegel` heißt: Der Knopf trägt das Bild des GEWÄHLTEN Eintrags, nicht ein festes
+     Symbol. Bei Tür und Fenster ist genau das die Auskunft — welcher Typ gerade gilt.
+     Bei Farben und Werkzeugen gibt es keinen dauerhaft gewählten Eintrag. */
+  tuertyp:    {q:'#sidebar [data-tuertyp]',    titel:'Türtyp',       ico:'tuer',    spiegel:true},
+  fenstertyp: {q:'#sidebar [data-fentyp]',     titel:'Fenstertyp',   ico:'fenster', spiegel:true}
+};
+function leisteKlapp(knopf, art){
+  const alt=$('#leisteklapp');
+  if(alt){ const war=alt.dataset.von; alt.remove(); if(war===art) return; }
+  const felder=[...document.querySelectorAll(KLAPP[art].q)];
+  if(!felder.length) return;
+  const box=document.createElement('div');
+  box.id='leisteklapp'; box.dataset.von=art;
+  box.className = art==='farbe' ? 'farbe' : 'gross';   // Farbfelder sind kleiner
+  box.innerHTML=felder.map((f,i)=>{
+    const an=f.classList.contains('an')||f.classList.contains('active') ? ' an' : '';
+    if(art==='farbe') return `<button data-nr="${i}" title="${esc(f.title||'')}"
+      style="background:${f.dataset.farbe}" class="${an.trim()}"></button>`;
+    const bild=f.querySelector('svg'), txt=f.textContent.trim();
+    return `<button data-nr="${i}" title="${esc(f.title||txt)}" class="${an.trim()}">${
+      bild ? bild.outerHTML : esc(txt)}</button>`;
+  }).join('');
+  document.body.appendChild(box);
+  const r=knopf.getBoundingClientRect();
+  box.style.left=(r.right+8)+'px';
+  box.style.top=Math.max(8, Math.min(r.top, innerHeight-box.offsetHeight-8))+'px';
+  box.querySelectorAll('[data-nr]').forEach(b=>b.onclick=()=>{
+    felder[+b.dataset.nr].click(); box.remove();
+  });
+}
+document.addEventListener('pointerdown', e=>{
+  const box=$('#leisteklapp');
+  if(box && !box.contains(e.target) && !e.target.closest('#leiste')) box.remove();
+}, true);
+
 function leisteBauen(){
   const kasten=$('#leiste'); if(!kasten) return;
-  let html='';
-  (LEISTE[kurzOrt()]||[]).forEach(wahl=>{
-    if(wahl==='-'){ html+='<span class="trenner"></span>'; return; }
+  const offen=$('#leisteklapp'); if(offen) offen.remove();
+  /* Eigener Ort für die Anwahl — `kurzOrt()` bleibt unangetastet, weil die
+     Kurzbefehlsleiste am Telefon und `handyOrdnung()` an seinen Werten hängen. */
+  const ort = (!focusRoomId && wahlAn()) ? 'wahl' : kurzOrt();
+  /* Erst sammeln, dann zeichnen: Trennstriche, die nichts mehr trennen, fallen sonst
+     als leerer Strich am Ende auf — genau dort, wo bei Mehrfachauswahl Duplizieren
+     und Fotos wegfallen. */
+  const teile=[];
+  (LEISTE[ort]||[]).forEach(wahl=>{
+    if(wahl==='-'){ teile.push(null); return; }
+    if(KLAPP[wahl]){
+      const k=KLAPP[wahl], felder=[...document.querySelectorAll(k.q)];
+      if(!felder.length) return;
+      const aktiv=felder.find(f=>f.classList.contains('an'));
+      const bild = k.spiegel && aktiv && aktiv.querySelector('svg')
+        ? aktiv.querySelector('svg').outerHTML : ico(k.ico, true);
+      teile.push(`<button data-ziel="${wahl}" data-nr="0" title="${
+        esc(k.titel + (k.spiegel && aktiv ? ' — ' + (aktiv.title||'') : ''))}">${bild}</button>`);
+      return;
+    }
     document.querySelectorAll('#sidebar '+wahl).forEach((el,i)=>{
       if(el.disabled) return;
       const bild=el.querySelector('svg');
       const txt=el.textContent.trim();
-      html+=`<button data-ziel="${wahl}" data-nr="${i}" title="${esc(el.title||txt)}"
-        class="${el.classList.contains('an')||el.classList.contains('active')?'an ':''}${
+      /* Eingabefelder haben kein Symbol — dort steht der Wert selbst auf dem Knopf,
+         das ist ohnehin die Auskunft, um die es geht. */
+      const feld=el.tagName==='INPUT';
+      const inhalt = feld ? `${ico('hoehe',true)}<span class="wert">${esc(el.value||'—')}</span>`
+        : (bild ? bild.outerHTML : esc(txt.slice(0,4)));
+      teile.push(`<button data-ziel="${wahl}" data-nr="${i}"
+        title="${esc(el.title || (feld ? feldName(el) : txt))}"
+        class="${feld?'feld ':''}${el.classList.contains('an')||el.classList.contains('active')?'an ':''}${
           el.classList.contains('danger')||el.classList.contains('zu')?'rot ':''}${
           el.classList.contains('green')?'gruen':''}"
-        >${bild ? bild.outerHTML : esc(txt.slice(0,4))}</button>`;
+        >${inhalt}</button>`);
     });
   });
-  kasten.innerHTML=html;
+  const sauber=teile.filter((t,i)=> t!==null || (teile.slice(0,i).some(Boolean) && teile.slice(i+1).some(Boolean)));
+  kasten.innerHTML=sauber.map(t=> t===null ? '<span class="trenner"></span>' : t).join('');
   kasten.querySelectorAll('[data-ziel]').forEach(b=>b.onclick=()=>{
+    if(KLAPP[b.dataset.ziel]){ leisteKlapp(b, b.dataset.ziel); return; }
     const ziel=document.querySelectorAll('#sidebar '+b.dataset.ziel)[+b.dataset.nr];
-    if(ziel) ziel.click();
+    if(!ziel) return;
+    /* Bei Eingabefeldern nicht klicken, sondern antippen: an `pointerdown` hängt die
+       Maßseite mit ihrem eigenen Ziffernblock. Ein `click()` würde nur den Fokus in ein
+       Feld setzen, das man gar nicht sieht — die Spalte ist ja eingeklappt. */
+    if(ziel.tagName==='INPUT'){
+      ziel.dispatchEvent(new PointerEvent('pointerdown',
+        {bubbles:true, cancelable:true, pointerId:1, pointerType:'touch', isPrimary:true}));
+      return;
+    }
+    ziel.click();
   });
 }
 const BLATT_KEY='grundriss-blatt-zu';
