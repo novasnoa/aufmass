@@ -281,14 +281,17 @@
   .lwkachel.an{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent);}
   .lwkachel:active{background:#eef1f6;}
   #lwLeer{padding:20px 12px; text-align:center; color:var(--muted); font-size:13px;}
-  /* Zwei Wege zur Position, je nach Gerät — nie beide zugleich, sonst steht dasselbe
-     zweimal da: am Rechner und auf dem iPad die Suchzeile mit Vorschlagsliste
-     (Tastatur und Zeigegerät sind da), am Telefon die Vollbild-Auswahl. */
+  /* Zwei Wege zur Position, nie beide zugleich — sonst steht dasselbe zweimal da.
+     **Entschieden wird nach dem GERÄT, nicht nach der Fensterbreite** (seit 2026-08-06):
+     Die Vorschlagsliste unter dem Feld lebt von einer richtigen Tastatur und einem
+     Zeigegerät. Auf dem iPad ist beides nicht da, obwohl der Schirm breit genug wäre —
+     dort war die Liste ein Stummel unter einer hochgefahrenen Bildschirmtastatur.
+     Also: **Bildschirm zum Anfassen → Vollbild-Auswahl, Rechner → Vorschlagsliste.**
+     Die Klasse `.fingergeraet` am `<html>` setzt das Skript aus `fingerGeraet`, derselben
+     Abfrage, die auch über Tastenleiste und Ziffernblock entscheidet. */
   #lvPosZeile{display:none;}
-  @media (max-width:640px){
-    #lvKurzZeile{display:none;}
-    #lvPosZeile{display:flex;}
-  }
+  .fingergeraet #lvKurzZeile{display:none;}
+  .fingergeraet #lvPosZeile{display:flex;}
   #llText{white-space:pre-wrap; font-size:14px; line-height:1.55; padding:12px 14px;
     overflow-y:auto; flex:1 1 auto; min-height:0;}
   .hint{font-size:11px; color:var(--muted);}
@@ -11179,6 +11182,9 @@ const TASTFELD='input:not([type=checkbox]):not([type=radio]):not([type=range])'
 const fingerGeraet = !!(window.matchMedia &&
     (matchMedia('(pointer:coarse)').matches || matchMedia('(any-pointer:coarse)').matches))
   || (navigator.maxTouchPoints||0) > 0;
+/* Dieselbe Auskunft fürs CSS. Damit entscheidet auch dort das Gerät und nicht die
+   Fensterbreite — siehe `#lvPosZeile`: Vorschlagsliste nur am Rechner. */
+document.documentElement.classList.toggle('fingergeraet', fingerGeraet);
 
 function zahlenfelderHerrichten(wurzel){
   if(!wurzel || wurzel.nodeType!==1) return;
