@@ -72,6 +72,26 @@
      und braucht kein zweites Gegenstueck. Bei offener Spalte steht er an deren rechter
      Kante (unten rechts, wie in der Vorlage), eingeklappt rutscht er an den linken
      Bildrand und holt sie zurueck. */
+  /* Bei eingeklappter Spalte bleibt links eine schmale Leiste mit den Knöpfen, die
+     man an diesem Ort wirklich braucht. Sie **baut nichts nach**, sondern spiegelt die
+     Knöpfe der verborgenen Spalte: Symbol und Beschriftung werden von dort geholt, ein
+     Tipp löst den echten Knopf aus. Damit gibt es keine zweite Stelle, an der dasselbe
+     Verhalten steht — und neue Knöpfe im Panel erscheinen hier von allein, sobald ihr
+     Selektor in `LEISTE` aufgenommen wird. */
+  #leiste{display:none; width:52px; min-width:52px; background:var(--panel);
+    border-right:1px solid var(--line); overflow-y:auto; overflow-x:hidden;
+    padding:8px 0 56px; flex-direction:column; align-items:center; gap:6px;
+    scrollbar-width:none;}
+  #leiste::-webkit-scrollbar{display:none;}
+  #layout.ohneblatt #leiste{display:flex;}
+  #leiste button{flex:0 0 auto; width:38px; height:38px; padding:3px; border:1px solid var(--line);
+    background:#fff; border-radius:9px; color:var(--accent); font-size:10.5px; line-height:1;
+    overflow:hidden;}
+  #leiste button.an{border-color:var(--accent); background:#eaf1ff;}
+  #leiste button.rot{color:var(--danger); border-color:#f0c4c4;}
+  #leiste button.gruen{color:#fff; background:var(--accent2); border-color:var(--accent2);}
+  #leiste svg{width:20px; height:20px; display:block; margin:0 auto; stroke-width:1.8;}
+  #leiste .trenner{flex:0 0 auto; width:22px; height:1px; background:var(--line); margin:1px 0;}
   #blattzu{position:absolute; left:10px; bottom:10px; z-index:5;
     width:34px; height:34px; padding:0; border:1px solid var(--line); background:#fff;
     border-radius:9px; color:var(--accent); box-shadow:0 1px 4px rgba(0,0,0,.10);}
@@ -377,7 +397,7 @@
        bis unter die Kopfleiste — ein halber Zwischenschritt war beim Aufmessen nur
        ein zusaetzlicher Tipp. */
     #blatt.zu{height:auto;}
-    #blattzu{display:none;}
+    #blattzu, #leiste{display:none !important;}
     #blatt.zu #sidebar{display:none;}
     #blatt.zieht #sidebar{display:block;}
     #blatt.auf{height:auto; max-height:calc(100vh - 46px); max-height:calc(100dvh - 46px);}
@@ -777,6 +797,7 @@
 <div id="layout">
   <!-- Am Rechner eine Spalte, am Handy ein Blatt, das von unten hochfaehrt.
        `#sidebar` behaelt seine Kennung, damit alles Bestehende weiterschreibt. -->
+  <nav id="leiste"></nav>
   <div id="blatt" class="zu">
     <div id="blattgriff">
       <div class="zieh"><span class="strich"></span><span id="blatttitel">Werkzeuge</span><span class="pfeil">⌃</span></div>
@@ -5200,6 +5221,22 @@ const ICONS = {
   drehen:    '<path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v4h-4"/>',
   kette:     '<path d="M10 14a4 4 0 0 1 0-5.7l2-2a4 4 0 0 1 5.7 5.7l-1 1"/><path d="M14 10a4 4 0 0 1 0 5.7l-2 2a4 4 0 0 1-5.7-5.7l1-1"/>',
   winkelLinks: '<path d="M15 5l-7 7 7 7"/>',
+  /* Stärke von einer Seite übernehmen: der Kasten ist das Mauerwerk, der Doppelpfeil
+     darin die Stärke, der Pfeil daneben zeigt, aus welcher Richtung sie kommt. Vier
+     Fassungen, weil `wandFortsetzung` die Seite als links, rechts, oben oder unten
+     meldet — je nachdem, wie die Wand liegt. */
+  staerkeRechts: '<rect x="3" y="7" width="10" height="10" rx="1"/><path d="M8 9.4v5.2"/>'
+    + '<path d="M6.8 10.6 8 9.4l1.2 1.2"/><path d="M6.8 13.4 8 14.6l1.2-1.2"/>'
+    + '<path d="M15.5 12H21"/><path d="M18.5 9.5 21 12l-2.5 2.5"/>',
+  staerkeLinks:  '<rect x="11" y="7" width="10" height="10" rx="1"/><path d="M16 9.4v5.2"/>'
+    + '<path d="M14.8 10.6 16 9.4l1.2 1.2"/><path d="M14.8 13.4 16 14.6l1.2-1.2"/>'
+    + '<path d="M8.5 12H3"/><path d="M5.5 9.5 3 12l2.5 2.5"/>',
+  staerkeUnten:  '<rect x="7" y="3" width="10" height="10" rx="1"/><path d="M12 5.4v5.2"/>'
+    + '<path d="M10.8 6.6 12 5.4l1.2 1.2"/><path d="M10.8 9.4 12 10.6l1.2-1.2"/>'
+    + '<path d="M12 15.5V21"/><path d="M9.5 18.5 12 21l2.5-2.5"/>',
+  staerkeOben:   '<rect x="7" y="11" width="10" height="10" rx="1"/><path d="M12 13.4v5.2"/>'
+    + '<path d="M10.8 14.6 12 13.4l1.2 1.2"/><path d="M10.8 17.4 12 18.6l1.2-1.2"/>'
+    + '<path d="M12 8.5V3"/><path d="M9.5 5.5 12 3l2.5 2.5"/>',
   winkelRechts:'<path d="M9 5l7 7-7 7"/>',
   aufschlag: '<path d="M12 4v16"/><path d="M8 8l4-4 4 4"/><path d="M8 16l4 4 4-4"/>'
 };
@@ -5659,9 +5696,10 @@ function panelWand(p, r){
     <div class="row">${wandFortsetzung(r, sel.wall).map((f,k)=>
       `<button class="btn small" id="wdickevon${k}" style="flex:1" ${f.treffer&&!zu?'':'disabled'}
         title="${f.treffer
-          ? `Wand läuft in „${esc(f.treffer.raum)}“ weiter — dort ${fmt(f.treffer.dicke,3)} m stark`
+          ? `Stärke von ${f.seite} übernehmen — die Wand läuft in „${esc(f.treffer.raum)}“ weiter und ist dort ${fmt(f.treffer.dicke,3)} m stark`
           : `Auf dieser Seite läuft die Wand in keinem Nachbarraum weiter`}"
-        >Stärke von ${f.seite}${f.treffer?` (${fmt(f.treffer.dicke,3)})`:''}</button>`).join('')}</div>
+        >${ico('staerke'+f.seite[0].toUpperCase()+f.seite.slice(1))}${
+          f.treffer?fmt(f.treffer.dicke,3):f.seite}</button>`).join('')}</div>
     <div class="row">
       <button class="btn small ${magnetAn()?'auf':'zu'}" id="magnettoggle" style="flex:1"
         title="Wände und Ecken rasten beim Ziehen an Nachbarräumen ein">${ico('magnet')}${magnetAn()?'Magnet an':'Magnet aus'}</button>
@@ -5820,6 +5858,7 @@ function renderSidebar(){
 
   $('#sidebar').innerHTML=html;
   if(typeof blattTitel==='function'){ handyOrdnung(); blattTitel(); blattKurz(); }
+  if(typeof leisteBauen==='function') leisteBauen();
   // In der Etagen-Anwahl gelten dieselben Raum-Handler wie in der Raumansicht
   wireSidebar(fr || (etagenWahl?roomById(etagenWahl):null));
 }
@@ -12896,6 +12935,43 @@ function blattTitel(){
 /* Zustand ueberlebt das Neuladen -- wer die Spalte zumacht, will Platz fuer den Plan
    und nicht bei jedem Oeffnen wieder klicken. Gespeichert wird wie beim Magneten
    geraetweise, nicht im Aufmass: es ist eine Ansichtssache, keine Messung. */
+/* Je Ort die Knöpfe der Spalte, in der Reihenfolge, in der sie in der Leiste stehen
+   sollen. Ein Eintrag ist ein Selektor **innerhalb** von `#sidebar`; trifft er mehrere
+   Knöpfe (etwa alle Türtypen), bekommt jeder seinen Platz. `'-'` zieht einen Strich.
+   Was es an einem Ort nicht gibt oder was abgeschaltet ist, fällt weg. */
+const LEISTE = {
+  etage: ['#flooradd','#floorren','#floordup','#floordel','-','#modedraw','#modetpl'],
+  raum:  ['#rlv','#rdup','#rdel','-',
+          '#objrectbtn','#objlinebtn','#opdoorbtn','#opwinbtn','.symbtn','-','#rfoto'],
+  wand:  ['#wlock','#magnettoggle','#wandverbinden','#wdickevon0','#wdickevon1','-',
+          '#wopdoor','#wopwin','#wallsplit','-','#walllv','#walldesel','#wfoto'],
+  oeffnung: ['[data-tuertyp]','[data-fentyp]','-',
+             '#objlv','#opdup','.opdel','#opfoto'],
+  objekt: ['#objrot','#p360dreh','#p360laden','#ptadd','#ptdel','-',
+           '#objlv','#objdup','#objdel','#objfoto']
+};
+function leisteBauen(){
+  const kasten=$('#leiste'); if(!kasten) return;
+  let html='';
+  (LEISTE[kurzOrt()]||[]).forEach(wahl=>{
+    if(wahl==='-'){ html+='<span class="trenner"></span>'; return; }
+    document.querySelectorAll('#sidebar '+wahl).forEach((el,i)=>{
+      if(el.disabled) return;
+      const bild=el.querySelector('svg');
+      const txt=el.textContent.trim();
+      html+=`<button data-ziel="${wahl}" data-nr="${i}" title="${esc(el.title||txt)}"
+        class="${el.classList.contains('an')||el.classList.contains('active')?'an ':''}${
+          el.classList.contains('danger')||el.classList.contains('zu')?'rot ':''}${
+          el.classList.contains('green')?'gruen':''}"
+        >${bild ? bild.outerHTML : esc(txt.slice(0,4))}</button>`;
+    });
+  });
+  kasten.innerHTML=html;
+  kasten.querySelectorAll('[data-ziel]').forEach(b=>b.onclick=()=>{
+    const ziel=document.querySelectorAll('#sidebar '+b.dataset.ziel)[+b.dataset.nr];
+    if(ziel) ziel.click();
+  });
+}
 const BLATT_KEY='grundriss-blatt-zu';
 function blattSpalte(zu){
   $('#layout').classList.toggle('ohneblatt', zu);
