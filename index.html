@@ -4022,17 +4022,27 @@ function renderCanvas(){
            der Zug fiel unten in den Pan-Zweig und die ganze Ansicht wanderte statt der
            Wand. Das Band wird jetzt nie schmaler, sondern zum Ziehen sogar breiter —
            wie schon bei den Ecken (dort 1,5-fach bzw. 2,8-fach). */
-        if(zeigWahl(i)) out+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#2f6fed" stroke-width="0.16" style="pointer-events:none"/>`;
+        const anQ=aussenNormale(r,i), dQ=wandDicke(r,i);
+        // Der Wandkörper als Vieleck: Innenkante a→b, dann die Wandstärke nach außen
+        const wandFlaeche = `M ${a.x} ${a.y} L ${b.x} ${b.y} L ${b.x+anQ.x*dQ} ${b.y+anQ.y*dQ}`
+          + ` L ${a.x+anQ.x*dQ} ${a.y+anQ.y*dQ} Z`;
+        /* **Angewählt = die ganze Wand blau, halb durchscheinend.** Bis zum 7.8.2026 war
+           es ein 0,16 m dicker blauer Strich — und der lag mittig auf der INNENKANTE, also
+           genau auf der Linie, an der man die Wand auf einen Hintergrundplan einpasst
+           (gemeldet: „diese wichtige Kante sehe ich nicht"). Die Fläche sagt dasselbe,
+           lässt die Kante aber stehen: sie hat keinen `stroke`, ihr Rand IST die Kante.
+           Einen Rückfall auf den Strich für Wandstärke 0 braucht es nicht — `wandDicke`
+           liefert nie 0, ein nicht positiver Wert fällt auf WAND_STD zurück. */
+        if(zeigWahl(i))
+          out+=`<path d="${wandFlaeche}" fill="#2f6fed" fill-opacity="0.5" style="pointer-events:none"/>`;
         out+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="transparent" stroke-width="${zeigWahl(i)?0.55:0.4}" data-roomid="${r.id}" data-wall="${i}" style="cursor:${zeigWahl(i)?'move':'pointer'}"/>`;
         // Touchfläche zusätzlich über den ganzen Wandkörper: die Wandstärke nach außen.
         // Öffnungs-Zonen kommen später und liegen obenauf — die Tür bleibt auf der Tür wählbar.
-        const anQ=aussenNormale(r,i), dQ=wandDicke(r,i);
         /* Auch im gesperrten Raum: **die ganze Wandstärke** gehört zur Wand. Ohne diese
            Fläche blieb nur die schmale Zone um die Wandachse, und weiter außen kam wieder
            das Raum-Panel — von innen nach außen also Raum, Wand, Raum. Objektpunkte
            verdeckt sie nicht mehr, die zieht `pointerdown` über `elementsFromPoint` vor. */
-        if(dQ>0) out+=`<path d="M ${a.x} ${a.y} L ${b.x} ${b.y} L ${b.x+anQ.x*dQ} ${b.y+anQ.y*dQ}`+
-          ` L ${a.x+anQ.x*dQ} ${a.y+anQ.y*dQ} Z" fill="transparent" data-roomid="${r.id}" data-wall="${i}" style="cursor:pointer"/>`;
+        if(dQ>0) out+=`<path d="${wandFlaeche}" fill="transparent" data-roomid="${r.id}" data-wall="${i}" style="cursor:pointer"/>`;
         /* Maßzahlen sind anfassbar: Ein Tipp öffnet die Maßseite mit der Maßkette dieser
            Wand (`massVomPlan`). Vorher wählte er nur die Wand aus — dasselbe, was ein
            Tipp auf die Wand selbst tut, also ein Weg umsonst.
@@ -10628,7 +10638,15 @@ let fmSlotWahl=null;
    nachgemessen liefert es diese Umgebung gar nicht, und ob es das Gerät des Nutzers tut,
    wäre eine Wette. Jeder andere Aufrufer ruft ohne Argument und räumt damit auf. */
 function lvWahlOeffnen(absicht){
-  lvUmhaengenWahl=absicht||null;
+  /* **Nur eine echte Absicht zählt, nicht irgendein Wahrheitswert.** Am 7.8.2026 hing
+     `lvWahlOeffnen` direkt am Klick des Wähler-Knopfes (`onclick=lvWahlOeffnen`) — und
+     bekam damit das Klick-Ereignis als `absicht`. Das ist ein Objekt, also wahr, also
+     hielt sich der Wähler für einen Umhäng-Auftrag: er schloss sich beim Antippen einer
+     Kachel und lief in `lvUmhaengen(undefined, …)` auf einen TypeError. Von außen sah es
+     aus, als bliebe die Vorauswahl einfach stehen. Der Aufrufer ist berichtigt; die
+     Prüfung hier bleibt, weil derselbe Fehler an jedem neuen Aufrufer wieder entstehen
+     kann und von selbst nie auffällt. */
+  lvUmhaengenWahl = (absicht && Array.isArray(absicht.ids)) ? absicht : null;
   $('#lwSuche').value='';
   lvKatKnoepfe(); lvWahlListe();
   if(!dlgLvWahl.open) dlgLvWahl.showModal();
@@ -10647,7 +10665,8 @@ function lvWahlOeffnen(absicht){
   if(fingerGeraet) dlgLvWahl.focus();
   else setTimeout(()=>$('#lwSuche').focus(), 40);
 }
-$('#lvWahlBtn').onclick=lvWahlOeffnen;
+// Bewusst ein Pfeil und keine nackte Referenz: sonst käme das Klick-Ereignis als „Absicht" an
+$('#lvWahlBtn').onclick=()=>lvWahlOeffnen();
 $('#lwZu').onclick=()=>dlgLvWahl.close();
 $('#lwSuche').addEventListener('input', lvWahlListe);
 $('#lwSuche').addEventListener('keydown', e=>{ if(e.key==='Enter') e.preventDefault(); });
