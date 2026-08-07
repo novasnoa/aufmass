@@ -968,7 +968,10 @@
     <aside id="sidebar"></aside>
   </div>
   <div id="main">
-    <svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg>
+    <!-- Zwei Lagen mit Absicht: `planlage` bleibt STEHEN, `zeichnung` wird bei jedem
+         Bild neu gebaut. Das Planbild darf nicht im neu gebauten Teil liegen — dazu
+         siehe docs/ansichten-und-plan.md, „Warum der Plan in einer eigenen Lage liegt". -->
+    <svg id="canvas" xmlns="http://www.w3.org/2000/svg"><g id="planlage"></g><g id="zeichnung"></g></svg>
     <button id="blattzu" title="Werkzeuge ausblenden"></button>
     <div id="crumb"></div>
     <div id="zoombar">
@@ -2484,9 +2487,12 @@ function bilderSichern(){
     });
   });
 }
-// Beim Start: Bilddaten aus IndexedDB zurück in die Fotos hängen
+/* Beim Start: Bilddaten aus IndexedDB zurück in die Fotos hängen.
+   **Ausgeblendete Planbilder bleiben draußen** (`f.aus`) — sie sind mit Absicht nicht im
+   Arbeitsspeicher, und sie hier wieder hereinzuholen hieße, den Schalter beim nächsten
+   Start still zurückzunehmen. Der Weg zurück führt allein über „anzeigen". */
 async function bilderNachladen(){
-  const fehlend=alleBilder().filter(f=>f && !f.src);
+  const fehlend=alleBilder().filter(f=>f && !f.src && !f.aus);
   if(!fehlend.length) return 0;
   const werte=await idbLesen(fehlend.map(f=>f.id));
   let ok=0;
@@ -3731,18 +3737,11 @@ function renderCanvas(){
   const rooms=fr?[...floorRooms().filter(x=>x.id!==fr.id), fr]:floorRooms();
   plakettenAus=!fr;                    // Etagenansicht: ohne Nummern (am Ende zurückgesetzt)
   const lbl=Math.max(0.14, Math.min(0.6, vb.w/55));
-  let out=`<defs>
-    <pattern id="grid" width="1" height="1" patternUnits="userSpaceOnUse">
-      <path d="M 1 0 L 0 0 0 1" fill="none" stroke="#e6e9ee" stroke-width="0.015"/>
-    </pattern>
-    <radialGradient id="ziehzone">
-      <stop offset="0%" stop-color="#0ea06f" stop-opacity="0.32"/>
-      <stop offset="55%" stop-color="#0ea06f" stop-opacity="0.16"/>
-      <stop offset="100%" stop-color="#0ea06f" stop-opacity="0"/>
-    </radialGradient>
-  </defs>
-  <rect x="${vb.x-50}" y="${vb.y-50}" width="${vb.w+100}" height="${vb.h+100}" fill="url(#grid)" data-bg="1"/>`;
-  out+=planBild();
+  /* `<defs>`, Raster und Planbild stehen in `#planlage` und werden **nicht** bei jedem
+     Bild neu gebaut (siehe `planLageZeichnen`). Muster und Verlauf sind unveränderlich;
+     sie jedes Mal zu verwerfen und neu anzulegen kostet nur. Hier kommt ab jetzt allein
+     das Bewegliche dazu. */
+  let out=planBild();
   /* Liegt ein Plan dahinter, kommt die ganze Zeichnung — Böden, Wände, Maße, Objekte,
      Beschriftungen — in eine gemeinsame durchscheinende Lage. Als EINE Gruppe, nicht je
      Element: sonst würden sich überlappende Teile gegenseitig durchscheinen und die Wände
@@ -3953,7 +3952,8 @@ function renderCanvas(){
       `<circle cx="${q.x}" cy="${q.y}" r="${rr*0.24}" fill="#0ea06f"/></g>`;
   }
   svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
-  svg.innerHTML=out;
+  $('#zeichnung').innerHTML=out;       // NICHT svg.innerHTML — sonst flöge `#planlage` mit
+  planLageZeichnen();                  // Raster und Planbild: nur Attribute nachführen
   plakettenAus=false;                  // Druck und Raumansicht zeigen die Nummern weiter
   svg.classList.toggle('draw', mode==='draw'||mode==='place'||mode==='objrect'||mode==='objline'||mode==='objsym'||mode==='addopen');
 }
@@ -7436,6 +7436,13 @@ function wireEtage(on, r){
     save(); renderAll();
   });
   on('#plankalib','onclick',()=>{ if(mode==='kalib') cancelModes(); else kalibStart(); });
+  /* Ausblenden schaltet um und gibt dabei den Speicher frei. Läuft der Maßstabs-Modus,
+     wird er beendet — ohne Bild gibt es nichts einzumessen. */
+  on('#planaus','onclick',()=>{
+    const pl=planObj(); if(!pl) return;
+    if(mode==='kalib'){ mode='select'; kalibPunkte=[]; }
+    planAusblenden(!pl.aus);
+  });
 
   on('#modedraw','onclick',()=>{
     if(mode==='draw'){ cancelModes(); return; }
@@ -11379,7 +11386,48 @@ function p360Uebernehmen(){
    App klein und offline-fähig bleibt. Die Bilddaten liegen wie Fotos in IndexedDB. */
 const PLAN_MAXKANTE=4500, PLAN_Q=0.72;
 const etage = () => proj().floors.find(f=>f.id===activeFloorId) || proj().floors[0];
-const planVon = () => { const f=etage(); return f && f.plan && f.plan.src ? f.plan : null; };
+/* `planObj` ist der Plan, wie er gespeichert ist — auch ausgeblendet. `planVon` ist der
+   Plan, der GEZEICHNET wird. Alles, was malt, zieht oder misst, fragt `planVon` und
+   braucht darum keine Zeile für den ausgeblendeten Fall. */
+const planObj = () => { const f=etage(); return f && f.plan ? f.plan : null; };
+const planVon = () => { const f=etage(); return f && f.plan && f.plan.src && !f.plan.aus ? f.plan : null; };
+/* ---------- Ausblenden gibt den Speicher wirklich frei (seit 2026-08-07) ----------
+   Ein Planbild ist das mit Abstand größte, was die App im Arbeitsspeicher hält: ein
+   iPad-Foto hat rund 4000 × 3000 Punkte, das sind als Bitmap etwa **48 MB** — dazu die
+   Base64-Zeile von ein paar MB. Nur `opacity="0"` zu setzen gäbe davon nichts frei.
+
+   Darum nimmt „Ausblenden" **beides** weg: das `<image>` verliert seine Quelle (der
+   Browser gibt die Bitmap frei) und `pl.src` wird gelöscht (die Base64-Zeile ist weg).
+   **Verloren geht nichts** — die Bilddaten liegen in IndexedDB, `bilderNachladen()`
+   hängt sie beim Einblenden wieder an. Genau derselbe Weg wie beim App-Start. */
+async function planAusblenden(aus){
+  const pl=planObj(); if(!pl) return;
+  if(aus){
+    pl.aus=true;
+    /* Erst sicherstellen, dass die Daten wirklich in IndexedDB stehen — sonst wäre der
+       Plan nach dem Löschen von `src` unwiederbringlich weg. `bilderSichern` läuft zwar
+       in jedem `save()`, aber verlassen wollen wir uns darauf hier nicht. */
+    if(pl.src){
+      try{ await idbSchreiben(pl.id, pl.src); idbGesichert.add(pl.id); delete pl.src; }
+      catch(err){ pl.aus=false; melde('Plan bleibt sichtbar — die Bilddaten ließen sich nicht sichern: '+err.message, true); return; }
+    }
+    save(); renderAll();
+    melde('Plan ausgeblendet — das Bild ist aus dem Arbeitsspeicher. Einblenden holt es zurück.');
+  } else {
+    delete pl.aus;
+    if(!pl.src){
+      melde('Planbild wird geholt …');
+      const n=await bilderNachladen();
+      if(!pl.src){
+        pl.aus=true;
+        melde('Das Planbild ist nicht mehr im Bildspeicher — bitte neu laden.', true);
+        renderAll(); return;
+      }
+      if(n) melde('Plan wieder da.');
+    }
+    save(); renderAll();
+  }
+}
 /* Zweiter Regler neben der Deckkraft des Plans: wie deckend die ZEICHNUNG darüber liegt.
    Ohne Plan bleibt alles voll deckend; mit Plan sind 60 % die Vorgabe, damit man den Plan
    sofort durchscheinen sieht. Gilt nur für den Bildschirm — der Druck baut sein eigenes SVG. */
@@ -11389,19 +11437,82 @@ function planDurchsicht(){
   return Number.isFinite(v) && v>0 ? Math.min(1, v) : 0.6;
 }
 
+/* ---------- Warum der Plan in einer EIGENEN Lage liegt (seit 2026-08-07) ----------
+   `renderCanvas` baut die ganze Zeichnung als Zeichenkette und setzt sie mit
+   `innerHTML`. Stand das Planbild darin, wurde bei **jedem** Bild die komplette
+   Base64-Datenzeile des Fotos neu in den Baum geschrieben — und ein `<image>`, das neu
+   entsteht, muss der Browser neu **dekodieren**. Bei einem iPad-Foto sind das rund
+   4000 × 3000 Pixel; das dauert je Bild zehntel Sekunden. `renderCanvas` läuft aber bei
+   jedem `pointermove`, also beim Ziehen und Zoomen zig Mal je Sekunde. Genau daher kam
+   das Hängen.
+
+   Jetzt bleibt das `<image>` **stehen** (`#planlage`) und bekommt nur seine Attribute
+   nachgeführt; die Bildquelle wird **nur bei echtem Wechsel** gesetzt. Der bewegliche
+   Rest — gestrichelter Rahmen und Maßstabsmarken — hängt weiter im neu gebauten Teil,
+   der ist billig.
+
+   Das Raster liegt mit in der stehenden Lage, weil es HINTER dem Plan liegen muss. */
+let planHrefJetzt=null;                  // was gerade im DOM steht — nur bei Wechsel neu setzen
+function planLageZeichnen(){
+  const g=$('#planlage'); if(!g) return;
+  let rast=g.querySelector('[data-bg]'), bild=g.querySelector('#planimg');
+  if(!rast){
+    g.insertAdjacentHTML('beforeend',
+      `<defs>
+         <pattern id="grid" width="1" height="1" patternUnits="userSpaceOnUse">
+           <path d="M 1 0 L 0 0 0 1" fill="none" stroke="#e6e9ee" stroke-width="0.015"/>
+         </pattern>
+         <radialGradient id="ziehzone">
+           <stop offset="0%" stop-color="#0ea06f" stop-opacity="0.32"/>
+           <stop offset="55%" stop-color="#0ea06f" stop-opacity="0.16"/>
+           <stop offset="100%" stop-color="#0ea06f" stop-opacity="0"/>
+         </radialGradient>
+       </defs>
+       <rect data-bg="1" fill="url(#grid)"/><image id="planimg" preserveAspectRatio="none"/>`);
+    rast=g.querySelector('[data-bg]'); bild=g.querySelector('#planimg');
+  }
+  rast.setAttribute('x', vb.x-50); rast.setAttribute('y', vb.y-50);
+  rast.setAttribute('width', vb.w+100); rast.setAttribute('height', vb.h+100);
+  const pl=planVon();
+  if(!pl){
+    /* Kein Plan oder ausgeblendet: die Bildquelle **weg**, nicht nur unsichtbar. Erst
+       damit gibt der Browser das dekodierte Bild frei — bei 4000 × 3000 sind das rund
+       48 MB, und die sind auf dem iPad der Unterschied zwischen flüssig und zäh. */
+    /* Gefragt wird das ELEMENT, nicht nur der Merker: der kann vom Baum abweichen (beim
+       Entfernen des Plans, nach einem Wiederherstellen). Ein Merker, der etwas behauptet,
+       das im Baum nicht steht, lässt das alte Bild stehen — und das ist genau das, was
+       hier weg soll. */
+    if(bild.hasAttribute('href')) bild.removeAttribute('href');
+    planHrefJetzt=null;
+    bild.setAttribute('width', 0); bild.setAttribute('height', 0);
+    return;
+  }
+  if(planHrefJetzt!==pl.src || !bild.hasAttribute('href')){
+    bild.setAttribute('href', pl.src); planHrefJetzt=pl.src;
+  }
+  bild.setAttribute('x', pl.x); bild.setAttribute('y', pl.y);
+  bild.setAttribute('width', pl.breite); bild.setAttribute('height', pl.hoehe);
+  bild.setAttribute('opacity', pl.deckkraft);
+  if(pl.drehung) bild.setAttribute('transform', `rotate(${pl.drehung} ${pl.x} ${pl.y})`);
+  else bild.removeAttribute('transform');
+  // Gesperrt liegt der Plan völlig durchlässig da — Klicks gehen an Räume und Ansicht
+  if(pl.gesperrt||mode==='kalib'){
+    bild.setAttribute('pointer-events','none'); bild.removeAttribute('data-plan');
+    bild.style.cursor='';
+  } else {
+    bild.removeAttribute('pointer-events'); bild.setAttribute('data-plan','1');
+    bild.style.cursor='move';
+  }
+}
+// Nur noch das Bewegliche: Rahmen und Maßstabsmarken. Das Bild selbst steht in `#planlage`.
 function planBild(){
   const pl=planVon(); if(!pl) return '';
-  // Drehung um die linke obere Ecke — dadurch bleibt das Skalieren beim Kalibrieren exakt
   const dreh=pl.drehung ? ` transform="rotate(${pl.drehung} ${pl.x} ${pl.y})"` : '';
-  // Gesperrt liegt der Plan völlig durchlässig da — Klicks gehen an Räume und Ansicht
-  const fass=(pl.gesperrt||mode==='kalib') ? ' pointer-events="none"' : ' data-plan="1" style="cursor:move"';
   const rand=pl.gesperrt ? '' :
     `<rect x="${pl.x}" y="${pl.y}" width="${pl.breite}" height="${pl.hoehe}" fill="none"
        stroke="#2f6fed" stroke-width="${Math.max(0.02, vb.w/900)}" stroke-dasharray="${vb.w/90} ${vb.w/140}"
        pointer-events="none"${dreh}/>`;
-  const marke=mode==='kalib' ? kalibMarken() : '';
-  return `<image href="${pl.src}" x="${pl.x}" y="${pl.y}" width="${pl.breite}" height="${pl.hoehe}"
-    opacity="${pl.deckkraft}" preserveAspectRatio="none"${dreh}${fass}/>`+rand+marke;
+  return rand+(mode==='kalib' ? kalibMarken() : '');
 }
 
 /* Die beiden Maßstabspunkte samt Verbindung. Wird aus planBild() heraus gezeichnet, also
@@ -11431,8 +11542,8 @@ function kalibMarken(){
 }
 
 function planPanel(){
-  const pl=planVon();
-  if(!pl) return `<div class="panel"><h3>Plan als Hintergrund</h3>
+  const pl=planObj();                 // auch der ausgeblendete Plan gehört ins Panel
+  if(!pl || (!pl.src && !pl.aus)) return `<div class="panel"><h3>Plan als Hintergrund</h3>
     <div class="row">
       <button class="btn small primary" id="planat" style="flex:1">${ico('wolke')}Aus Airtable</button>
       <button class="btn small" id="planadd" style="flex:1">${ico('bild')}Aus Datei</button>
@@ -11441,7 +11552,32 @@ function planPanel(){
     <p class="hint" style="margin-top:6px">Pläne liegen bei der Baustelle im Feld <b>Aufmaß Pläne</b>.
       PDFs vorher am Rechner umwandeln — <code>plan-export.py</code> schreibt die Breite in den Dateinamen,
       dann stimmt der Maßstab von selbst.</p></div>`;
+  const aus=!!pl.aus;
+  /* Der Schalter steht GANZ OBEN und ist das Erste im Panel: er ist der Ausweg, wenn die
+     App am Plan hängt, und dann sucht man ihn nicht erst unten. Grün heißt sichtbar,
+     rot heißt aus — dieselbe Farbregel wie bei jedem Schloss in der App. */
+  const schalter=`<div class="row">
+      <button class="btn small ${aus?'zu':'auf'}" id="planaus" style="flex:1"
+        title="${aus
+          ? 'Plan wieder anzeigen — das Bild wird aus dem Bildspeicher geholt'
+          : 'Plan ausblenden und das Bild aus dem Arbeitsspeicher nehmen'}"
+        >${ico('bild')}${aus?'Ausgeblendet · anzeigen':'Sichtbar · ausblenden'}</button>
+    </div>`;
+  if(aus) return `<div class="panel"><h3>Plan als Hintergrund</h3>
+    ${schalter}
+    <div class="stat"><span>${esc(pl.name||'Planbild')}</span><b>${fmt(pl.breite,2)} m breit</b></div>
+    <div class="row">
+      <button class="btn small" id="planat" style="flex:1">${ico('wolke')}Airtable</button>
+      <button class="btn small" id="planadd" style="flex:1">${ico('bild')}Datei</button>
+      <button class="btn small danger" id="plandel">${ico('papierkorb')}Entfernen</button>
+    </div>
+    <div id="planListe"></div>
+    <p class="hint" style="margin-top:6px">Der Plan ist <b>ausgeblendet</b> und sein Bild ist aus dem
+      Arbeitsspeicher genommen — Maßstab, Lage und Drehung sind gemerkt und kommen beim Anzeigen
+      unverändert zurück. Das Bild selbst liegt weiter im Bildspeicher des Geräts.
+      <br>Wenn die App mit einem großen Planfoto zäh wird, ist das hier der Ausweg.</p></div>`;
   return `<div class="panel"><h3>Plan als Hintergrund</h3>
+    ${schalter}
     <div class="stat"><span>${esc(pl.name||'Planbild')}</span><b>${fmt(pl.breite,2)} m breit</b></div>
     <div class="row"><label>Breite (m)</label><input id="planbreite" type="text" inputmode="decimal" value="${fmt(pl.breite,3)}"></div>
     <div class="row"><label>Drehung °</label><input id="plandreh" type="text" inputmode="decimal" value="${fmt(pl.drehung||0,1)}"></div>
