@@ -533,6 +533,22 @@
     box-shadow:0 0 0 1px var(--accent);}
   .werkzeuge button.breit{grid-column:span 2;}
   .werkzeuge.drei{grid-template-columns:repeat(3,1fr);}
+  /* Die fuenf Farbfelder des Fotoaufmasses: hoch, ueber die ganze Breite, und die Farbe
+     traegt die Aussage — sie ist dieselbe wie die der Markierungen im Foto. */
+  .fmfeld{display:block; width:100%; text-align:left; border:2px solid; border-radius:10px;
+    padding:8px 10px; margin-bottom:6px; min-height:62px; background:#fff; cursor:pointer;}
+  .fmfeld:hover{filter:brightness(0.97);}
+  .fmfeld .oben{display:flex; align-items:center; gap:8px;}
+  .fmfeld .punkt{flex:0 0 auto; width:14px; height:14px; border-radius:4px;
+    border:1px solid rgba(0,0,0,.25);}
+  .fmfeld .txt{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap; font-weight:600;}
+  .fmfeld .summe{flex:0 0 auto; font-variant-numeric:tabular-nums; font-weight:700;}
+  .fmfeld .leer{color:var(--muted); font-weight:400;}
+  .fmfeld .unten{display:flex; align-items:center; gap:8px; margin-top:5px;
+    font-size:12px; color:var(--muted);}
+  .fmzeile{display:flex; align-items:center; gap:6px; margin:-2px 0 8px 0;}
+  .fmzeile label{flex:0 0 auto; font-size:12px; color:var(--muted);}
   .werkzeuge button.loesch{color:var(--danger); border-color:#f0c4c4;}
   /* Kopfzeile mit den beiden Anwahl-Schaltern rechts */
   .panel h3.mitschalter{display:flex; align-items:center; justify-content:space-between; gap:8px;}
@@ -1846,6 +1862,23 @@ function polyArea(pts){ return Math.abs(polyUmlauf(pts))/2; }
    Nichts davon muss extra gerechnet werden. */
 const halbwaende = r => (r && r.objects || []).filter(g => g && g.type==='hw');
 const istHalbwand = g => !!(g && g.type==='hw');
+/* ---------- Der verformende Schacht (seit 2026-08-07) ----------
+   Derselbe Kniff wie bei der Halbwand, nur für ein Symbol: rastet ein Schacht an einer
+   Wand ein, merkt er sich die Bindung (`g.wall` + `g.t`) und wird damit zu Mauerwerk —
+   die Innenkontur macht einen Umweg um ihn herum. Grundfläche schrumpft, Umfang wächst.
+
+   **Ohne Bindung bleibt er das freie Symbol von heute.** Ein Schacht mitten im Raum
+   (Steigleitung in der Zimmermitte) muss es weiter geben; er hat dann kein `g.wall`,
+   verformt nichts und wird als grünes Kästchen gezeichnet wie bisher. */
+const istSchacht      = g => !!(g && g.type==='sym' && g.sub==='schacht');
+// Gebunden heißt: an einer Wand (`wall` + `t`) ODER in einer Ecke (`wall` + `ecke`)
+const schachtGebunden = g => istSchacht(g) && (g.wall!=null || g.ecke!=null);
+const schachtInEcke   = g => istSchacht(g) && g.ecke!=null;
+/* Alles, was in der Wand hängt und die Innenkontur verformt. Über diese Liste gehen
+   `innenPolygon`, die Trefferflächen und das Umschreiben der Wandindizes — wer ein
+   weiteres solches Bauteil baut, trägt es hier und in `bauteilGeometrie` ein. */
+const wandGebunden = g => istHalbwand(g) || schachtGebunden(g);
+const wandBauteile = r => (r && r.objects || []).filter(wandGebunden);
 /* Die vier Eckpunkte eines Vorsprungs, dazu seine Achsen. `t` misst bis zur MITTE des
    Vorsprungs, gemessen ab dem Wandanfang — so bleibt er beim Ändern der Stärke stehen,
    statt nach einer Seite zu wandern. */
@@ -1951,19 +1984,218 @@ function hwGeometrie(r, g){
           ecken:seite(1).concat(seite(-1).reverse()),
           mitte:{x:(mitten[0].x+mitten[1].x)/2, y:(mitten[0].y+mitten[1].y)/2}};
 }
-/* Der Raumumriss, wie er wirklich aussieht: `r.points` mit dem Umweg um jede Halbwand.
+/* Der Umriss eines gebundenen Schachts. Er ist viel einfacher als der einer Halbwand —
+   ein Rechteck `w × h` —, und er ist **hohl**: um ihn läuft eine eigene Wand der Stärke
+   `g.dicke`, innen ist er offen (der Schacht geht ja durch die Decke).
+
+   Er liefert dieselben Felder wie `hwGeometrie`, damit alles Weitere für beide gleich
+   rechnet:
+     `d`      = die Fußbreite AN der Wand (bei der Halbwand ihre Stärke, hier `w`),
+     `t0`     = wo der Umweg an der Wand beginnt (danach sortiert `innenPolygon`),
+     `ecken`  = an der Wand hinein, ums Bauteil herum, an der Wand wieder heraus.
+   Dazu zwei eigene:
+     `aussen` = der Umriss als geschlossenes Viereck (Griffe, Innenversatz),
+     `innen`  = die Öffnung, um `dicke` nach innen versetzt — oder `null`, wenn die
+                Wände zusammenstoßen und gar kein Hohlraum übrig bleibt.
+
+   **Zwei Bindungen** (seit 2026-08-07, zweiter Durchgang): an EINER Wand (`g.wall` +
+   `g.t`) oder in einer ECKE (`g.wall` **und** `g.ecke`) — dort hängt er an beiden
+   Wänden. `g.wall` bleibt auch in der Ecke gesetzt und sagt, an welcher der beiden
+   Wände die **Breite** liegt; sonst müssten beim Einrasten Breite und Tiefe tauschen,
+   und die Zahlen im Panel sprängen um. */
+const SCHACHT_MIN=0.10;                  // kleiner lässt sich kein Schacht ziehen
+const SCHACHT_DICKE=0.115;               // Vorgabe der Schachtwand
+const schachtDicke = g => Math.max(0.01, g && g.dicke!=null ? g.dicke : SCHACHT_DICKE);
+/* Ein Vieleck um `s` nach INNEN versetzen: jede Kante parallel verschieben, an den Ecken
+   die versetzten Geraden schneiden (Gehrung) — dieselbe Rechnung wie in `aussenPolygon`,
+   nur andersherum. Welche Seite „innen" ist, wird nicht geraten: der Versatz wird
+   einmal probiert und bei größerer Fläche umgedreht.
+
+   **`fest` = Kanten, die liegen bleiben** (Index i meint die Kante `pts[i] → pts[i+1]`).
+   Damit hat der angebaute Schacht zur Raumwand hin **keine eigene Wand**: dort ist die
+   Raumwand schon da, eine zweite davor wäre doppeltes Mauerwerk.
+
+   `null`, wenn nichts übrig bleibt — dann ist der Schacht massiv, nicht hohl. */
+function polyEinwaerts(pts, s, fest){
+  const n=pts&&pts.length;
+  if(!n || n<3 || !(s>0)) return null;
+  const bleibt=i=>!!(fest && fest.indexOf(i)>=0);
+  const versuch=vz=>{
+    const lin=pts.map((A,i)=>{
+      const B=pts[(i+1)%n], dx=B.x-A.x, dy=B.y-A.y, L=Math.hypot(dx,dy);
+      if(L<1e-9) return null;
+      const v=bleibt(i)?0:s;
+      const nx=vz*dy/L*v, ny=-vz*dx/L*v;
+      return [{x:A.x+nx, y:A.y+ny}, {x:B.x+nx, y:B.y+ny}];
+    });
+    if(lin.some(l=>!l)) return null;
+    const out=[];
+    for(let i=0;i<n;i++){
+      const vor=lin[(i-1+n)%n], q=linienSchnitt(vor[0], vor[1], lin[i][0], lin[i][1]);
+      if(!q) return null;
+      out.push(q);
+    }
+    return out;
+  };
+  let out=versuch(1);
+  if(out && polyArea(out)>polyArea(pts)) out=versuch(-1);
+  // Zu dicke Wände fressen den Hohlraum auf — dann gibt es keinen
+  if(!out || polyArea(out) < 1e-4 || polyArea(out) >= polyArea(pts)) return null;
+  return out;
+}
+/* Die Öffnung und die Restfelder an einen fertigen Umriss hängen.
+   `festeKanten` sind die, die in einer Raumwand stecken — dort baut der Schacht nicht
+   noch einmal eigenes Mauerwerk davor. */
+function schachtHuelle(g, aussen, inWand, festeKanten, rest){
+  return Object.assign({aussen, innen:polyEinwaerts(aussen, schachtDicke(g), festeKanten),
+    inWand, mitte:centroid(aussen)}, rest);
+}
+function schachtGeometrie(r, g){
+  if(!r || !g || !r.points || r.points.length<3) return null;
+  if(g.ecke!=null) return schachtEckGeometrie(r, g);
+  if(g.wall==null || !(g.wall>=0 && g.wall<r.points.length)) return null;
+  const [A,B]=wallPoints(r, g.wall);
+  const L=dist(A,B);
+  if(L<0.005) return null;
+  const ux=(B.x-A.x)/L, uy=(B.y-A.y)/L;
+  // Normale nach INNEN — genau wie bei der Halbwand entscheidet das der Umriss
+  let nx=-uy, ny=ux;
+  const m={x:A.x+ux*L/2, y:A.y+uy*L/2};
+  if(!pointInPoly({x:m.x+nx*0.02, y:m.y+ny*0.02}, r.points)){ nx=-nx; ny=-ny; }
+  const w=Math.max(SCHACHT_MIN, Math.min(L, g.w||0.8));
+  const h=Math.max(SCHACHT_MIN, g.h||0.6);
+  const tm=Math.max(w/2, Math.min(L-w/2, (g.t!=null?g.t:L/2)));   // Mitte, ab Wandanfang
+  const W=(a,e)=>({x:A.x+ux*(tm+a)+nx*e, y:A.y+uy*(tm+a)+ny*e});
+  /* ---- Bündig an einer Ecke: die Flanke folgt der NACHBARWAND ----
+     Steht der Schacht mit einem Fuß genau auf einem Eckpunkt, dockt er dort an die
+     angrenzende Wand an. Bei einem rechten Winkel fällt das mit der Wandnormalen
+     zusammen und ändert nichts; bei einem schiefen bliebe sonst ein Keil zwischen
+     Schacht und Nachbarwand. Zieht man die Breite auf die volle Wandlänge, gilt das an
+     BEIDEN Enden — dann dockt der Schacht an beiden Ecken der Wand an. */
+  const n0=r.points.length;
+  /* Zwei Millimeter Spielraum, nicht ein halber: `mm()` rundet Breite und Abstand
+     getrennt auf Millimeter, und eine echte Wandlänge ist 6,2744 m und keine glatte
+     Zahl. Bei 0,5 mm fiel der Schacht bei solchen Wänden aus der Bündigkeit heraus und
+     baute sich eine eigene Flanke vor die Nachbarwand. */
+  const buendigA = tm-w/2 <= 0.002, buendigB = tm+w/2 >= L-0.002;
+  const tiefeLinie=[W(0,h), {x:W(0,h).x+ux, y:W(0,h).y+uy}];      // Linie in Tiefe `h`
+  const flanke=(eck, nachbar, standard)=>{
+    const dx=nachbar.x-eck.x, dy=nachbar.y-eck.y, dl=Math.hypot(dx,dy);
+    if(dl<0.005) return standard;
+    const q=linienSchnitt(eck, {x:eck.x+dx/dl, y:eck.y+dy/dl}, tiefeLinie[0], tiefeLinie[1]);
+    // Nachbarwand fast parallel zu dieser (gestreckte Ecke) → kein brauchbarer Schnitt
+    return (q && dist(q, eck) < dl+0.001) ? q : standard;
+  };
+  const F0=buendigA?A:W(-w/2,0), F1=buendigB?B:W(w/2,0);
+  const C0=buendigA ? flanke(A, r.points[(g.wall-1+n0)%n0], W(-w/2,h)) : W(-w/2,h);
+  const C1=buendigB ? flanke(B, r.points[(g.wall+2)%n0],    W( w/2,h)) : W( w/2,h);
+  const aussen=[F0, C0, C1, F1];
+  /* Der UMWEG lässt einen bündigen Fußpunkt weg — dort ist er der Raumeckpunkt selbst,
+     und `innenPolygon` überspringt den. Stünde er in beiden, liefe die Kontur vom Eck
+     in den Schacht hinein und wieder zurück: ein Sporn ohne Fläche, der aber den
+     schwarzen Rand der Wand über den Anschluss der Schachtwand hinweg zeichnet und den
+     Umfang um zweimal die Tiefe zu groß macht. (Gemeldet am 7.8.2026 mit Bild.) */
+  const ecken=[];
+  if(!buendigA) ecken.push(F0);
+  ecken.push(C0, C1);
+  if(!buendigB) ecken.push(F1);
+  /* In der Wand steckt die Rückseite — Kante 3 (von `ecken[3]` nach `ecken[0]`, beide auf
+     der Wandlinie). Dort baut der Schacht keine eigene Wand, er ist ja angebaut. Wo er
+     bündig an einer Ecke sitzt, gilt dasselbe für die Flanke: Kante 0 links, Kante 2
+     rechts. */
+  const s=schachtDicke(g);
+  const fest=[3];
+  if(buendigA) fest.push(0);
+  if(buendigB) fest.push(2);
+  // Was in einer Wand steckt, ist keine freie Fläche und zählt beim Umlauf nicht mit
+  const inWand=w + (buendigA?dist(F0,C0):0) + (buendigB?dist(F1,C1):0);
+  // Der VOLLE Umriss geht in die Hülle (Griffe, Versatz), der verkürzte Umweg in `ecken`
+  return schachtHuelle(g, aussen, inWand, fest,
+    {art:'wand', A, B, L, ux, uy, nx, ny, w, h, tm, d:w, t0:tm-w/2, ecken,
+     buendigA, buendigB, ganzeWand:buendigA&&buendigB,
+     offW:w-(buendigA?0:s)-(buendigB?0:s), offH:h-s});
+}
+/* In der ECKE hängt der Schacht an beiden angrenzenden Wänden. Der Umriss ersetzt dann
+   den Eckpunkt selbst — er läuft von Wand `ecke-1` herein, ums Bauteil herum und auf
+   Wand `ecke` wieder hinaus.
+
+   Bei einem rechten Winkel ist das ein Rechteck; bei einem schiefen ein Parallelogramm,
+   das sich an beide Wände anlegt. Das ist Absicht: „in der Ecke" heißt, dass keine Fuge
+   bleibt, und die entstünde bei einem starr rechtwinkligen Kasten sofort. */
+function schachtEckGeometrie(r, g){
+  const n=r.points.length, c=((g.ecke%n)+n)%n;
+  const P=r.points[c];
+  const vorIdx=(c-1+n)%n;
+  const [a1,b1]=wallPoints(r, vorIdx);        // läuft in die Ecke hinein: b1 === P
+  const [a2,b2]=wallPoints(r, c);             // läuft aus der Ecke heraus: a2 === P
+  const L1=dist(a1,b1), L2=dist(a2,b2);
+  if(L1<0.005 || L2<0.005) return null;
+  // Richtungen vom Eckpunkt AUS, in die jeweilige Wand hinein
+  const v1={x:(a1.x-b1.x)/L1, y:(a1.y-b1.y)/L1};       // in Wand `ecke-1`
+  const v2={x:(b2.x-a2.x)/L2, y:(b2.y-a2.y)/L2};       // in Wand `ecke`
+  // `g.wall` sagt, an welcher der beiden Wände die BREITE liegt
+  const breiteAn1 = g.wall===vorIdx;
+  const w=Math.max(SCHACHT_MIN, g.w||0.8), h=Math.max(SCHACHT_MIN, g.h||0.6);
+  const e1=Math.min(breiteAn1?w:h, L1), e2=Math.min(breiteAn1?h:w, L2);
+  const p1={x:P.x+v1.x*e1, y:P.y+v1.y*e1};            // auf Wand `ecke-1`
+  const p3={x:P.x+v2.x*e2, y:P.y+v2.y*e2};            // auf Wand `ecke`
+  const p2={x:p1.x+v2.x*e2, y:p1.y+v2.y*e2};          // die freie Ecke
+  /* `ecken` ersetzt den Eckpunkt: erst auf Wand `ecke-1` heraus, um die freie Ecke
+     herum, dann auf Wand `ecke` weiter — in der Laufrichtung der Kontur.
+     In der Ecke stecken ZWEI Kanten in Raumwänden: `P→p1` (Kante 0) und `p3→P`
+     (Kante 3). Beide bleiben beim Versatz liegen — dort ist schon Mauerwerk. */
+  const s=schachtDicke(g);
+  return schachtHuelle(g, [P, p1, p2, p3], e1+e2, [0,3],
+    {art:'ecke', P, v1, v2, e1, e2, L1, L2, vorIdx, ecke:c, breiteAn1,
+     d:e2, t0:0, ecken:[p1, p2, p3],
+     offW:(breiteAn1?e1:e2)-s, offH:(breiteAn1?e2:e1)-s});
+}
+const bauteilGeometrie = (r, g) => istHalbwand(g) ? hwGeometrie(r, g) : schachtGeometrie(r, g);
+/* Die freien Felder (`x`, `y`, `rot`) eines gebundenen Schachts der Wand nachführen.
+   Gezeichnet wird er aus `wall`/`t` bzw. `ecke`, aber wer ihn wieder löst, soll ihn dort
+   wiederfinden, wo er zuletzt stand — und `objCenter` fragt weiter nach `x`/`y`. */
+function schachtLage(r, g){
+  const geo=schachtGeometrie(r, g); if(!geo) return;
+  g.x=mm(geo.mitte.x-g.w/2); g.y=mm(geo.mitte.y-g.h/2);
+  /* Die Drehung so, dass die lokale y-Achse auf die Innennormale zeigt — sonst stünde
+     der gelöste Schacht seitenverkehrt zur Wand. In der Ecke zählt die Wand, an der die
+     Breite liegt: sie ist die, an der er auch als freies Symbol läge. */
+  const u = geo.art==='ecke'
+    ? (geo.breiteAn1 ? {x:-geo.v1.x, y:-geo.v1.y} : geo.v2)
+    : {x:geo.ux, y:geo.uy};
+  g.rot=(Math.atan2(u.y, u.x)*180/Math.PI+360)%360;
+}
+/* Der Raumumriss, wie er wirklich aussieht: `r.points` mit dem Umweg um jede Halbwand
+   und jeden gebundenen Schacht.
    ALLES, was Fläche, Umfang oder Mauerwerk zeichnet, muss hierüber gehen — `r.points`
-   allein ist nur noch die Liste der nummerierten Wände. */
+   allein ist nur noch die Liste der nummerierten Wände.
+
+   Ein Eckschacht **ersetzt** den Eckpunkt, ein Wandbauteil wird **hinter** ihm
+   eingehängt. Beides in derselben Runde, damit die Reihenfolge stimmt. */
 function innenPolygon(r){
-  const hw=halbwaende(r);
-  if(!hw.length || !r.points || r.points.length<3) return r.points;
+  const bt=wandBauteile(r);
+  if(!bt.length || !r.points || r.points.length<3) return r.points;
+  const n=r.points.length;
+  const alle=bt.map(g=>({g, geo:bauteilGeometrie(r,g)})).filter(x=>x.geo);
+  /* Welche RAUMECKEN deckt ein Bauteil zu? Die fallen aus der Kontur heraus — der
+     Umweg bringt an ihrer Stelle seinen eigenen Punkt mit. Ohne das liefe die Kontur
+     vom Eck in das Bauteil hinein und wieder zurück (siehe `schachtGeometrie`). */
+  const weg=new Set();
+  alle.forEach(x=>{
+    if(x.geo.art==='ecke') weg.add(x.g.ecke);
+    else if(istSchacht(x.g)){
+      if(x.geo.buendigA) weg.add(x.g.wall);
+      if(x.geo.buendigB) weg.add((x.g.wall+1)%n);
+    }
+  });
   const out=[];
-  for(let i=0;i<r.points.length;i++){
-    out.push(r.points[i]);
-    const dran=hw.filter(g=>g.wall===i)
-      .map(g=>({g, geo:hwGeometrie(r,g)})).filter(x=>x.geo)
-      .sort((x,y)=>x.geo.t0-y.geo.t0);
-    dran.forEach(x=>{ x.geo.ecken.forEach(pt=>out.push(pt)); });
+  for(let i=0;i<n;i++){
+    const eck=alle.find(x=>x.geo.art==='ecke' && x.g.ecke===i);
+    if(eck) eck.geo.ecken.forEach(pt=>out.push(pt));
+    else if(!weg.has(i)) out.push(r.points[i]);
+    alle.filter(x=>x.geo.art!=='ecke' && x.g.wall===i)
+      .sort((x,y)=>x.geo.t0-y.geo.t0)
+      .forEach(x=>{ x.geo.ecken.forEach(pt=>out.push(pt)); });
   }
   return out;
 }
@@ -1984,6 +2216,57 @@ function hwUmlauf(g, r){
   const geo=raum?hwGeometrie(raum, g):null;
   if(!geo) return 2*hwGesamt(g) + Math.max(0, g.dicke||0);     // Notnagel ohne Raum
   return Math.max(0, polyPerimeter(geo.ecken) - geo.d);
+}
+/* Umlaufend am gebundenen Schacht: die freien Seiten. An der Wand sind das drei, in der
+   Ecke nur zwei — was in einer Wand steckt, ist keine Fläche. **Aus dem echten Umriss
+   gerechnet** (`geo.inWand` sagt, wieviel davon in Wänden liegt), nicht als 2×(w+h):
+   an der Halbwand ist genau dieser Kurzschluss schon einmal schiefgegangen. */
+function schachtUmlauf(g, r){
+  if(!g) return 0;
+  const raum=r || hwRaumVon(g);
+  const geo=raum?schachtGeometrie(raum, g):null;
+  if(!geo) return 2*((g.w||0)+(g.h||0));                       // Notnagel ohne Raum
+  return Math.max(0, polyPerimeter(geo.aussen) - geo.inWand);
+}
+/* ---------- Die Öffnung im Schacht (Schraffur, seit 2026-08-07) ----------
+   Ein Schacht ist nach DIN 1356-1 ein **Durchbruch durch die Decke**. Üblich sind drei
+   Darstellungen: diagonal gekreuzt (das klassische Durchbruchzeichen), schraffiert, oder
+   leer mit Beschriftung. Hier die **Schraffur**: sie sagt „hier ist kein Raum", ohne wie
+   Mauerwerk zu wirken, und bleibt im Etagenplan auch bei kleinen Schächten lesbar.
+   Reines Weiß war die schlechteste Wahl — es sah aus wie ein Loch im Blatt.
+
+   Der Abstand steht in METERN, nicht in Bildschirmpunkten: die Schraffur gehört zur
+   Zeichnung, nicht zur Ansicht, und soll beim Zoomen mitwachsen wie das Bauteil selbst.
+
+   Die Id hängt an der Strichfarbe, damit Bildschirm (dunkelblau) und Druck (schwarz bzw.
+   grau) sich nicht dieselbe `<pattern>`-Id teilen — bei doppelter Id gewinnt die erste,
+   und der Ausdruck bekäme die Bildschirmfarbe. */
+function schachtSchraffur(linie){
+  const id='schr'+String(linie).replace(/[^a-z0-9]/gi,'');
+  return {id, def:`<pattern id="${id}" patternUnits="userSpaceOnUse"`+
+    ` width="0.07" height="0.07" patternTransform="rotate(45)">`+
+    `<rect width="0.07" height="0.07" fill="#fdfcf8"/>`+
+    `<line x1="0" y1="0" x2="0" y2="0.07" stroke="${linie}" stroke-width="0.014"`+
+    ` opacity="0.5"/></pattern>`};
+}
+/* Gezeichnet wird die Öffnung ÜBER den Wandkörper, nicht als Loch im Pfad: `wandLage`
+   legt alle Wände einer Etage als eine Fläche mit `nonzero` übereinander, ein Loch darin
+   würde vom Nachbarraum wieder zugedeckt. Obendrauf ist es in jeder Ansicht dasselbe. */
+function schachtLoecher(rooms, opt){
+  opt=opt||{};
+  const linie=opt.linie||'#2b3345';
+  const sw=opt.sw!=null ? opt.sw : Math.max(0.012, vb.w/900);
+  const sch=schachtSchraffur(linie);
+  let out='';
+  (rooms||[]).forEach(r=>wandBauteile(r).forEach(g=>{
+    if(!istSchacht(g)) return;
+    const geo=schachtGeometrie(r, g);
+    if(!geo || !geo.innen) return;
+    if(!out) out+=sch.def;                       // einmal je Lage genügt
+    out+=`<path d="${polyD(geo.innen)}" fill="url(#${sch.id})" stroke="${linie}"`+
+      ` stroke-width="${sw}" stroke-linejoin="miter" pointer-events="none"/>`;
+  }));
+  return out;
 }
 function polyPerimeter(pts){
   let s=0;
@@ -2226,6 +2509,7 @@ function save(){
   fmAttrsNachziehen();                     // Summen des Fotoaufmaßes in ihre Zuordnungen
   objMasseNachziehen();                    // Maße an Flächen/Linien folgen der Form …
   lvMasseNachziehen();                     // … und die Zuordnungen den Wänden bzw. Objekten
+  schachtLagenNachziehen();                // gebundene Schächte folgen ihrer Wand
   const text=standErfassen();              // ohne Bilddaten — die liegen in IndexedDB
   if(!ohneUndoAktiv){
     if(letzterStand!=null && letzterStand!==text){
@@ -2321,6 +2605,31 @@ function objMasseNachziehen(){
     if(!objHatMass(g)) return;
     if(!g.festL) g.massL=mm(objFormL(g));
     if(g.type==='rect' && !g.festB) g.massB=mm(objFormB(g));
+  }));
+}
+/* Gebundene Schächte werden aus `wall`/`t` gezeichnet, tragen aber weiter `x`/`y`/`rot`
+   für den Fall, dass jemand sie löst. Wandert die Wand — Ecke geschoben, Ecke eingefügt,
+   Raum verschoben —, laufen die beiden auseinander. Hier in `save()` zieht die freie
+   Lage nach, an EINER Stelle für alle Wege; die Ecken-Handler dürfen das nicht selbst
+   tun, denn `wandRefsUmschreiben` läuft VOR dem Ändern von `r.points`. */
+function schachtLagenNachziehen(){
+  (proj().rooms||[]).forEach(r=>(r.objects||[]).forEach(g=>{
+    if(!schachtGebunden(g)) return;
+    const n=(r.points||[]).length;
+    /* Zeigt die Bindung ins Leere, wird der Schacht wieder frei. Ein gebundener Schacht
+       ohne Wand wäre unsichtbar — `objMarks` überspringt ihn, `hwMarks` bekommt keine
+       Geometrie —, und ein Objekt, das niemand mehr sieht, ist schlimmer als eins, das
+       an der falschen Stelle steht. */
+    if(!(g.ecke>=0 && g.ecke<n)) delete g.ecke;
+    if(!(g.wall>=0 && g.wall<n)){ schachtLoesen(g); return; }
+    /* Aus der Ecke gefallen (Ecke gelöscht): er hängt noch an seiner Wand, hat aber
+       keinen Abstand mehr. Dann setzt er sich ans Wandende, an dem die Ecke war. */
+    if(g.ecke==null && g.t==null){
+      const [a,b]=wallPoints(r, g.wall);
+      schachtBinden(r, g, g.wall, dist(a,b)/2);
+      return;
+    }
+    schachtLage(r, g);
   }));
 }
 function lvMasseNachziehen(){
@@ -2498,7 +2807,7 @@ let messungLaeuft=false;
    Die Stärke wächst nach außen und dient Darstellung, Volumen und Laibungen. */
 /* Datum des letzten Umbaus — geht bei jedem Ticket mit, damit beim Nachstellen klar ist,
    welcher Stand auf dem Gerät lag. Bei größeren Änderungen mit hochziehen. */
-const APP_STAND='2026-08-05';
+const APP_STAND='2026-08-07';
 const WAND_STD=0.24;
 // Spanne des Schiebereglers im Wand-Panel. Von Hand darf man auch daneben liegen —
 // der Regler wird dann rot, damit der Ausreißer nicht unbemerkt bleibt.
@@ -2712,7 +3021,8 @@ function wandLage(rooms, opt){
   const sw=opt.sw!=null ? opt.sw : Math.max(0.012, vb.w/900);
   return `<path d="${alle}" fill="none" stroke="${linie}" stroke-width="${sw*2}"`+
       ` stroke-linejoin="miter" pointer-events="none"/>`+
-    `<path d="${alle}" fill="${fuell}" fill-rule="nonzero" pointer-events="none"/>`;
+    `<path d="${alle}" fill="${fuell}" fill-rule="nonzero" pointer-events="none"/>`+
+    schachtLoecher(rooms, {linie, sw});          // Schächte sind hohl
 }
 function wandKoerper(r, opt){
   opt=opt||{};
@@ -2722,7 +3032,8 @@ function wandKoerper(r, opt){
   const sw=opt.sw!=null ? opt.sw : Math.max(0.012, vb.w/900);
   // Der Strich liegt auf beiden Konturen — Außen- und Innenkante der Wand
   return `<path d="${dRing}" fill="${fuell}" fill-rule="evenodd" stroke="${linie}"`+
-    ` stroke-width="${sw}" stroke-linejoin="miter" pointer-events="none"/>`;
+    ` stroke-width="${sw}" stroke-linejoin="miter" pointer-events="none"/>`+
+    schachtLoecher([r], {linie, sw});            // Schächte sind hohl
 }
 /* ---------- Türtypen ----------
    `o.tuerTyp` steuert nur die Darstellung — Maße, LV-Bezug und Flächenrechnung sind
@@ -3098,8 +3409,10 @@ function zoneMarks(r, lbl){
 function objMarks(r, lbl, interactive){
   let out='';
   (r.objects||[]).forEach(g=>{
-    // Halbwände sind schon im Mauerwerk gezeichnet — `hwMarks` legt nur die Trefferfläche darüber
-    if(istHalbwand(g)) return;
+    /* Halbwände und gebundene Schächte sind schon im Mauerwerk gezeichnet — `hwMarks`
+       legt nur die Trefferfläche darüber. Ein gebundener Schacht darf hier NICHT mehr
+       als grünes Symbolkästchen erscheinen: er ist Wand, kein Gerät. */
+    if(wandGebunden(g)) return;
     const isSel = interactive && sel.objId===g.id;
     const ab=out.length;                                   // Startmarke für das Ausgrauen
     if(g.type==='rect'){
@@ -3147,10 +3460,26 @@ function objMarks(r, lbl, interactive){
       out+=`<g transform="rotate(${g.rot||0} ${cx} ${cy})">`;
       out+=`<rect x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" fill="${fl}" fill-opacity="0.9" stroke="${st}" stroke-width="${isSel?0.06:0.04}"${interactive?` data-obj="${g.id}" style="cursor:move"`:''}/>`;
       if(g.sub==='rfa'){
-        const rr=Math.min(g.w,g.h)*0.3;
-        out+=`<circle cx="${cx}" cy="${cy}" r="${rr}" fill="none" stroke="${st}" stroke-width="0.035" style="pointer-events:none"/>`;
-        out+=`<line x1="${cx-rr}" y1="${cy}" x2="${cx+rr}" y2="${cy}" stroke="${st}" stroke-width="0.03" style="pointer-events:none"/>`;
-        out+=`<line x1="${cx}" y1="${cy-rr}" x2="${cx}" y2="${cy+rr}" stroke="${st}" stroke-width="0.03" style="pointer-events:none"/>`;
+        /* Raumluftfilteranlage: links die Filterpakete, rechts das Gebläserad, dazwischen
+           der Weg der Luft. Der Pfeil zeigt, wohin sie BLÄST — bei Unterdruckhaltung also
+           aus dem Schwarzbereich hinaus. Er ist der Grund, warum das Drehen der Anlage
+           ueberhaupt etwas aussagt; das alte Fadenkreuz sah in jeder Lage gleich aus. */
+        const P=(fx,fy)=>({x:g.x+g.w*fx, y:g.y+g.h*fy});
+        const sw=Math.min(g.w,g.h);
+        const stift=v=>`fill="none" stroke="${st}" stroke-width="${SYM_STRICH*v/0.05}" stroke-linecap="round" style="pointer-events:none"`;
+        /* Geblaeserad. Striche und Pfeil (Variante C) waren zwar in kleiner Groesse
+           robuster, sahen den Schleusen daneben aber zu aehnlich — beides Kaesten mit
+           Linien und einem Pfeil. Das Rad unterscheidet sich auf einen Blick. */
+        const m=P(0.5,0.5), rr=sw*0.32;
+        out+=`<circle cx="${m.x}" cy="${m.y}" r="${rr}" ${stift(0.05)}/>`;
+        for(let i=0;i<4;i++){
+          const a=i*Math.PI/2;
+          const c1={x:m.x+Math.cos(a)*rr*0.35, y:m.y+Math.sin(a)*rr*0.35};
+          const c2={x:m.x+Math.cos(a+0.9)*rr*0.95, y:m.y+Math.sin(a+0.9)*rr*0.95};
+          const e ={x:m.x+Math.cos(a+1.25)*rr*0.98, y:m.y+Math.sin(a+1.25)*rr*0.98};
+          out+=`<path d="M ${m.x} ${m.y} C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${e.x} ${e.y}" ${stift(0.06)}/>`;
+        }
+        out+=`<circle cx="${m.x}" cy="${m.y}" r="${rr*0.18}" fill="${st}" stroke="none" style="pointer-events:none"/>`;
       } else if(istFotoMass(g)){
         /* Kamera mit Maßpfeil darunter. Vorher war es ein leeres Kästchen — im Plan war
            nicht zu erkennen, wofür das Objekt steht. Gezeichnet in Anteilen der Kantenlänge,
@@ -3177,7 +3506,7 @@ function objMarks(r, lbl, interactive){
         /* Die Stufen kommen aus der Lauflänge, nicht aus einer gespeicherten Zahl:
            zieht man die Treppe länger, kommen welche dazu. Der Pfeil zeigt die
            Laufrichtung, der Punkt am Fuß den Antritt. */
-        const n=stufenZahl(g), strich=Math.min(g.w,g.h)*0.045;
+        const n=stufenZahl(g), strich=SYM_STRICH;
         for(let i=1;i<n;i++){
           const xx=g.x+g.w*i/n;
           out+=`<line x1="${xx}" y1="${g.y}" x2="${xx}" y2="${g.y+g.h}" stroke="${st}" stroke-width="${strich}" style="pointer-events:none"/>`;
@@ -3188,33 +3517,101 @@ function objMarks(r, lbl, interactive){
         out+=`<path d="M ${x1} ${cy} L ${x1-ph*1.7} ${cy-ph} M ${x1} ${cy} L ${x1-ph*1.7} ${cy+ph}" ${stift}/>`;
         out+=`<circle cx="${x0}" cy="${cy}" r="${strich*1.6}" fill="${st}" style="pointer-events:none"/>`;
       } else if(g.sub==='schacht'){
-        // Kreuz = Durchbruch/Schacht, so steht es im Plan
-        const sw=Math.min(g.w,g.h)*0.05;
-        out+=`<line x1="${g.x}" y1="${g.y}" x2="${g.x+g.w}" y2="${g.y+g.h}" stroke="${st}" stroke-width="${sw}" style="pointer-events:none"/>`;
-        out+=`<line x1="${g.x+g.w}" y1="${g.y}" x2="${g.x}" y2="${g.y+g.h}" stroke="${st}" stroke-width="${sw}" style="pointer-events:none"/>`;
+        /* Ein Schacht ist ein hohler Kasten: ringsum eine Wand der Stärke `g.dicke`,
+           innen die Schraffur des Deckendurchbruchs — dasselbe Bild wie beim gebundenen
+           Schacht im Mauerwerk. Bis 2026-08-07 stand hier ein Kreuz über dem ganzen
+           Kasten; jetzt sagt der gezeichnete Hohlraum das, und zwar maßstäblich.
+           **Frei stehend hat er ringsum eigene Wände** — angebaut fällt die zur Raumwand
+           hin weg, aber hier grenzt er ja an nichts.
+           Zu dicke Wände fressen den Hohlraum auf — dann bleibt der Kasten massiv. */
+        const s=schachtDicke(g);
+        const iw=g.w-2*s, ih=g.h-2*s;
+        if(iw>0.01 && ih>0.01){
+          const sch=schachtSchraffur(st);
+          out+=sch.def;
+          out+=`<rect x="${g.x+s}" y="${g.y+s}" width="${iw}" height="${ih}"
+            fill="url(#${sch.id})" stroke="${st}" stroke-width="${isSel?0.05:0.035}"
+            style="pointer-events:none"/>`;
+        }
       } else {
+        /* Schleuse (seit 2026-08-07). Vorher: Kammern durch Striche geteilt, je eine
+           Diagonale — das sagte weder, wo man hineingeht, noch wozu die Kammern da sind.
+           Jetzt drei Aussagen:
+             · TÜREN als Lücken in jeder Trennwand und in beiden Stirnseiten. Bewusst
+               keine Schwenkbögen: bei vier Kammern wird das im Etagenplan ein Gekrissel.
+             · LAUFRICHTUNG als Pfeil vom Punkt am schmutzigen Ende zum sauberen.
+               Erst dadurch sagt das Drehen des Symbols etwas.
+             · DUSCHE in der dritten Kammer, sobald es vier sind — daran erkennt man die
+               Dekontaminationsschleuse und nicht bloß vier Kästchen. */
         const k=(SYMDEFS[g.sub]||{}).k||1;
+        const P=(fx,fy)=>({x:g.x+g.w*fx, y:g.y+g.h*fy});
+        const sw=Math.min(g.w,g.h);          // nur fuer die Geometrie, nicht fuer den Strich
+        const stift=v=>`fill="none" stroke="${st}" stroke-width="${SYM_STRICH*v/0.05}" stroke-linecap="round" style="pointer-events:none"`;
+        // Trennwände mit Türlücke in der Mitte
         for(let i=1;i<k;i++){
           const xx=g.x+g.w*i/k;
-          out+=`<line x1="${xx}" y1="${g.y}" x2="${xx}" y2="${g.y+g.h}" stroke="${st}" stroke-width="0.035" style="pointer-events:none"/>`;
+          out+=`<line x1="${xx}" y1="${g.y}" x2="${xx}" y2="${g.y+g.h*0.34}" ${stift(0.05)}/>`;
+          out+=`<line x1="${xx}" y1="${g.y+g.h*0.66}" x2="${xx}" y2="${g.y+g.h}" ${stift(0.05)}/>`;
         }
-        for(let i=0;i<k;i++){
-          const x0=g.x+g.w*i/k, x1=g.x+g.w*(i+1)/k;
-          out+=`<line x1="${x0}" y1="${g.y+g.h}" x2="${x1}" y2="${g.y}" stroke="${st}" stroke-width="0.02" style="pointer-events:none"/>`;
+        /* Die Türen der Stirnseiten werden in die schon gezeichnete Umrandung
+           hineingemalt — der Rahmen ist ein `rect`, aus dem sich nichts ausstanzen
+           lässt. Die Linie trägt die Füllfarbe und deckt das Stück Rand ab. */
+        [g.x, g.x+g.w].forEach(xx=>{
+          out+=`<line x1="${xx}" y1="${g.y+g.h*0.34}" x2="${xx}" y2="${g.y+g.h*0.66}"
+            stroke="${fl}" stroke-width="${(isSel?0.06:0.04)*1.6}" style="pointer-events:none"/>`;
+        });
+        const duscheIn = k>=4 ? 2 : -1;              // dritte Kammer, erst ab vier
+        // Laufrichtung: Punkt am schmutzigen Ende, Pfeil zum sauberen
+        const pkt=P(0.03,0.5);
+        out+=`<circle cx="${pkt.x}" cy="${pkt.y}" r="${sw*0.055}" fill="${st}" stroke="none" style="pointer-events:none"/>`;
+        const ph=sw*0.075;
+        const pfeil=(vonF, bisF)=>{
+          const a=P(vonF,0.5), b=P(bisF,0.5);
+          if(b.x-a.x < sw*0.12) return;
+          out+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" ${stift(0.05)}/>`;
+          out+=`<path d="M ${b.x} ${b.y} L ${b.x-ph*1.5} ${b.y-ph} M ${b.x} ${b.y} L ${b.x-ph*1.5} ${b.y+ph}" ${stift(0.05)}/>`;
+        };
+        if(duscheIn<0) pfeil(0.10, 0.94);
+        else {                                       // um die Dusche herum, in zwei Zügen
+          pfeil(0.10, duscheIn/k - 0.02);
+          pfeil((duscheIn+1)/k + 0.02, 0.94);
+          const b=P((duscheIn+0.5)/k, 0.30), br=g.w*0.055;
+          out+=`<line x1="${b.x-br}" y1="${b.y}" x2="${b.x+br}" y2="${b.y}" ${stift(0.05)}/>`;
+          out+=`<line x1="${b.x}" y1="${b.y-g.h*0.09}" x2="${b.x}" y2="${b.y}" ${stift(0.05)}/>`;
+          [-1,0,1].forEach(j=>{
+            const x0=b.x+j*br*0.62, y0=b.y+g.h*0.07, y1=b.y+g.h*(j?0.20:0.24);
+            out+=`<line x1="${x0}" y1="${y0}" x2="${x0+j*br*0.16}" y2="${y1}" ${stift(0.045)}/>`;
+          });
         }
       }
       out+=`</g>`;
-      const W=(g.rot||0)%180?g.h:g.w, H=(g.rot||0)%180?g.w:g.h;
-      out+=objBadge(g, cx+W/2+lbl*0.45, cy-H/2-lbl*0.45, lbl, interactive);
+      /* Frei drehbar seit 2026-08-07 — die Griffe muessen deshalb MITDREHEN. Bis dahin
+         wurden sie ueber `%180` an einer achsparallelen Huelle aufgehaengt; das galt nur
+         fuer 0/90/180/270 und griffe bei jedem anderen Winkel ins Leere. */
+      const dreh=(px,py)=>{
+        const a=(g.rot||0)*Math.PI/180, dx=px-cx, dy=py-cy;
+        return {x:cx+dx*Math.cos(a)-dy*Math.sin(a), y:cy+dx*Math.sin(a)+dy*Math.cos(a)};
+      };
+      const eck=dreh(g.x+g.w, g.y);
+      out+=objBadge(g, eck.x+lbl*0.45, eck.y-lbl*0.45, lbl, interactive);
       if(isSel){
-        // Eckgriffe am sichtbaren Umriss (auch bei 90°/270° gedrehten Symbolen)
-        const vx=cx-W/2, vy=cy-H/2;
-        [[vx,vy,0],[vx+W,vy,1],[vx+W,vy+H,2],[vx,vy+H,3]].forEach(([px,py,k])=>{
+        [[g.x,g.y,0],[g.x+g.w,g.y,1],[g.x+g.w,g.y+g.h,2],[g.x,g.y+g.h,3]].forEach(([lx,ly,k])=>{
+          const q=dreh(lx,ly);
           const an=sel.objH===k, hs=lbl*(an?0.45:0.35), tr=lbl*(an?2.6:1.2);
-          if(an) out+=`<circle cx="${px}" cy="${py}" r="${tr}" fill="url(#ziehzone)" style="pointer-events:none"/>`;
-          out+=`<rect x="${px-hs}" y="${py-hs}" width="${2*hs}" height="${2*hs}" fill="${an?'#2f6fed':'#fff'}" stroke="#2f6fed" stroke-width="${lbl*0.08}" data-obj="${g.id}" data-objh="${k}" style="cursor:nwse-resize"/>`;
-          out+=`<circle cx="${px}" cy="${py}" r="${tr}" fill="transparent" data-obj="${g.id}" data-objh="${k}" style="cursor:nwse-resize"/>`;
+          if(an) out+=`<circle cx="${q.x}" cy="${q.y}" r="${tr}" fill="url(#ziehzone)" style="pointer-events:none"/>`;
+          out+=`<rect x="${q.x-hs}" y="${q.y-hs}" width="${2*hs}" height="${2*hs}" fill="${an?'#2f6fed':'#fff'}" stroke="#2f6fed" stroke-width="${lbl*0.08}" data-obj="${g.id}" data-objh="${k}" style="cursor:nwse-resize"/>`;
+          out+=`<circle cx="${q.x}" cy="${q.y}" r="${tr}" fill="transparent" data-obj="${g.id}" data-objh="${k}" style="cursor:nwse-resize"/>`;
         });
+        /* Drehgriff ueber der Oberkante, an einem Stiel — so wie man es von
+           Bildbearbeitung kennt. Anfassen und im Kreis fuehren. */
+        const oben=dreh(cx, g.y), stiel=dreh(cx, g.y-lbl*1.9);
+        out+=`<line x1="${oben.x}" y1="${oben.y}" x2="${stiel.x}" y2="${stiel.y}"
+          stroke="#2f6fed" stroke-width="${lbl*0.08}" style="pointer-events:none"/>`;
+        out+=`<circle cx="${stiel.x}" cy="${stiel.y}" r="${lbl*0.42}" fill="#fff"
+          stroke="#2f6fed" stroke-width="${lbl*0.11}" data-obj="${g.id}" data-objdreh="1"
+          style="cursor:grab"/>`;
+        out+=`<circle cx="${stiel.x}" cy="${stiel.y}" r="${lbl*2.2}" fill="transparent"
+          data-obj="${g.id}" data-objdreh="1" style="cursor:grab"/>`;
       }
     } else {
       // Linie in LV-Farbe; mehrere LV-Positionen → farblich abwechselnde Streifen entlang der Linie
@@ -3996,10 +4393,13 @@ function istGewaehlt(el){
   return false;
 }
 const SYMDEFS={
-  '1k':{label:'1-K-Schleuse', w:1.0, h:1.0, k:1},
-  '2k':{label:'2-K-Schleuse', w:2.0, h:1.0, k:2},
-  '4k':{label:'4-K-Schleuse', w:4.0, h:1.0, k:4},
-  'rfa':{label:'RFA', w:1.2, h:1.2, k:0},
+  /* `rastet` heisst nur: legt sich beim Ziehen an die naechste Wand und mittig vor
+     eine Tuer oder ein Fenster. Das ist bewusst NICHT `bauteil` — daran haengt der
+     Umlauf fuer die LV-Zuordnung, und den hat eine Schleuse nicht. */
+  '1k':{label:'1-K-Schleuse', w:1.0, h:1.0, k:1, rastet:true},
+  '2k':{label:'2-K-Schleuse', w:2.0, h:1.0, k:2, rastet:true},
+  '4k':{label:'4-K-Schleuse', w:4.0, h:1.0, k:4, rastet:true},
+  'rfa':{label:'RFA', w:1.2, h:1.2, k:0, rastet:true},
   /* Bauteile im Raum (seit 2026-08-06). Sie sitzen auf derselben Mechanik wie die
      Schleusen — Rechteck mit Drehung, Eckgriffen und Nummer —, haben aber zwei
      Eigenschaften mehr:
@@ -4018,10 +4418,20 @@ const SYMDEFS={
 const ist360 = g => g && g.type==='sym' && g.sub==='p360';
 const symDef      = g => (g && g.type==='sym') ? (SYMDEFS[g.sub]||{}) : {};
 const istBauteil  = g => !!symDef(g).bauteil;
+const rastetEin   = g => { const d=symDef(g); return !!(d.bauteil || d.rastet); };
 const ohneLvObjekt= g => !!symDef(g).ohneLv;
-/* Eine Stufe je 28 cm Lauflänge, mindestens zwei. Wird die Treppe länger gezogen,
-   kommen Stufen DAZU — sie werden nicht mitskaliert; genau darum geht es. */
-const STUFE_M=0.28;
+/* Eine Stufe je 46,5 cm Lauflänge, mindestens zwei. Wird die Treppe länger gezogen,
+   kommen Stufen DAZU — sie werden nicht mitskaliert; genau darum geht es.
+   Der Abstand war bis 7.8.2026 28 cm (echtes Auftrittsmaß) — im Plan standen die
+   Striche damit so dicht, dass sie zu einer Fläche verschmolzen. Jetzt 66 % mehr:
+   das Symbol soll „Treppe" sagen, nicht die Stufen zählen lassen. */
+const STUFE_M=0.465;
+/* Strichstaerke der Symbolzeichnungen — eine feste Groesse in METERN, nicht ein
+   Anteil des Objekts. Sonst wird die Zeichnung beim Groesserziehen fetter und beim
+   Kleinerziehen duenner; die Strichstaerke sagt aber nichts ueber das Bauteil aus,
+   sie soll nur lesbar sein. Die GEOMETRIE (Radien, Pfeilspitzen, Dusche) skaliert
+   weiter mit, die gehoert zum Bild. */
+const SYM_STRICH=0.045;
 const stufenZahl = g => Math.max(2, Math.round((g.w||0)/STUFE_M));
 /* „Umlaufend" = einmal ums Bauteil herum: beide Seiten plus die beiden Stirnflächen.
    Genau die Menge, die zählt, wenn an einer Halbwand rundum Putz abgeschlagen wird.
@@ -4029,8 +4439,16 @@ const stufenZahl = g => Math.max(2, Math.round((g.w||0)/STUFE_M));
    gesetzten) Maße statt über die Zeichnung. */
 function umlaufVon(g){
   if(!g) return 0;
+  /* Der Raum aus dem LV-Dialog zählt nur, wenn das Bauteil auch DORT liegt. `lvRoomId`
+     bleibt nach dem Schließen stehen; gegen die Wände eines fremden Raums gerechnet
+     käme sonst stillschweigend eine falsche Zahl heraus. Ohne Treffer sucht
+     `hwRaumVon` den richtigen Raum selbst. */
+  const lvR=roomById(lvRoomId);
+  const wandR=(lvR && (lvR.objects||[]).some(o=>o.id===g.id)) ? lvR : null;
   // Die Halbwand hat nur EINE freie Stirnseite — die andere steckt in der Wand
-  if(istHalbwand(g)) return hwUmlauf(g, roomById(lvRoomId));
+  if(istHalbwand(g)) return hwUmlauf(g, wandR);
+  // Der gebundene Schacht ebenso: seine Rückseite liegt in der Wandflucht
+  if(schachtGebunden(g)) return schachtUmlauf(g, wandR);
   if(g.type==='sym') return istBauteil(g) ? 2*((g.w||0)+(g.h||0)) : 0;
   if(g.type==='rect'){
     const L=objMass(g,'L'), B=objMass(g,'B');
@@ -4239,13 +4657,14 @@ function fmAttrsNachziehen(){
       if(!x || !x.lv || !fmPasst(g,m)) return;      // ohne Position bzw. falsches Werkzeug
       let a=(p.attrs||[]).find(y=>y.fmMark===m.id);
       if(!a){
-        a={id:uid(), fmMark:m.id, abschlag:p.abschlag, fotos:[]};
+        a={id:uid(), fmMark:m.id, abschlag:x.abschlag||p.abschlag, fotos:[]};
         p.attrs.push(a);
         if(!g.nr) g.nr=nextObjNr();
       }
       lebt.add(m.id);
       a.roomId=r.id; a.objId=g.id;
       a.lv=x.lv; a.kurz=x.kurz||a.kurz; a.einheit=x.einheit;
+      if(x.abschlag) a.abschlag=x.abschlag;      // AZ der Farbe gilt für ihre Messungen
       /* Nur die Masse fuellen, die diese Messung wirklich hat — die uebrigen bleiben 0.
          Eine 1 stuende sonst als „1,00 m" in der Tabelle, wo gar nichts gemessen wurde.
          Ungenutzte Masse gehen in keine Formel ein: Flaeche rechnet ueber die Seite
@@ -4301,6 +4720,13 @@ function cancelDrag(){
     d.room.points[d.idx]={...d.origA};
     d.room.points[(d.idx+1)%n]={...d.origB};
   } else if((d.kind==='objmove'||d.kind==='objh') && d.g && d.orig){
+    /* `Object.assign` überschreibt nur, es entfernt nichts. Ein Schacht, der während
+       des Zugs an der Wand eingerastet ist, behielte seine Bindung — also erst weg damit. */
+    if(istSchacht(d.g)){
+      if(d.orig.wall==null){ delete d.g.wall; delete d.g.t; }
+      if(d.orig.ecke==null) delete d.g.ecke;
+      if(d.orig.t==null)    delete d.g.t;
+    }
     Object.assign(d.g, JSON.parse(JSON.stringify(d.orig)));
   } else if((d.kind==='open'||d.kind==='openend') && d.o && d.orig){
     Object.assign(d.o, d.orig);
@@ -4484,6 +4910,11 @@ svg.addEventListener('pointerdown', e=>{
     if(g){
       const neuesObjekt = sel.objId!==g.id;
       if(neuesObjekt) sel={roomId:focusRoomId, wall:null, vertex:null, objId:g.id};
+      if(t.dataset.objdreh!==undefined){
+        // Drehgriff: gleich anfassen, ein Vorwaehlen waere hier nur ein Klick zu viel
+        drag={kind:'objdreh', room:r, g, moved:false, orig:JSON.parse(JSON.stringify(g))};
+        renderAll(); return;
+      }
       if(t.dataset.objh!==undefined){
         // Ecke/Punkt: erst anwählen, ziehen geht erst beim zweiten Anfassen
         const k=+t.dataset.objh;
@@ -4776,14 +5207,28 @@ svg.addEventListener('pointermove', e=>{
   } else if(drag.kind==='objmove'){
     const dx=mm(p.x-drag.start.x), dy=mm(p.y-drag.start.y);
     const g=drag.g, o=drag.orig;
-    if(istHalbwand(g)){
-      /* Eine Halbwand kann den Raum nicht verlassen — sie rutscht nur an IHRER Wand
-         entlang. Gerechnet wird als Projektion der Zeigerstelle auf die Wand. */
-      const geo=hwGeometrie(drag.room, g);
+    if(wandGebunden(g)){
+      /* Ein wandgebundenes Bauteil kann den Raum nicht verlassen — es rutscht nur an
+         SEINER Wand entlang. Gerechnet wird als Projektion der Zeigerstelle auf die
+         Wand. Ganz heraus geht es nur über den Knopf im Panel; ein Bauteil, das beim
+         Ziehen von allein absprünge, wäre nicht wiederzufinden.
+         **Beim Schacht führt derselbe Zug in die Ecke und wieder heraus** —
+         `schachtBinden` entscheidet das aus dem Abstand zum Wandende. */
+      if(istSchacht(g)){
+        const [A,B]=wallPoints(drag.room, g.wall), L=dist(A,B);
+        if(L>0.005){
+          const t=((p.x-A.x)*(B.x-A.x) + (p.y-A.y)*(B.y-A.y))/L;
+          const vorher=g.ecke!=null?`e${g.ecke}`:`t${g.t}`;
+          schachtBinden(drag.room, g, g.wall, t);
+          if(vorher!==(g.ecke!=null?`e${g.ecke}`:`t${g.t}`)) drag.moved=true;
+        }
+        renderCanvas(); return;
+      }
+      const geo=bauteilGeometrie(drag.room, g);
       if(geo){
         const t=(p.x-geo.A.x)*geo.ux + (p.y-geo.A.y)*geo.uy;
         g.t=mm(Math.max(geo.d/2, Math.min(geo.L-geo.d/2, t)));
-        if(Math.abs(g.t-o.t)>0.0005) drag.moved=true;
+        if(Math.abs(g.t-(o.t||0))>0.0005) drag.moved=true;
       }
       renderCanvas(); return;
     }
@@ -4791,6 +5236,18 @@ svg.addEventListener('pointermove', e=>{
     else { g.x=o.x+dx; g.y=o.y+dy; }
     bauteilRasten(g, drag.room);          // Wand, Schacht, Treppe an die Raumwand
     if(dx||dy) drag.moved=true;
+    renderCanvas();
+  } else if(drag.kind==='objdreh'){
+    /* Der Griff steht ueber der Oberkante, also zeigt er bei 0° nach oben — daher die
+       90 Grad Zuschlag. Gerastet wird auf 5°, und rechte Winkel ziehen an: die trifft
+       man auf dem Tablett sonst nie genau. */
+    const g=drag.g, c={x:g.x+g.w/2, y:g.y+g.h/2};
+    let a=Math.atan2(p.y-c.y, p.x-c.x)*180/Math.PI + 90;
+    a=Math.round(a/5)*5;
+    const nah=Math.round(a/90)*90;
+    if(Math.abs(a-nah)<=5) a=nah;
+    g.rot=((a%360)+360)%360;
+    drag.moved=true;
     renderCanvas();
   } else if(drag.kind==='objh'){
     const g=drag.g;
@@ -4810,23 +5267,75 @@ svg.addEventListener('pointermove', e=>{
       }
       renderCanvas(); return;
     }
+    /* Der gebundene Schacht wird in SEINEM System gezogen — an der Wand entlang und in
+       den Raum hinein, in der Ecke entlang der beiden Wände. Die Kante, die in einer
+       Wand steckt, bleibt dabei liegen; sie gehört der Wand, nicht dem Griff. */
+    if(schachtGebunden(g)){
+      const geo=schachtGeometrie(drag.room, g);
+      if(geo && geo.art==='wand'){
+        const a=(q.x-geo.A.x)*geo.ux + (q.y-geo.A.y)*geo.uy;    // längs der Wand
+        const e=(q.x-geo.A.x)*geo.nx + (q.y-geo.A.y)*geo.ny;    // in den Raum
+        // Die gegenüberliegende Kante bleibt stehen — wie bei jedem Eckgriff
+        const aFest=(drag.h===0||drag.h===1) ? geo.t0+geo.w : geo.t0;
+        let aNeu=Math.max(0, Math.min(geo.L, a));
+        /* Am Wandende einrasten. Ohne das bliebe dort ein Streifen Wand von wenigen
+           Millimetern stehen — auf dem Tablett trifft man ein Wandende nie genau. */
+        if(aNeu <= SCHACHT_FUGE) aNeu=0;
+        if(aNeu >= geo.L-SCHACHT_FUGE) aNeu=geo.L;
+        g.w=mm(Math.max(SCHACHT_MIN, Math.abs(aNeu-aFest)));
+        g.t=mm(Math.min(aNeu, aFest)+g.w/2);
+        if(drag.h===1||drag.h===2) g.h=mm(Math.max(SCHACHT_MIN, e));
+        /* Bewusst KEIN `schachtBinden` hier: das würde beim Breiterziehen bis ans
+           Wandende mitten im Zug in die Ecke umschalten — und dort zählen die Griffe
+           anders. In die Ecke geht es durch Schieben, nicht durch Ziehen an der Ecke. */
+        schachtLage(drag.room, g);
+        drag.moved=true;
+      } else if(geo){
+        /* In der Ecke: die Zeigerstelle in das schiefwinklige System der beiden Wände
+           auflösen (2×2), damit es auch bei einer Ecke ungleich 90° stimmt. */
+        const dx=q.x-geo.P.x, dy=q.y-geo.P.y;
+        const det=geo.v1.x*geo.v2.y-geo.v1.y*geo.v2.x;
+        if(Math.abs(det)>1e-9){
+          const a1=(dx*geo.v2.y-dy*geo.v2.x)/det;   // an Wand `ecke-1`
+          const a2=(geo.v1.x*dy-geo.v1.y*dx)/det;   // an Wand `ecke`
+          const setz=(anWand1, wert)=>{
+            const feld = (geo.breiteAn1===anWand1) ? 'w' : 'h';
+            g[feld]=mm(Math.max(SCHACHT_MIN, wert));
+          };
+          if(drag.h===1||drag.h===2) setz(true,  a1);
+          if(drag.h===2||drag.h===3) setz(false, a2);
+          schachtLage(drag.room, g);
+          drag.moved=true;
+        }
+      }
+      renderCanvas(); return;
+    }
     if(g.type==='rect'){
       const corners=[[g.x,g.y],[g.x+g.w,g.y],[g.x+g.w,g.y+g.h],[g.x,g.y+g.h]];
       const opp=corners[(drag.h+2)%4];
       g.x=Math.min(q.x,opp[0]); g.y=Math.min(q.y,opp[1]);
       g.w=Math.max(0.05,Math.abs(q.x-opp[0])); g.h=Math.max(0.05,Math.abs(q.y-opp[1]));
     } else if(g.type==='sym'){
-      // Symbol: im sichtbaren (ggf. gedrehten) Umriss resizen, dann auf w/h zurückrechnen
-      const rot=(g.rot||0)%180;
+      /* Bei freier Drehung wird im EIGENEN System des Symbols gerechnet: Zeigerstelle
+         zurueckdrehen, dort ganz normal am Rechteck ziehen, danach die Mitte so
+         nachschieben, dass die gegenueberliegende Ecke im Plan stehen bleibt. Ohne
+         diese Korrektur wandert das Symbol beim Ziehen davon, weil sich die Mitte
+         verschiebt und die Drehung um sie herum stattfindet. */
+      const a=(g.rot||0)*Math.PI/180, ca=Math.cos(a), sa=Math.sin(a);
       const c={x:g.x+g.w/2, y:g.y+g.h/2};
-      const W=rot?g.h:g.w, H=rot?g.w:g.h;
-      const vx=c.x-W/2, vy=c.y-H/2;
-      const corners=[[vx,vy],[vx+W,vy],[vx+W,vy+H],[vx,vy+H]];
-      const opp=corners[(drag.h+2)%4];
-      const nvx=Math.min(q.x,opp[0]), nvy=Math.min(q.y,opp[1]);
-      const nW=Math.max(0.2,Math.abs(q.x-opp[0])), nH=Math.max(0.2,Math.abs(q.y-opp[1]));
-      g.w=rot?nH:nW; g.h=rot?nW:nH;
-      g.x=nvx+nW/2-g.w/2; g.y=nvy+nH/2-g.h/2;
+      const zurueck=(pt)=>{ const dx=pt.x-c.x, dy=pt.y-c.y;
+        return {x:c.x+dx*ca+dy*sa, y:c.y-dx*sa+dy*ca}; };
+      const vor=(pt, mitte)=>{ const dx=pt.x-mitte.x, dy=pt.y-mitte.y;
+        return {x:mitte.x+dx*ca-dy*sa, y:mitte.y+dx*sa+dy*ca}; };
+      const ql=zurueck(q);
+      const ecken=[[g.x,g.y],[g.x+g.w,g.y],[g.x+g.w,g.y+g.h],[g.x,g.y+g.h]];
+      const opp=ecken[(drag.h+2)%4];
+      const oppWelt=vor({x:opp[0], y:opp[1]}, c);        // steht im Plan fest
+      g.x=Math.min(ql.x,opp[0]); g.y=Math.min(ql.y,opp[1]);
+      g.w=Math.max(0.2,Math.abs(ql.x-opp[0])); g.h=Math.max(0.2,Math.abs(ql.y-opp[1]));
+      const c2={x:g.x+g.w/2, y:g.y+g.h/2};
+      const oppNeu=vor({x:opp[0], y:opp[1]}, c2);
+      g.x+=oppWelt.x-oppNeu.x; g.y+=oppWelt.y-oppNeu.y;
     } else {
       const k=drag.h, pts=g.points;
       const fix=pts[k-1]||pts[k+1];
@@ -4952,7 +5461,7 @@ svg.addEventListener('pointerup', e=>{
       mode='select'; drag=null; renderAll(); updateDrawHint(); return;
     }
     let refocused=false;
-    if(drag && drag.moved && (drag.kind==='objmove'||drag.kind==='objh')){
+    if(drag && drag.moved && (drag.kind==='objmove'||drag.kind==='objh'||drag.kind==='objdreh')){
       // In einen anderen Raum geschoben? Dann dort einsortieren und dorthin wechseln
       const moved=reassignObjectRoom(drag.room, drag.g);
       if(moved){ focusRoomId=moved.id; sel={roomId:moved.id, wall:null, vertex:null, objId:drag.g.id}; refocused=true; }
@@ -4982,7 +5491,7 @@ svg.addEventListener('pointerup', e=>{
     if(drag && drag.moved && drag.kind==='vertex' && lockPruefen(drag.room, drag.lockSnap)){
       drag=null; renderAll(); return;      // zurückgesetzt: nichts speichern, Plan neu zeichnen
     }
-    if(drag && drag.moved && (drag.kind==='room'||drag.kind==='vertex'||drag.kind==='wall'||drag.kind==='open'||drag.kind==='openend'||drag.kind==='objmove'||drag.kind==='objh')){
+    if(drag && drag.moved && (drag.kind==='room'||drag.kind==='vertex'||drag.kind==='wall'||drag.kind==='open'||drag.kind==='openend'||drag.kind==='objmove'||drag.kind==='objh'||drag.kind==='objdreh')){
       syncSharedDoors(); save();
       drag=null; renderAll();    // erst loslassen, dann zeichnen — sonst bliebe der
       if(refocused) zoomFit();   // Winkelbogen der gezogenen Ecke stehen
@@ -5234,7 +5743,7 @@ function placeOpening(r, wallIdx, type, tWunsch){
    nach dem ersten Einrasten für immer an der Wand kleben. */
 const RAST_M=0.30;                       // so nah muss der Rücken an die Wand
 function bauteilRasten(g, r){
-  if(!istBauteil(g) || !magnetAn() || !r || !r.points) return;
+  if(!rastetEin(g) || !magnetAn() || !r || !r.points) return;
   const c={x:g.x+g.w/2, y:g.y+g.h/2};
   let best=null;
   r.points.forEach((_,i)=>{
@@ -5243,34 +5752,163 @@ function bauteilRasten(g, r){
     if(L<0.01) return;
     const t=Math.max(0, Math.min(1, ((c.x-p1.x)*vx+(c.y-p1.y)*vy)/(L*L)));
     const q={x:p1.x+vx*t, y:p1.y+vy*t}, d=Math.hypot(c.x-q.x, c.y-q.y);
-    if(!best || d<best.d) best={d, q, ux:vx/L, uy:vy/L};
+    if(!best || d<best.d) best={d, q, ux:vx/L, uy:vy/L, i, p1, L, t:t*L};
   });
   // Der RÜCKEN zählt, nicht die Mitte — sonst rastete ein tiefes Bauteil nie ein
   if(!best || best.d-g.h/2 > RAST_M) return;
   // Drehung: Längsachse in die Wandrichtung, auf 90° gerundet
   const grad=Math.atan2(best.uy, best.ux)*180/Math.PI;
   g.rot=((Math.round(grad/90)*90)%360+360)%360;
+  /* Zweite Stufe: liegt auf DIESER Wand eine Tür oder ein Fenster in Reichweite,
+     setzt sich das Symbol mittig davor. Eine Schleuse gehört an den Durchgang, und
+     sie von Hand auf den Zentimeter zu treffen ist auf dem Tablett aussichtslos.
+     Die Wand hat schon eingerastet — hier wird nur noch entlang geschoben. */
+  let t=best.t;
+  let nah=null;
+  // Nur die Geräte (Schleuse, RFA) suchen den Durchgang. Ein BAUTEIL — Schacht, Treppe —
+  // hat vor einer Tür nichts verloren; der gebundene Schacht würde sie sogar zumauern.
+  if(!istBauteil(g)) (r.openings||[]).forEach(o=>{
+    if(o.wall!==best.i) return;
+    const m=(o.offset||0)+(o.width||0)/2;             // Mitte der Öffnung ab Wandanfang
+    const d=Math.abs(m-best.t);
+    /* Fester Fangbereich um die MITTE, nicht um die ganze Oeffnung: sonst reisst ein
+       breites Fassadenfenster die komplette Wand an sich und daneben laesst sich
+       nichts mehr abstellen. */
+    if(d<=RAST_M*1.5 && (!nah || d<nah.d)) nah={d, m};
+  });
+  if(nah) t=nah.m;
+  const q={x:best.p1.x+best.ux*t, y:best.p1.y+best.uy*t};
   // Lage: Mitte um die halbe Tiefe von der Wand weg, auf die Seite, wo das Bauteil liegt
   const nx=-best.uy, ny=best.ux;
-  const s=Math.sign((c.x-best.q.x)*nx+(c.y-best.q.y)*ny) || 1;
-  g.x=mm(best.q.x + nx*s*g.h/2 - g.w/2);
-  g.y=mm(best.q.y + ny*s*g.h/2 - g.h/2);
+  const sg=Math.sign((c.x-best.q.x)*nx+(c.y-best.q.y)*ny) || 1;
+  g.x=mm(q.x + nx*sg*g.h/2 - g.w/2);
+  g.y=mm(q.y + ny*sg*g.h/2 - g.h/2);
+  /* Der Schacht rastet nicht nur ein, er BINDET sich: ab jetzt legt sich die
+     Innenkontur um ihn herum (`innenPolygon`), er ist Mauerwerk. Passt er nicht auf die
+     Wand, bleibt er das freie Symbol — eine Bindung, die den Umriss zerreißt, wäre
+     schlimmer als keine. */
+  if(istSchacht(g)) schachtBinden(r, g, best.i, t);
 }
-/* Halbwände zum Anfassen: eine unsichtbare Fläche über dem Vorsprung. Gezeichnet ist
-   er schon als Teil des Mauerwerks — hier geht es nur um Treffer und Auswahl. */
+/* ---------- Bindung des Schachts setzen (seit 2026-08-07) ----------
+   Eine Stelle für alle Wege: Einrasten beim Ziehen, Ziehen an der Wand entlang und der
+   Knopf im Panel. Sie entscheidet auch, ob es die WAND oder die ECKE wird — kommt der
+   Schacht dem Wandende nahe genug, legt er sich an BEIDE Wände.
+
+   `g.wall` bleibt in der Ecke gesetzt und sagt, an welcher der beiden Wände die Breite
+   liegt. Ohne das müssten beim Einrasten Breite und Tiefe tauschen, und die Zahlen im
+   Panel sprängen um, ohne dass sich der Kasten bewegt hat. */
+const ECK_RAST=0.20;                     // so nah ans Wandende, dann ist es die Ecke
+/* Rest, der noch als Wand stehen bleiben darf. Alles darunter wird geschluckt: ein
+   Streifen von zwei Zentimetern neben einem Schacht ist keine Wand, sondern ein Fehler
+   beim Eintippen — und von Hand trifft man eine Wandlänge wie 6,274 m ohnehin nie. */
+const SCHACHT_FUGE=0.05;
+function schachtBinden(r, g, wall, tRoh){
+  const n=r.points.length;
+  if(!(wall>=0 && wall<n)) return false;
+  const [a,b]=wallPoints(r, wall), L=dist(a,b);
+  if(L < SCHACHT_MIN+0.01) return false;             // auf so eine Wand passt gar nichts
+  /* Breiter als die Wand geht nicht — er wird dann auf sie gestutzt und dockt an beiden
+     Ecken an. Früher war das ein Grund, die Bindung ganz abzulehnen; seit es die
+     Zwei-Ecken-Lage gibt, ist es der Normalfall am kurzen Wandstück.
+     **Fast so breit zählt als ganz** (`SCHACHT_FUGE`), sonst bleibt an einem Ende ein
+     Streifen Wand stehen, den niemand gewollt hat. */
+  if(g.w >= L-SCHACHT_FUGE){ g.w=mm(L); }
+  const w=Math.max(SCHACHT_MIN, g.w||0.8), h=Math.max(SCHACHT_MIN, g.h||0.6);
+  const t=Number.isFinite(tRoh) ? tRoh : L/2;
+  /* In die Ecke nur, wenn die NACHBARWAND die Tiefe auch trägt — sonst stünde der
+     Schacht über sie hinaus und der Umriss risse auf. Dann bleibt es bei der Wand. */
+  const eckOk = c => {
+    const andere=(c===wall) ? (c-1+n)%n : c;
+    const [p,q]=wallPoints(r, andere);
+    return dist(p,q) > h+0.01;
+  };
+  const nahA = t-w/2 <= ECK_RAST, nahB = t+w/2 >= L-ECK_RAST;
+  /* Reicht der Schacht an BEIDE Enden, füllt er die Wand aus und dockt an beiden Ecken
+     an. **Diese Frage muss VOR der nach der einen Ecke stehen** — sonst gewinnt der
+     Zweig für die eine Ecke, und am anderen Ende bleibt ein Streifen Wand übrig.
+     Die Geometrie fällt dann von selbst richtig heraus: die beiden Fußpunkte landen
+     genau auf den Eckpunkten, und `schachtGeometrie` legt die Flanken in die
+     Nachbarwände. */
+  if(w >= L-0.001 || (nahA && nahB)){
+    g.wall=wall; delete g.ecke; g.w=mm(L); g.t=mm(L/2);
+  } else if(nahA && eckOk(wall)){
+    g.wall=wall; g.ecke=wall; delete g.t;
+  } else if(nahB && eckOk((wall+1)%n)){
+    g.wall=wall; g.ecke=(wall+1)%n; delete g.t;
+  } else {
+    g.wall=wall; delete g.ecke;
+    g.t=mm(Math.max(w/2, Math.min(L-w/2, t)));
+  }
+  schachtLage(r, g);
+  return true;
+}
+// Losbinden: zurück zum freien Symbol, die Lage bleibt, wo sie war
+function schachtLoesen(g){ delete g.wall; delete g.ecke; delete g.t; }
+/* Nach einer geänderten Breite oder Tiefe die Bindung nachziehen.
+
+   **Getippt ist nicht gezogen.** `schachtBinden` rastet großzügig ein (`ECK_RAST`,
+   20 cm) — richtig beim Ziehen, wo man das Wandende auf dem Tablett nie genau trifft.
+   Eine eingegebene Zahl dagegen ist gemeint: wer 6,07 auf eine 6,27-Wand schreibt, will
+   an jedem Ende zehn Zentimeter Wand behalten, nicht die ganze Wand. Darum geht dieser
+   Weg NICHT über `schachtBinden`, sondern schluckt nur den unbaubaren Rest
+   (`SCHACHT_FUGE`, 5 cm).
+
+   Nötig ist die Funktion trotzdem: die Breite bestimmt mit, ob es die eine Ecke oder
+   beide werden. Wer nur `schachtLage` aufruft, lässt den Schacht in der Ecke stehen und
+   an ihr vorbeiwachsen — genau das ging am 7.8.2026 schief. */
+function schachtMassAnpassen(r, g){
+  if(!schachtGebunden(g)) return;
+  const [a,b]=wallPoints(r, g.wall);
+  if(!a || !b) return;
+  const L=dist(a,b);
+  if(g.w >= L-SCHACHT_FUGE){
+    // Fast so breit wie die Wand zählt als ganz → er dockt an beiden Ecken an
+    g.w=mm(L); delete g.ecke; g.t=mm(L/2);
+  } else if(g.ecke==null){
+    // An der Wand bleibt die Lage, wo sie ist — nur der Abstand wird in die Wand geführt
+    const w=Math.max(SCHACHT_MIN, g.w||0.8);
+    g.t=mm(Math.max(w/2, Math.min(L-w/2, g.t!=null?g.t:L/2)));
+  }
+  // In der Ecke gibt es nichts nachzuführen: dort hält ihn der Eckpunkt.
+  schachtLage(r, g);
+}
+// Nächstgelegene Wand des Raums zum Mittelpunkt eines Objekts — ohne Magnet und ohne Grenze
+function naechsteWand(r, c){
+  let best=null;
+  (r&&r.points||[]).forEach((_,i)=>{
+    const [p1,p2]=wallPoints(r,i);
+    const vx=p2.x-p1.x, vy=p2.y-p1.y, L=Math.hypot(vx,vy);
+    if(L<0.01) return;
+    const t=Math.max(0, Math.min(1, ((c.x-p1.x)*vx+(c.y-p1.y)*vy)/(L*L)));
+    const q={x:p1.x+vx*t, y:p1.y+vy*t}, d=Math.hypot(c.x-q.x, c.y-q.y);
+    if(!best || d<best.d) best={d, i, t:t*L};
+  });
+  return best;
+}
+/* Wandgebundene Bauteile zum Anfassen: eine unsichtbare Fläche über dem Umriss.
+   Gezeichnet sind sie schon als Teil des Mauerwerks — hier geht es nur um Treffer und
+   Auswahl. Seit 2026-08-07 laufen auch die gebundenen Schächte hierüber. */
 function hwMarks(r, lbl, aktiv){
-  return halbwaende(r).map(g=>{
-    const geo=hwGeometrie(r,g); if(!geo) return '';
-    const d=geo.ecken.map((p,i)=>(i?'L':'M')+p.x+' '+p.y).join(' ')+' Z';
+  return wandBauteile(r).map(g=>{
+    const geo=bauteilGeometrie(r,g); if(!geo) return '';
+    /* Die Trefferfläche ist der GANZE Umriss. Bei der Halbwand ist `ecken` genau das;
+       beim Schacht ist `ecken` der (verkürzte) Umweg für die Innenkontur — dort liegt
+       der volle Umriss in `aussen`, sonst bliebe von einem Schacht über die ganze Wand
+       eine Linie aus zwei Punkten übrig. */
+    const umriss=geo.aussen || geo.ecken;
+    const d=umriss.map((p,i)=>(i?'L':'M')+p.x+' '+p.y).join(' ')+' Z';
     const an=sel.objId===g.id;
-    let out=`<path d="${d}" fill="${an?'#2f6fed':'transparent'}" fill-opacity="${an?0.25:1}"
+    /* Beim Schacht liegt die Trefferfläche über der WAND, nicht über dem Hohlraum —
+       ein Tipp mitten in die Öffnung soll den Schacht trotzdem greifen, darum trotzdem
+       der ganze Umriss; nur die blaue Füllung der Auswahl wäre über dem Weiß störend. */
+    let out=`<path d="${d}" fill="${an?'#2f6fed':'transparent'}" fill-opacity="${an?(istSchacht(g)?0.14:0.25):1}"
       stroke="${an?'#2f6fed':'none'}" stroke-width="${an?lbl*0.12:0}"
       ${aktiv?`data-obj="${g.id}" style="cursor:move"`:'style="pointer-events:none"'}/>`;
     /* Ein Griff auf JEDER Ecke der Mittellinie — der Fußpunkt an der Wand bleibt aus:
        er sitzt auf der Wand und wird über „Abstand" bzw. durch Ziehen der ganzen
        Halbwand bewegt. Bedienung wie bei Raumecken: erst antippen (Ring geht auf),
        dann ziehen. */
-    if(an && aktiv) geo.mitten.forEach((q,k)=>{
+    if(an && aktiv && geo.mitten) geo.mitten.forEach((q,k)=>{
       if(!k) return;
       const gewaehlt = sel.objH===k-1;
       const hs=lbl*(gewaehlt?0.45:0.35), tr=lbl*(gewaehlt?2.6:1.2);
@@ -5280,6 +5918,22 @@ function hwMarks(r, lbl, aktiv){
         data-obj="${g.id}" data-objh="${k-1}" style="cursor:move"/>`;
       out+=`<circle cx="${q.x}" cy="${q.y}" r="${tr}" fill="transparent"
         data-obj="${g.id}" data-objh="${k-1}" style="cursor:move"/>`;
+    });
+    /* Der Schacht wird über seine ECKEN in Form gezogen — auch gebunden, wie jedes andere
+       Objekt. Die Ecken, die IN einer Wand sitzen, bekommen keinen Griff: sie liegen in
+       der Flucht und werden über „Abstand" bzw. das Ziehen des ganzen Schachts bewegt.
+       An der Wand ist das eine (der Fußpunkt zählt doppelt, darum beide Wandecken), in
+       der Ecke nur der Raumeckpunkt selbst. */
+    if(an && aktiv && istSchacht(g)) geo.aussen.forEach((q,k)=>{
+      if(geo.art==='ecke' && k===0) return;           // das ist die Raumecke
+      const gewaehlt = sel.objH===k;
+      const hs=lbl*(gewaehlt?0.45:0.35), tr=lbl*(gewaehlt?2.6:1.2);
+      if(gewaehlt) out+=`<circle cx="${q.x}" cy="${q.y}" r="${tr}" fill="url(#ziehzone)" style="pointer-events:none"/>`;
+      out+=`<rect x="${q.x-hs}" y="${q.y-hs}" width="${2*hs}" height="${2*hs}"
+        fill="${gewaehlt?'#2f6fed':'#fff'}" stroke="#2f6fed" stroke-width="${lbl*0.08}"
+        data-obj="${g.id}" data-objh="${k}" style="cursor:nwse-resize"/>`;
+      out+=`<circle cx="${q.x}" cy="${q.y}" r="${tr}" fill="transparent"
+        data-obj="${g.id}" data-objh="${k}" style="cursor:nwse-resize"/>`;
     });
     if(g.nr) out+=objBadge(g, geo.mitte.x, geo.mitte.y, lbl, aktiv);
     return out;
@@ -5475,15 +6129,27 @@ function lockPruefen(r, abbild){
 /* ---------- Ecken einfügen/löschen ----------
    Wandindizes werden von Öffnungen, LV-Positionen, Wandnummern und -fotos referenziert.
    Beim Einfügen/Löschen einer Ecke müssen die alle mitwandern. */
-function wandRefsUmschreiben(r, mapFn){
+/* `eckFn` bildet ECKINDIZES ab, nicht Wandindizes — daran hängt der Eckschacht. Beim
+   Einfügen ist es dieselbe Abbildung wie für die Wände (alles hinter der Stelle rutscht
+   um eins), beim LÖSCHEN nicht: dort verschwindet ein Punkt, und für den Schacht in
+   genau dieser Ecke gibt es keinen Ersatz — er fällt zurück an seine Wand.
+   Fehlt `eckFn`, gilt `mapFn` auch für die Ecken. */
+function wandRefsUmschreiben(r, mapFn, eckFn){
   const p=proj();
   (p.attrs||[]).forEach(a=>{
     if(a.roomId!==r.id || a.wall==null) return;
     const n=mapFn(a.wall);
     if(n==null) delete a.wall; else a.wall=n;
   });
-  // Halbwände hängen an einem Wandindex wie eine Öffnung — der muss mitwandern
-  halbwaende(r).forEach(g=>{
+  /* Halbwände und gebundene Schächte hängen an einem Wandindex wie eine Öffnung — der
+     muss mitwandern, sonst sitzt das Bauteil nach dem Einfügen oder Löschen einer Ecke
+     auf der falschen Wand. Fällt die Wand ganz weg, verliert der Schacht seine Bindung
+     und steht wieder frei im Raum. */
+  wandBauteile(r).forEach(g=>{
+    if(g.ecke!=null){
+      const e=(eckFn||mapFn)(g.ecke);
+      if(e==null) delete g.ecke; else g.ecke=e;
+    }
     const n=mapFn(g.wall);
     if(n==null) g.wall=null; else g.wall=n;
   });
@@ -5721,7 +6387,8 @@ function eckeLoeschen(r, i){
     if(o.wall===i) o.offset=mm(o.offset+lenVor);  // Maß ab dem neuen Wandanfang
     o.wall=map(o.wall);
   });
-  wandRefsUmschreiben(r, map);
+  // Ecke i verschwindet — ein Schacht, der genau dort saß, fällt an seine Wand zurück
+  wandRefsUmschreiben(r, map, c => c===i ? null : (c>i ? c-1 : c));
   r.points.splice(i,1);
   return true;
 }
@@ -6048,10 +6715,12 @@ function panelObjekt(p, selObj){
       /* `btns` ist die alte Knopfzeile INNERHALB des Panels. Sie steht nur noch dem
          Fotoaufmaß zur Verfügung, das getrennt umgebaut wird; alle anderen Objektarten
          hängen `aktionen` als eigene Karte an — Reihenfolge wie überall sonst. */
+      /* Nur noch das Fotoaufmass benutzt diese Zeile — und dort gibt es KEINE einzelne
+         LV-Position: seine Zuordnungen entstehen aus den fuenf Farbfeldern, eine von
+         Hand angehaengte haette daneben gestanden und waere nie gefuellt worden. */
       const btns=`<div class="row">
-          <button class="btn green small" id="objlv">＋ LV-Position</button>
-          <button class="btn small" id="objdup">Duplizieren</button>
-          <button class="btn danger small" id="objdel">Entfernen</button>
+          <button class="btn small" id="objdup" style="flex:1">Duplizieren</button>
+          <button class="btn danger small" id="objdel" style="flex:1">Entfernen</button>
         </div>`;
       /* `mitLv=false` für Bauteile ohne Zuordnung (Treppe): Duplizieren und Löschen
          bleiben, nur die LV-Position fällt weg. */
@@ -6111,25 +6780,41 @@ function panelObjekt(p, selObj){
           ${aktionen}`;
       } else if(istFotoMass(selObj)){
         const sl=fmSlots(selObj), fo=selObj.fotos||[];
-        html+=`<div class="panel"><h3>Fotoaufmaß${nrTxt} — noch im alten Aufbau</h3>
+        /* Fuenf Felder, eins je Farbe. Das Feld IST der Knopf: hineintippen oeffnet
+           denselben Positionswaehler wie ueberall sonst — vorher stand hier ein
+           Texteingabefeld mit eigener Vorschlagsliste, also eine zweite Art, dieselbe
+           Position zu suchen. Darunter je Zeile das Werkzeug und der Abschlag. */
+        html+=`<div class="panel"><h3>Fotoaufmaß${nrTxt}</h3>
           <div class="row"><label>Name</label><input type="text" id="objname" value="${esc(selObj.name||'')}"></div>
           <p class="hint">Fünf Farben, fünf LV-Positionen. Auf dem Foto wird je nach Einheit ein
             <b>Rechteck</b> (Fläche), eine <b>Linie</b> (Länge) oder ein <b>Kreuz</b> (Stück) gesetzt —
             die Maße tippst du ein, die Zeichnung zeigt nur, wo gemessen wurde.</p>
-          ${sl.map((x,i)=>`<div class="row" style="align-items:center">
-            <span style="flex:0 0 auto; width:16px; height:16px; border-radius:4px; background:${x.farbe}; border:1px solid rgba(0,0,0,.2)"></span>
-            <span class="sugwrap"><input type="text" class="fmlv" data-i="${i}" autocomplete="off"
-              value="${esc(x.lv||'')}" placeholder="LV Position" style="flex:1; min-width:76px; border:1px solid var(--line); border-radius:6px; padding:4px 6px"><div class="sugbox breit" id="fmsug${i}"></div></span>
-            <select class="fmeinheit" data-i="${i}" style="flex:0 0 auto">
+          ${sl.map((x,i)=>`
+          <button type="button" class="fmfeld" data-fmwahl="${i}"
+            style="border-color:${x.farbe}; background:${x.farbe}14"
+            title="${x.lv?'Andere LV-Position wählen':'LV-Position wählen'}">
+            <span class="oben">
+              <span class="punkt" style="background:${x.farbe}"></span>
+              <span class="txt${x.lv?'':' leer'}">${x.lv ? esc(x.kurz||x.lv) : '— keine Position —'}</span>
+              <span class="summe">${x.lv ? fmt(fmSumme(selObj,i),2)+' '+(EINH_SYM[x.einheit]||'') : ''}</span>
+            </span>
+            <span class="unten">${x.lv
+              ? `${esc(x.lv)} · ${fmAnzahl(selObj,i)} Eintrag/Einträge`
+              : 'zum Wählen antippen'}</span>
+          </button>
+          <div class="fmzeile">
+            <label>Werkzeug</label>
+            <select class="fmeinheit" data-i="${i}">
               ${Object.keys(FM_WERKZEUG).map(e=>`<option value="${e}" ${x.einheit===e?'selected':''}>${einhTxt(e)}</option>`).join('')}
             </select>
-            <b style="flex:0 0 auto; min-width:72px; text-align:right">${
-              x.lv ? fmt(fmSumme(selObj,i),2)+' '+(EINH_SYM[x.einheit]||'') : '—'}</b>
-          </div>
-          ${x.lv?`<div class="row" style="margin-top:-2px"><label></label>
-            <input type="text" class="fmkurz" data-i="${i}" value="${esc(x.kurz||'')}" placeholder="Kurztext"
-              style="flex:1; border:1px solid var(--line); border-radius:6px; padding:3px 6px; font-size:12px">
-            <span class="hint" style="flex:0 0 auto">${fmAnzahl(selObj,i)} Einträge</span></div>`:''}`).join('')}
+            <label style="margin-left:6px">AZ</label>
+            <input type="number" min="1" step="1" class="fmaz" data-i="${i}"
+              value="${x.abschlag||p.abschlag}" style="width:58px"
+              title="Abschlag, unter dem die Messungen dieser Farbe abgerechnet werden">
+            ${x.lv?`<span style="flex:1"></span>
+              <button class="btn small danger fmleer" data-i="${i}"
+                title="Position von dieser Farbe lösen — die Messungen im Foto bleiben">✕</button>`:''}
+          </div>`).join('')}
           ${btns}
           </div>
         <div class="panel"><h3>Fotos (${fo.length} von ${FM_MAX_FOTOS})</h3>
@@ -6171,17 +6856,62 @@ function panelObjekt(p, selObj){
       } else if(selObj.type==='sym'){
         const def=SYMDEFS[selObj.sub]||{};
         const [labL, labB]=def.masse || ['Breite','Tiefe'];
+        /* Der Schacht braucht seinen Raum — die Wand, an der er hängt, steht dort.
+           `panelObjekt` bekommt ihn nicht durchgereicht, also derselbe Weg wie bei der
+           Halbwand. */
+        const schR = istSchacht(selObj) ? (roomById(selObj.roomId) || roomById(focusRoomId)
+          || (p.rooms||[]).find(x=>(x.objects||[]).some(o=>o.id===selObj.id))) : null;
+        const gebunden = schachtGebunden(selObj);
+        const inEcke   = schachtInEcke(selObj);
+        const schGeo = gebunden && schR ? schachtGeometrie(schR, selObj) : null;
+        const schS = schachtDicke(selObj);
+        // In der Ecke hängt er an zwei Wänden — beide nennen, sonst rät man
+        const eckWaende = inEcke && schR
+          ? `Wand ${((selObj.ecke-1+schR.points.length)%schR.points.length)+1} und ${selObj.ecke+1}`
+          : '';
         html+=`<div class="panel"><h3>${esc(def.label||'Symbol')}${nrTxt}</h3>
           <div class="row"><label>Name</label><input type="text" id="objname" value="${esc(selObj.name||'')}"></div>
           <div class="row"><label>${esc(labL)} (m)</label><input class="laser objdim" data-f="w" value="${fmt(selObj.w,3)}"></div>
           <div class="row"><label>${esc(labB)} (m)</label><input class="laser objdim" data-f="h" value="${fmt(selObj.h,3)}"></div>
+          ${istSchacht(selObj)?`<div class="row"><label>Stärke (m)</label>
+            <input class="laser schachtfld" data-f="dicke" value="${fmt(schS,3)}">
+            ${gebunden?`<button class="btn small" id="schachtdickewand"
+              title="Stärke der Wand übernehmen, an der er hängt"
+              >${ico('nachbar')}${wandDicke(schR, selObj.wall)?fmt(wandDicke(schR, selObj.wall),3):'Wand'}</button>`:''}</div>
+          <div class="row"><label></label><input id="schachtdickereg" type="range" min="4" max="50" step="0.5"
+            value="${Math.max(4, Math.min(50, schS*100))}" style="flex:1"
+            title="Stärke der Schachtwand, stufenlos von 0,04 bis 0,50 m"></div>`:''}
+          ${(gebunden && !inEcke)?`<div class="row"><label>Abstand (m)</label>
+            <input class="laser schachtfld" data-f="t" value="${fmt(selObj.t,3)}"></div>`:''}
           ${selObj.sub==='treppe'?`<div class="stat"><span>Stufen</span><b>${stufenZahl(selObj)}</b></div>`:''}
+          ${gebunden?`<div class="stat"><span>sitzt ${inEcke?'in':'auf'}</span><b>${inEcke
+            ? `Ecke ${selObj.ecke+1} (${eckWaende})`
+            : `Wand ${selObj.wall+1}${schGeo?` (${fmt(schGeo.L,3)} m)`:''}${
+                (schGeo&&schGeo.ganzeWand)?' — an beiden Ecken':''}`}</b></div>`:''}
+          ${(istSchacht(selObj)&&schGeo)?`<div class="stat"><span>lichte Öffnung</span><b>${
+            schGeo.innen ? `${fmt(Math.max(0,schGeo.offW),3)} × ${fmt(Math.max(0,schGeo.offH),3)} m`
+                         : 'keine — die Wände stoßen zusammen'}</b></div>`:''}
           <!-- Der Umlauf steht nur da, wo er auch abgerechnet werden kann. An der
                Treppe wäre er eine Zahl ohne Verwendung. -->
           ${(!ohneLvObjekt(selObj)&&umlaufVon(selObj))?`<div class="stat"><span>Umlaufend</span><b>${fmt(umlaufVon(selObj),3)} m</b></div>`:''}
-          <div class="stat"><span>Drehung</span><b>${selObj.rot||0}°</b></div>
-          <div class="row"><button class="btn small" id="objrot" style="flex:1">${ico('drehen')}Drehen 90°</button></div>
-          <p class="hint">${istBauteil(selObj)
+          ${gebunden?'':`<div class="row"><label>Drehung (°)</label>
+            <input type="number" min="0" max="359" step="5" id="objgrad" value="${Math.round(selObj.rot||0)}" style="width:80px">
+            <button class="btn small" id="objrot" style="flex:1">${ico('drehen')}+90°</button></div>
+          <p class="hint">Im Plan lässt sich das Symbol am <b>Griff über der Oberkante</b> frei
+            drehen — er rastet auf 5°, rechte Winkel ziehen an.</p>`}
+          ${istSchacht(selObj)?`<div class="row">
+            <button class="btn small ${gebunden?'auf':'zu'}" id="schachtwand" style="flex:1"
+              title="${gebunden
+                ? 'Der Schacht ist Mauerwerk — lösen macht ihn wieder zum freien Symbol'
+                : 'Der Schacht setzt sich an die nächste Wand und wird dort zu Mauerwerk'}"
+              >${ico('kette')}${gebunden
+                ? `${inEcke?`In Ecke ${selObj.ecke+1}`:`In Wand ${selObj.wall+1}`} · lösen`
+                : 'Frei im Raum · an die Wand'}</button></div>`:''}
+          <p class="hint">${gebunden
+            ? `Er gehört zum Mauerwerk: die Grundfläche schrumpft um seine ganze Grundform, der Umfang wächst um die freien Seiten. Innen ist er <b>hohl</b> — die Stärke oben ist die seiner eigenen Wand; zur Raumwand hin baut er keine, dort ist schon eine. <b>Ziehen schiebt ihn an der Wand entlang</b>, ans Wandende gezogen legt er sich in die <b>Ecke</b> und hängt dann an beiden Wänden; zurückziehen löst das wieder. Die <b>Eckgriffe</b> ändern die Größe — auf die volle Wandlänge gezogen dockt er an <b>beiden Ecken</b> der Wand an.`
+            : istSchacht(selObj)
+            ? 'Ein hohler Kasten mit eigener Wand. Ziehen verschiebt; bei eingeschaltetem Magnet setzt er sich an die nächste Wand — und wird dort zu Mauerwerk. Eckgriffe ändern die Größe.'
+            : istBauteil(selObj)
             ? 'Ziehen verschiebt. Bei eingeschaltetem Magnet legt sich das Bauteil rechtwinklig an die nächste Raumwand.'
             : 'Ziehen verschiebt das Symbol.'}${
             selObj.sub==='treppe' ? ' Die Stufen ergeben sich aus der Lauflänge.' : ''} Entf = löschen, Esc = abwählen.</p></div>
@@ -6203,9 +6933,11 @@ function panelObjekt(p, selObj){
           <p class="hint">Ziehen auf der Linie verschiebt sie. Ecken ziehen rastet auf 45°, die Längeneingabe skaliert die ganze Linie. Entf = Objekt löschen, Esc = abwählen.</p></div>
           ${aktionen}`;
       }
-      html+=fotoPanel(selObj.fotos, 'objfoto')
-        // Die Treppe trägt keine Zuordnungen — dann steht dort auch keine leere Liste
-        + (ohneLvObjekt(selObj) ? '' : lvPanel(p.attrs.filter(a=>a.objId===selObj.id)));
+      /* Das Fotoaufmass bringt seine eigenen drei Fotos mit — der allgemeine Fotokasten
+         waere ein zweiter Stapel am selben Objekt und hat mehr verwirrt als genutzt.
+         Die Treppe traegt keine Zuordnungen, dort steht auch keine leere Liste. */
+      if(!istFotoMass(selObj)) html+=fotoPanel(selObj.fotos, 'objfoto');
+      html+= (ohneLvObjekt(selObj) ? '' : lvPanel(p.attrs.filter(a=>a.objId===selObj.id)));
   return html;
 }
 
@@ -7042,8 +7774,57 @@ function wireObjekt(on, r){
           else if(f==='B'){ selObj.massB=v; selObj.festB=true; }
           else if(f==='w') selObj.w=v;
           else if(f==='h') selObj.h=v;
+          /* Am gebundenen Schacht entscheidet die neue Kantenlänge die Bindung MIT:
+             eine Breite in Höhe der Wandlänge heißt „an beiden Ecken", und aus der einen
+             Ecke muss er dafür heraus. Nur die Lage nachzuziehen genügte nicht — dann
+             blieb er in der Ecke stehen und wuchs an ihr vorbei. */
+          if(schachtGebunden(selObj)) schachtMassAnpassen(r, selObj);
           save(); renderAll();
         };
+      });
+      /* ---- Der Schacht: Stärke, Abstand, Bindung ---- */
+      document.querySelectorAll('.schachtfld').forEach(inp=>{
+        inp.onchange=()=>{
+          const v=parseNum(inp.value);
+          if(!Number.isFinite(v)){ renderAll(); return; }
+          if(inp.dataset.f==='dicke') selObj.dicke=Math.max(0.01, v);
+          else {
+            const geo=schachtGeometrie(r, selObj), L=geo?geo.L:99;
+            schachtBinden(r, selObj, selObj.wall, Math.max(0, Math.min(L, v)));
+          }
+          if(schachtGebunden(selObj)) schachtLage(r, selObj);
+          save(); renderAll();
+        };
+      });
+      // Regler wie an der Halbwand: beim Schieben nur zeichnen, gespeichert wird am Ende
+      const schReg=$('#schachtdickereg');
+      if(schReg){
+        const setz=()=>{ selObj.dicke=mm(+schReg.value/100); };
+        schReg.oninput =()=>{ setz(); renderCanvas(); };
+        schReg.onchange=()=>{ setz(); save(); renderAll(); };
+      }
+      on('#schachtdickewand','onclick',()=>{
+        const d=wandDicke(r, selObj.wall);
+        if(d){ selObj.dicke=d; save(); renderAll(); }
+      });
+      /* Ein Knopf, zwei Zustände — grün heißt gebunden, rot heißt frei. Ohne ihn käme
+         man aus der Bindung nicht mehr heraus: ein gebundener Schacht rutscht beim
+         Ziehen nur noch an seiner Wand entlang. */
+      on('#schachtwand','onclick',()=>{
+        if(schachtGebunden(selObj)){
+          schachtLoesen(selObj);
+          melde('Der Schacht steht wieder frei im Raum — die Wand läuft gerade durch.');
+        } else {
+          const best=naechsteWand(r, objCenter(selObj));
+          if(!best || !schachtBinden(r, selObj, best.i, best.t)){
+            melde('Kein Platz: der Schacht ist breiter als die nächste Wand.', true);
+            return;
+          }
+          melde(schachtInEcke(selObj)
+            ? `Der Schacht sitzt jetzt in Ecke ${selObj.ecke+1} und hängt an beiden Wänden.`
+            : `Der Schacht sitzt jetzt in Wand ${best.i+1} — die Wand legt sich um ihn herum.`);
+        }
+        save(); renderAll();
       });
       // Schloss vor dem Feld: koppeln ⇄ entkoppeln
       document.querySelectorAll('.koppel').forEach(btn=>{
@@ -7054,33 +7835,28 @@ function wireObjekt(on, r){
           save(); renderAll();          // save() zieht ein wieder gekoppeltes Maß gleich nach
         };
       });
+      document.querySelectorAll('[data-fmwahl]').forEach(b=>b.onclick=()=>{
+        fmSlotWahl={g:selObj, i:+b.dataset.fmwahl};
+        lvWahlOeffnen();
+      });
+      document.querySelectorAll('.fmleer').forEach(b=>b.onclick=()=>{
+        const x=fmSlots(selObj)[+b.dataset.i]; if(!x) return;
+        x.lv=''; x.kurz=''; save(); renderAll();
+      });
+      document.querySelectorAll('.fmaz').forEach(inp=>inp.onchange=()=>{
+        const x=fmSlots(selObj)[+inp.dataset.i]; if(!x) return;
+        const v=Math.max(1, Math.round(parseNum(inp.value)||1));
+        x.abschlag=v; save(); renderAll();
+      });
+      on('#objgrad','onchange',e=>{
+        const v=parseNum(e.target.value);
+        if(!Number.isFinite(v)) { renderAll(); return; }
+        selObj.rot=((Math.round(v)%360)+360)%360; save(); renderAll();
+      });
       if(istFotoMass(selObj)){
-        /* Dieselbe Vorschlagsliste wie im LV-Dialog (`makeSuggest`), damit man aus den
-           **vorhandenen** Positionen wählt statt Nummern blind zu tippen. Übernommen wird
-           erst, wenn die Nummer wirklich im Katalog steht — beim Tippen soll die
-           Seitenleiste nicht bei jedem Zeichen neu aufgebaut werden. */
-        document.querySelectorAll('.fmlv').forEach(inp=>{
-          const i=+inp.dataset.i, box=document.querySelector('#fmsug'+i);
-          if(!box) return;
-          makeSuggest(inp, box,
-            (it,q)=>!q || it.lv.toLowerCase().startsWith(q) || (it.kurz||'').toLowerCase().includes(q),
-            it=>({a:it.lv, b:it.kurz, num:'a'}),
-            null,
-            it=>fmSlotAusKatalog(selObj, i, it.lv, r.id));
-        });
-        document.querySelectorAll('.fmlv').forEach(inp=>{ inp.onchange=()=>{
-          const i=+inp.dataset.i, lv=inp.value.trim();
-          const sl=fmSlots(selObj)[i];
-          // Kurztext und Einheit aus dem Katalog holen, wenn die Nummer bekannt ist
-          const k=(proj().lvTexts||{})[lv] || sl.kurz;
-          const e=(proj().lvUnits||{})[lv];
-          const einheit=(e && FM_WERKZEUG[e]) ? e : sl.einheit;
-          if(e && !FM_WERKZEUG[e]) melde(`„${lv}" hat die Einheit ${einhTxt(e)} — dafür gibt es kein Werkzeug. Bitte Fläche, Länge oder Stück wählen.`, true);
-          fmSlotSetzen(selObj, i, lv, k, einheit, r.id);
-          save(); renderAll();
-        }; });
-        document.querySelectorAll('.fmkurz').forEach(inp=>{ inp.onchange=()=>{
-          fmSlots(selObj)[+inp.dataset.i].kurz=inp.value.trim(); save(); renderAll(); }; });
+        /* Die Eingabefelder fuer LV-Nummer und Kurztext samt eigener Vorschlagsliste
+           gab es hier bis 6.8.2026. Sie waren eine ZWEITE Art, dieselbe Position zu
+           suchen — jetzt oeffnet ein Tipp aufs Farbfeld denselben Waehler wie ueberall. */
         document.querySelectorAll('.fmeinheit').forEach(seq=>{ seq.onchange=()=>{
           const i=+seq.dataset.i;
           fmSlots(selObj)[i].einheit=seq.value;
@@ -7101,6 +7877,16 @@ function wireObjekt(on, r){
         const c=JSON.parse(JSON.stringify(selObj)); c.id=uid(); delete c.nr; delete c.fotos;
         if(c.points) c.points=c.points.map(pt=>({x:pt.x+0.3, y:pt.y+0.3}));
         else { c.x+=0.3; c.y+=0.3; }
+        /* Ein gebundener Schacht sitzt an `wall`/`t` — ein Versatz in x/y allein würde
+           die Kopie genau auf das Original legen. Sie rückt darum an der Wand weiter.
+           In der Ecke geht das nicht (dort ist nur ein Platz): die Kopie rutscht aus
+           der Ecke heraus an dieselbe Wand. */
+        if(schachtGebunden(c)){
+          const [wa,wb]=wallPoints(r, c.wall);
+          const t = c.t!=null ? c.t + c.w + 0.3 : dist(wa,wb)/2;
+          delete c.ecke;
+          schachtBinden(r, c, c.wall, t);
+        }
         r.objects.push(c);
         // Verknüpfte LV-Positionen mitkopieren → Kopie bekommt eigene Nummer
         const p=proj(), linked=p.attrs.filter(a=>a.objId===selObj.id);
@@ -9307,6 +10093,21 @@ function lvWahlListe(){
     </div>`).join('');
   box.querySelectorAll('[data-wahl]').forEach(el=>el.onclick=()=>{
     const it=treffer[+el.dataset.wahl];
+    /* Derselbe Waehler bedient jetzt zwei Ziele: den LV-Dialog und ein Farbfeld des
+       Fotoaufmasses. `fmSlotWahl` sagt, welches — gesetzt wird es unmittelbar vor dem
+       Oeffnen und danach wieder geleert. Ein zweiter Waehler waere dieselbe Liste
+       gewesen, nur mit eigenen Fehlern. */
+    if(fmSlotWahl){
+      const {g, i}=fmSlotWahl; fmSlotWahl=null;
+      const x=fmSlots(g)[i];
+      if(x){
+        x.lv=it.lv; x.kurz=it.kurz||'';
+        const e=(proj().lvUnits||{})[it.lv] || einheitAusKurz(it.kurz);
+        if(e && FM_WERKZEUG[e]) x.einheit=e;      // Werkzeug folgt der Einheit der Position
+        save();
+      }
+      dlgLvWahl.close(); renderAll(); return;
+    }
     $('#lvPos').value=it.lv; $('#lvKurz').value=it.kurz||''; lvApplyKnown(it.lv);
     autoGrow($('#lvKurz')); lvWahlAnzeigen();
     dlgLvWahl.close();
@@ -9318,6 +10119,8 @@ function lvWahlListe(){
     dlgLvLang.showModal();
   });
 }
+/* Gesetzt, solange der Positionswaehler fuer ein Farbfeld des Fotoaufmasses offen ist */
+let fmSlotWahl=null;
 function lvWahlOeffnen(){
   $('#lwSuche').value='';
   lvKatKnoepfe(); lvWahlListe();
