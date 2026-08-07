@@ -600,6 +600,26 @@
   .fotos.raster .mehr{position:absolute; inset:0; display:flex; align-items:center;
     justify-content:center; background:rgba(20,25,35,.55); color:#fff;
     font-size:15px; font-weight:600; pointer-events:none;}
+  /* Foto ohne Bilddaten („Ohne Fotos laden", 7.8.2026). Ein <img> ohne Quelle zeigt das
+     zerbrochene Bildsymbol des Browsers und sieht nach Datenverlust aus — genau der
+     falsche Eindruck, denn das Bild liegt ja noch bei der Baustelle. Also ein eigener,
+     ruhiger Platzhalter, und ohne `cursor:zoom-in`: es gibt nichts anzusehen. */
+  /* ---------- LV-Zuordnung in den Plan ziehen (seit 2026-08-07) ----------
+     `pan-y` ist der Kern der Bedienung: senkrecht gehört die Geste weiter der Liste
+     (die Seitenleiste muss sich rollen lassen), waagerecht uns — und waagerecht ist
+     genau die Richtung zum Plan, weil die Leiste links steht. Ohne diese Zeile müsste
+     man sich zwischen Rollen und Ziehen entscheiden. */
+  [data-lvopen]{touch-action:pan-y;}
+  #lvgeist{position:fixed; z-index:9999; pointer-events:none; left:0; top:0;
+    background:rgba(20,25,35,.92); color:#fff; border-radius:8px; padding:5px 9px;
+    font-size:12px; line-height:1.35; max-width:230px; box-shadow:0 3px 12px rgba(0,0,0,.3);}
+  #lvgeist b{display:block; font-weight:600;}
+  #lvgeist .ziel{color:#7cc6ff;}
+  #lvgeist .kein{color:#ff9a9a;}
+  .fotos .fw .fehlt{width:100%; height:100%; display:flex; align-items:center;
+    justify-content:center; background:repeating-linear-gradient(45deg,
+      #eef1f5 0 6px, #e4e8ee 6px 12px); color:#9aa3ad;}
+  .fotos .fw .fehlt svg{width:22px; height:22px;}
   /* ---------- Foto-Rolle: ein Bild groß, wischen blättert ---------- */
   #dlgFotoRolle{background:#14181f; color:#e8ecf3;}
   #dlgFotoRolle .dhead{border-bottom-color:#2a3345; color:#e8ecf3;}
@@ -1357,8 +1377,27 @@
         Im Druckdialog <b>„Als PDF speichern"</b> wählen.</p>
       <div class="row"><label>Umfang</label><select id="agUmfang"></select></div>
       <p class="hint" id="agUmfangInfo" style="margin-bottom:8px"></p>
-      <label style="display:block; margin-bottom:8px"><input type="checkbox" id="agOeffMasse">
+      <label style="display:block; margin-bottom:4px"><input type="checkbox" id="agAlleRaeume">
+        <b>Alle Räume</b> — auch die ohne Zuordnung in diesem Umfang</label>
+      <label style="display:block; margin-bottom:4px"><input type="checkbox" id="agOeffMasse">
         Tür-/Fenstermaße im Plan bemaßen</label>
+      <label style="display:block; margin-bottom:4px"><input type="checkbox" id="agRaumListen">
+        <b>Raumlisten</b> — LV-Positionen unter jedem Raum</label>
+      <label style="display:block; margin-bottom:4px"><input type="checkbox" id="agAnmerkungen">
+        <b>Anmerkungen</b> — der Kasten unter dem Raumplan</label>
+      <label style="display:block; margin-bottom:8px"><input type="checkbox" id="agRaumSeite">
+        <b>Raum auf ganze Seite</b> — Plan füllt das Blatt, Listen folgen dahinter</label>
+      <!-- Ausschlüsse stehen bewusst getrennt: die Schalter oben stellen den Bericht ein,
+           diese hier lassen ganze Teile weg. Alle drei sind ab Werk AUS — ohne Häkchen
+           enthält das Dokument alles, wie bisher. -->
+      <div style="font-size:11px; font-weight:700; color:var(--muted); letter-spacing:.02em;
+        margin:2px 0 3px">WEGLASSEN</div>
+      <label style="display:block; margin-bottom:4px"><input type="checkbox" id="agOhneLv">
+        <b>LV-Positionen</b> — nur der Plan; das Deckblatt nennt dann „Plan"</label>
+      <label style="display:block; margin-bottom:4px"><input type="checkbox" id="agOhneObjekte">
+        <b>Objekte</b> — Flächen, Linien und Symbole nicht zeichnen</label>
+      <label style="display:block; margin-bottom:8px"><input type="checkbox" id="agOhneFotos">
+        <b>Fotos</b> — keine Bildseiten und kein Fotoaufmaß</label>
       <button class="btn primary" id="agPrint">🖨 Drucken / PDF</button>
     </fieldset>
     <fieldset><legend>CSV für die Excel-Pipeline</legend>
@@ -1804,6 +1843,7 @@
      Dateien in „Dateien" ausgrauen. Geprüft wird darum erst beim Einlesen. -->
 <input type="file" id="gaebfile" style="display:none">
 <input type="file" id="planfile" accept="image/*" style="display:none">
+<input type="file" id="planvekfile" accept=".json,application/json" style="display:none">
 <input type="file" id="p360file" accept="image/*" style="display:none">
 
 <!-- Leiste über der Bildschirmtastatur: der Ziffernblock von iOS hat keine
@@ -3189,9 +3229,14 @@ function openingMarks(r, lbl){
     const ux=(b.x-a.x)/L, uy=(b.y-a.y)/L;
     const t0=Math.max(0,Math.min(o.offset, L-o.width));
     const bm={x:a.x+ux*(t0+o.width/2), y:a.y+uy*(t0+o.width/2)};
+    // Ausweichweg: die Breite der Öffnung — weiter darf die Nummer nicht wandern,
+    // sonst bezeichnete sie das Mauerwerk daneben
+    const rr=badgeR(lbl||0.2), ein=Math.max(0, Math.min(rr, o.width/2-0.001));
+    const badge=objBadge(o, bm.x, bm.y, lbl||0.2, false, badgeWeg([
+      {x:a.x+ux*(t0+ein), y:a.y+uy*(t0+ein)},
+      {x:a.x+ux*(t0+o.width-ein), y:a.y+uy*(t0+o.width-ein)}]));
     // Tür/Fenster selbst bleiben immer voll sichtbar (Architektur) — nur die
     // Nummern-Plakette verblasst, wenn die Öffnung nicht zu diesem Abschlag gehört
-    const badge=objBadge(o, bm.x, bm.y, lbl||0.2, false);
     if(badge) out+=`<g style="pointer-events:none"${objAktiv(o)?'':` opacity="${ABS_BLASS}"`}>${badge}</g>`;
   });
   return out;
@@ -3212,7 +3257,8 @@ function dimSvg(a, b, nx, ny, lbl, opts){
   // außen, sonst läge sie im Mauerwerk
   const wand=opts.wand||0;
   const roh=opts.off!=null?opts.off:lbl*2.0;
-  const off=roh+wand;
+  // opts.raus: die ganze Maßkette eine Reihe weiter nach außen (siehe massKetteSvg)
+  const off=roh+wand+(opts.raus||0);
   const L=dist(a,b); if(L<0.001) return '';
   const ux=(b.x-a.x)/L, uy=(b.y-a.y)/L;
   const A={x:a.x+nx*off, y:a.y+ny*off}, B={x:b.x+nx*off, y:b.y+ny*off};
@@ -3229,7 +3275,7 @@ function dimSvg(a, b, nx, ny, lbl, opts){
   s+=`<line x1="${B.x-dx}" y1="${B.y-dy}" x2="${B.x+dx}" y2="${B.y+dy}" stroke="${col}" stroke-width="${sw*2.2}"/>`;
   // Maßzahl mittig AUF der Maßlinie, mitgedreht; Halo in Hintergrundfarbe überschreibt die Linie
   const ang=readAngle(a,b);
-  const tx=(A.x+B.x)/2, ty=(A.y+B.y)/2;
+  let tx=(A.x+B.x)/2, ty=(A.y+B.y)/2;
   const halo=opts.halo||'#fafbfc';
   const txt=fmt(L,2);
   // Druck: 9 pt anstreben, bei Enge auf 7 pt herunter, sonst nummerierter Verweis
@@ -3239,6 +3285,23 @@ function dimSvg(a, b, nx, ny, lbl, opts){
   if(opts.refs && !passt(fs)){
     if(opts.minFs && passt(opts.minFs)) fs=opts.minFs;
     else { verweis=true; fs=Math.max(opts.minFs||0, fs); }
+  }
+  /* Maßzahlen weichen einander aus — und den Plaketten, denn sie teilen sich EINE
+     Belegungsliste: eine Nummer auf einer Maßzahl ist genauso unlesbar wie zwei Nummern
+     übereinander. Der erste Zug gehört aber NICHT hierher: bedrängte Maße rücken als ganze
+     Kette nach außen (`massKetteSvg`), so wie ein Zeichner es macht. Was danach noch
+     übereinandersteht, rutscht hier auf seiner eigenen Maßlinie beiseite — nie quer
+     daneben, dort bemaßte die Zahl nichts mehr. */
+  {
+    const breite=(verweis ? fs*1.24 : txt.length*fs*0.58) + (opts.lock ? fs*1.1 : 0);
+    const kasten={x:tx, y:ty, hw:breite/2, hh:fs*0.6, cos:ux, sin:uy};
+    // Probelauf: nur den Platzbedarf melden, nichts zeichnen und nichts belegen
+    if(opts.probe){ opts.probe.push(kasten); return ''; }
+    // Weiter als bis ans Ende der eigenen Maßlinie darf sie nicht — sonst bemaßt sie nichts
+    const grenze=Math.max(0, L/2 - breite/2);
+    const q=badgePlatz(kasten, badgeWeg([
+      {x:tx-ux*grenze, y:ty-uy*grenze}, {x:tx+ux*grenze, y:ty+uy*grenze}]));
+    tx=q.x; ty=q.y;
   }
   if(verweis){
     const nr=opts.refs.length+1;
@@ -3263,6 +3326,31 @@ function dimSvg(a, b, nx, ny, lbl, opts){
   }
   s+=`<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="middle" font-size="${fs}" fill="${opts.tcol||col}" stroke="${halo}" stroke-width="${fs*0.35}" stroke-linejoin="round" paint-order="stroke"${opts.bold?' font-weight="700"':''} transform="rotate(${ang} ${tx} ${ty})"${da}>${txt}</text>`;
   return s;
+}
+/* ---------- Bedrängte Maße rücken nach außen (seit 2026-08-07) ----------
+   Wo zwei Maßketten sich an einer Ecke ins Gehege kommen, schiebt ein Zeichner die eine
+   eine Reihe weiter vom Bauwerk weg. Die Zahl bleibt dabei in der Mitte ihres Maßes, wo
+   sie hingehört. Genau das passiert hier — und zwar mit der ganzen KETTE einer Wand samt
+   Maßlinie, Hilfslinien und Gesamtmaß; verschöbe man die einzelne Zahl, zerfiele die Reihe.
+
+   Zuerst ein Probelauf je Reihe: `dimSvg` meldet unter `probe` nur den Platzbedarf seiner
+   Zahlen, zeichnet nichts und belegt nichts. Die erste Reihe ohne Zusammenstoß gewinnt;
+   findet sich keine, die mit den wenigsten. `teile` = [{a, b, opts}] einer Wand. */
+let massAusgewichen=0;                   // meiste ausgewichene Reihen des Plans (siehe planSvg)
+function massKetteSvg(teile, nx, ny, lbl, stufe, reihen){
+  let raus=0, gewaehlt=0;
+  if(badgeBelegt && teile.length>0){
+    let wenigste=Infinity;
+    for(let n=0; n<=(reihen==null?1:reihen); n++){
+      const probe=[];
+      teile.forEach(t=>dimSvg(t.a, t.b, nx, ny, lbl, {...t.opts, raus:n*stufe, probe}));
+      const stoss=probe.filter(k=>badgeBelegt.some(b=>kastenStoss(k,b))).length;
+      if(!stoss){ raus=n*stufe; gewaehlt=n; break; }
+      if(stoss<wenigste){ wenigste=stoss; raus=n*stufe; gewaehlt=n; }
+    }
+  }
+  if(gewaehlt>massAusgewichen) massAusgewichen=gewaehlt;
+  return teile.map(t=>dimSvg(t.a, t.b, nx, ny, lbl, {...t.opts, raus})).join('');
 }
 /* Maßketten-Segmente einer Wand: an den Kanten von Türen/Fenstern unterteilt.
    Liefert Punktpaare [p,q] entlang der Wand (ohne Öffnungen: ein Segment = ganze Wand). */
@@ -3323,9 +3411,99 @@ function badgeR(lbl){
    Wänden und Maßketten behaupten. Am Bildschirm bleibt es beim schlanken Strich. */
 const LINIE_SW_BASIS=0.05;
 const linieSw = () => imDruck ? LINIE_SW_BASIS*1.5 : LINIE_SW_BASIS;
-/* Runde Nummern-Plakette */
-function badgeSvg(x, y, rr, col, txt, dat){
+/* ---------- Plaketten dürfen sich nicht überdecken (seit 2026-08-07) ----------
+   Wand-, Objekt- und Öffnungsnummern entstehen in drei getrennten Funktionen und wussten
+   nichts voneinander. Auf dem Papier ist das kein Schönheitsfehler: eine verdeckte Nummer
+   ist eine, die im Bericht steht und im Plan nicht wiederzufinden ist.
+
+   Darum eine gemeinsame Belegungsliste je Plan. Ausgewichen wird **am Rand des eigenen
+   Trägers entlang** — die Wandnummer auf ihrer Wand, die Nummer eines Linienobjekts auf
+   dessen Linie, die eines Kastens um dessen Umriss herum. Findet sich dort nichts, bleibt
+   die Plakette, wo sie hingehört: lieber zwei übereinander als eine an falscher Stelle.
+   Ein Ring ins Freie stand hier bis zum 7.8.2026 und ist wieder weg — eine Nummer neben
+   ihrem Objekt zeigt auf nichts, und dann ist sie schlimmer als eine verdeckte. */
+let badgeBelegt=null;                  // [{x,y,hw,hh,cos,sin}] · null = keine Entzerrung
+const badgeReset = an => { badgeBelegt = an ? [] : null; };
+/* Belegt wird mit einem **gedrehten Rechteck**, nicht mit einem Kreis. Eine Maßzahl ist
+   breit und flach und liegt schräg auf ihrer Maßlinie; ein Kreis darum hätte den halben
+   Diagonalradius — und meldete damit Zusammenstöße, wo keine sind. Beim ersten Versuch
+   waren drei von dreizehn „Überlappungen" in Wahrheit Zahlen aus zwei verschiedenen
+   Maßreihen, 19 cm übereinander bei 19 cm Schrifthöhe: sie berührten sich, mehr nicht.
+   Geprüft wird darum über getrennte Achsen (SAT) — vier Achsen, zwei je Rechteck.
+   Plaketten tragen sich als Quadrat ein, das ist für einen Kreis knapp großzügig. */
+function kastenStoss(a, b){
+  const achsen=[{x:a.cos,y:a.sin},{x:-a.sin,y:a.cos},{x:b.cos,y:b.sin},{x:-b.sin,y:b.cos}];
+  const dx=b.x-a.x, dy=b.y-a.y;
+  const reich=(k,ax)=>k.hw*Math.abs(ax.x*k.cos+ax.y*k.sin)
+                    + k.hh*Math.abs(-ax.x*k.sin+ax.y*k.cos);
+  for(const ax of achsen)
+    if(Math.abs(dx*ax.x+dy*ax.y) > (reich(a,ax)+reich(b,ax))*0.98) return false;
+  return true;                          // keine Trennachse → sie überlappen
+}
+/* Der Ausweichweg selbst: eine Punktfolge, meist der Umriss des Trägers. `zu` schließt
+   sie zum Ring (Rechteck, Kreis, Schachtumriss), offen bleiben Linien und Maßlinien.
+   Gerechnet wird über die Bogenlänge, damit ein Weg über mehrere Ecken derselbe Weg
+   bleibt und die Plakette nicht an jedem Knick hängenbleibt. */
+function badgeWeg(pts, zu){
+  if(!pts || pts.length<2) return null;
+  const P = zu ? pts.concat([pts[0]]) : pts;
+  const segs=[]; let acc=0;
+  for(let i=0;i<P.length-1;i++){
+    const d=dist(P[i], P[i+1]);
+    if(d<1e-6) continue;
+    segs.push({p:P[i], q:P[i+1], a:acc, e:acc+d});
+    acc+=d;
+  }
+  return segs.length ? {segs, laenge:acc, zu:!!zu} : null;
+}
+function wegPunkt(w, s){                 // Punkt bei Bogenlänge s (geschlossene Wege laufen um)
+  if(w.zu) s=((s%w.laenge)+w.laenge)%w.laenge;
+  else if(s<-1e-9 || s>w.laenge+1e-9) return null;
+  for(const g of w.segs){
+    if(s<=g.e || g===w.segs[w.segs.length-1]){
+      const t=Math.max(0, Math.min(1, (s-g.a)/(g.e-g.a)));
+      return {x:g.p.x+(g.q.x-g.p.x)*t, y:g.p.y+(g.q.y-g.p.y)*t};
+    }
+  }
+  return null;
+}
+function wegNah(w, x, y){                // Bogenlänge des Wegpunktes, der dem Wunschplatz am nächsten liegt
+  let best=0, bd=Infinity;
+  for(const g of w.segs){
+    const dx=g.q.x-g.p.x, dy=g.q.y-g.p.y, L2=dx*dx+dy*dy;
+    const t=Math.max(0, Math.min(1, L2 ? ((x-g.p.x)*dx+(y-g.p.y)*dy)/L2 : 0));
+    const px=g.p.x+dx*t-x, py=g.p.y+dy*t-y, d=px*px+py*py;
+    if(d<bd){ bd=d; best=g.a+(g.e-g.a)*t; }
+  }
+  return best;
+}
+/* Sucht den Platz: erst der Wunschplatz, sonst am Weg entlang, abwechselnd nach beiden
+   Seiten. Ohne Weg bleibt die Plakette, wo sie ist. */
+function badgePlatz(k, weg){
+  if(!badgeBelegt) return {x:k.x, y:k.y};
+  const frei=(px,py)=>!badgeBelegt.some(b=>kastenStoss({...k, x:px, y:py}, b));
+  let ziel = frei(k.x, k.y) ? {x:k.x, y:k.y} : null;
+  if(!ziel && weg){
+    const s0=wegNah(weg, k.x, k.y);
+    const schritt=Math.max(k.hw, k.hh)*0.7;
+    // Geschlossene Wege einmal ganz herum: je Richtung die halbe Länge
+    const weit=weg.zu ? weg.laenge/2 : weg.laenge;
+    for(let n=1; n*schritt<=weit && n<=60 && !ziel; n++)
+      for(const s of [1,-1]){
+        const q=wegPunkt(weg, s0+schritt*n*s);
+        if(q && frei(q.x, q.y)){ ziel=q; break; }
+      }
+  }
+  if(!ziel) ziel={x:k.x, y:k.y};
+  badgeBelegt.push({...k, x:ziel.x, y:ziel.y});
+  return ziel;
+}
+/* Runde Nummern-Plakette. `weg` ist der Rand, an dem sie bei Gedränge entlangwandern
+   darf — bei der Wand deren Achse, beim Kasten sein Umriss. */
+function badgeSvg(x, y, rr, col, txt, dat, weg){
   dat=dat||'';
+  const q=badgePlatz({x, y, hw:rr, hh:rr, cos:1, sin:0}, weg);
+  x=q.x; y=q.y;
   return `<circle cx="${x}" cy="${y}" r="${rr}" fill="${col}" stroke="#fff" stroke-width="${rr*0.12}"${dat}/>`+
     `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" font-size="${rr*1.1}" font-weight="700" fill="${txtOn(col)}"${dat}>${txt}</text>`;
 }
@@ -3334,22 +3512,23 @@ function badgeSvg(x, y, rr, col, txt, dat){
    Objekte selbst werden weiter gezeichnet. Im Druck und in der Raumansicht bleibt es
    bei den Nummern; renderCanvas setzt und löscht das Flag um seinen eigenen Durchlauf. */
 let plakettenAus=false;
-/* Nummern-Plakette: nur für Objekte/Öffnungen, die einer LV-Position zugeordnet sind */
-function objBadge(g, x, y, lbl, interactive){
+/* Nummern-Plakette: nur für Objekte/Öffnungen, die einer LV-Position zugeordnet sind.
+   `weg` = Rand des Objekts, an dem die Nummer bei Gedränge entlangwandern darf. */
+function objBadge(g, x, y, lbl, interactive, weg){
   if(plakettenAus) return '';
   const p=proj();
   const a=(p.attrs||[]).find(t=>t.objId===g.id && t.lv);
   if(!a || !g.nr) return '';
   const col=lvColor(p, a.lv) || '#8a93a5';
   const dat=interactive?` data-obj="${g.id}" style="cursor:move"`:'';
-  return badgeSvg(x, y, badgeR(lbl), col, g.nr||'', dat);
+  return badgeSvg(x, y, badgeR(lbl), col, g.nr||'', dat, weg);
 }
 /* Nummern-Plaketten der Wände — mittig IM Mauerwerk, nicht daneben */
 function wallMarks(r, lbl){
   if(plakettenAus) return '';
   const p=proj();
   let out='';
-  const c=centroid(r.points), n=r.points.length;
+  const n=r.points.length;
   for(let i=0;i<n;i++){
     const nr=wallNrOf(r,i); if(!nr) continue;
     // Auch eine Wand, die ihre Nummer nur einem Foto verdankt, bekommt die Plakette —
@@ -3357,13 +3536,21 @@ function wallMarks(r, lbl){
     const a=(p.attrs||[]).find(x=>x.roomId===r.id && x.wall===i && x.lv);
     const [A,B]=wallPoints(r,i), L=dist(A,B); if(L<0.05) continue;
     const mx=(A.x+B.x)/2, my=(A.y+B.y)/2;
-    let nx=-(B.y-A.y)/L, ny=(B.x-A.x)/L;
-    if((mx+nx*0.1-c.x)**2+(my+ny*0.1-c.y)**2 > (mx-nx*0.1-c.x)**2+(my-ny*0.1-c.y)**2){nx=-nx;ny=-ny;}
+    /* Hier stand bis zum 7.8.2026 dieselbe Schwerpunkt-Heuristik wie bei den Maßketten —
+       nur wurde ihr Ergebnis nie benutzt: die Plakette sitzt seit jeher auf der geprüften
+       `aussenNormale` unten. Toter Code, der aussieht wie eine Regel, ist schlimmer als
+       keiner; der nächste Leser hält ihn für die gültige. */
     // Mitte des Mauerwerks: die gezeichnete Linie ist die Innenkante, die Wand wächst
     // nach AUSSEN. Die Normale oben zeigt zum Schwerpunkt, also nach innen — deshalb
     // hier die geprüfte Außennormale, die auch bei einspringenden Ecken stimmt.
     const an=aussenNormale(r,i), tief=wandDicke(r,i)/2, rr=badgeR(lbl);
-    const m=badgeSvg(mx+an.x*tief, my+an.y*tief, rr, (a && lvColor(p, a.lv))||'#8a93a5', nr);
+    /* Ausweichweg: die Wandachse selbst — eine Wandnummer soll auf ihrer Wand bleiben.
+       Um einen Plakettenradius verkürzt, sonst ragte sie an der Ecke über die Wand hinaus. */
+    const ux=(B.x-A.x)/L, uy=(B.y-A.y)/L, ein=Math.min(rr, L/2-0.001);
+    const weg=badgeWeg([{x:A.x+an.x*tief+ux*ein, y:A.y+an.y*tief+uy*ein},
+                        {x:B.x+an.x*tief-ux*ein, y:B.y+an.y*tief-uy*ein}]);
+    const m=badgeSvg(mx+an.x*tief, my+an.y*tief, rr, (a && lvColor(p, a.lv))||'#8a93a5', nr,
+      '', weg);
     out+= wandFotoAktiv(r,i) ? m : `<g opacity="${ABS_BLASS}">${m}</g>`;
   }
   return out ? `<g style="pointer-events:none">${out}</g>` : '';
@@ -3432,7 +3619,12 @@ function objMarks(r, lbl, interactive){
         fill=`url(#strp${g.id})`; stroke=cols[0]; fillOp=isSel?0.55:0.4;
       }
       out+=`<rect x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" fill="${fill}" fill-opacity="${fillOp}" stroke="${isSel?'#2f6fed':stroke}" stroke-width="${isSel?0.05:0.03}" stroke-dasharray="0.1 0.06"${interactive?` data-obj="${g.id}" style="cursor:move"`:''}/>`;
-      out+=objBadge(g, g.x+g.w+lbl*0.45, g.y-lbl*0.45, lbl, interactive);
+      /* Die Nummer sitzt an der oberen rechten Ecke, knapp außerhalb — und wandert bei
+         Gedränge um genau diesen Umriss herum. So bleibt sie immer AM Kasten. */
+      const d=lbl*0.45;
+      out+=objBadge(g, g.x+g.w+d, g.y-d, lbl, interactive, badgeWeg([
+        {x:g.x+g.w+d, y:g.y-d}, {x:g.x+g.w+d, y:g.y+g.h+d},
+        {x:g.x-d, y:g.y+g.h+d}, {x:g.x-d, y:g.y-d}], true));
       if(isSel){
         [[g.x,g.y,0],[g.x+g.w,g.y,1],[g.x+g.w,g.y+g.h,2],[g.x,g.y+g.h,3]].forEach(([px,py,k])=>{
           const an=sel.objH===k, hs=lbl*(an?0.45:0.35), tr=lbl*(an?2.6:1.2);
@@ -3456,7 +3648,11 @@ function objMarks(r, lbl, interactive){
       out+=`<line x1="${cx}" y1="${cy}" x2="${px}" y2="${py}" stroke="${st}" stroke-width="${rr*0.22}" style="pointer-events:none"/>`;
       out+=`<circle cx="${cx}" cy="${cy}" r="${rr}" fill="${fl}" stroke="${st}" stroke-width="${isSel?rr*0.3:rr*0.2}"${interactive?` data-obj="${g.id}" style="cursor:move"`:''}/>`;
       out+=`<circle cx="${cx}" cy="${cy}" r="${rr*0.3}" fill="${st}" style="pointer-events:none"/>`;
-      out+=objBadge(g, cx+rr+lbl*0.45, cy-rr-lbl*0.45, lbl, interactive);
+      // Ausweichweg: der Kreis, auf dem die Nummer ohnehin schon sitzt
+      const rb=Math.hypot(rr+lbl*0.45, rr+lbl*0.45);
+      out+=objBadge(g, cx+rr+lbl*0.45, cy-rr-lbl*0.45, lbl, interactive, badgeWeg(
+        Array.from({length:24}, (_,i)=>{ const w=-Math.PI/4+i*Math.PI/12;
+          return {x:cx+Math.cos(w)*rb, y:cy+Math.sin(w)*rb}; }), true));
     } else if(g.type==='sym'){
       const cx=g.x+g.w/2, cy=g.y+g.h/2;
     /* Bauteile tragen die Farbe des Mauerwerks, nicht das Grün der Schleusen — eine
@@ -3598,8 +3794,12 @@ function objMarks(r, lbl, interactive){
         const a=(g.rot||0)*Math.PI/180, dx=px-cx, dy=py-cy;
         return {x:cx+dx*Math.cos(a)-dy*Math.sin(a), y:cy+dx*Math.sin(a)+dy*Math.cos(a)};
       };
-      const eck=dreh(g.x+g.w, g.y);
-      out+=objBadge(g, eck.x+lbl*0.45, eck.y-lbl*0.45, lbl, interactive);
+      /* Der Umriss als Ausweichweg — MITGEDREHT. Damit sitzt die Nummer auch bei
+         schräggestellten Bauteilen an der Ecke des Symbols und nicht daneben. */
+      const d=lbl*0.45;
+      const eck=[[g.x+g.w+d, g.y-d],[g.x+g.w+d, g.y+g.h+d],
+                 [g.x-d, g.y+g.h+d],[g.x-d, g.y-d]].map(([px,py])=>dreh(px,py));
+      out+=objBadge(g, eck[0].x, eck[0].y, lbl, interactive, badgeWeg(eck, true));
       if(isSel){
         [[g.x,g.y,0],[g.x+g.w,g.y,1],[g.x+g.w,g.y+g.h,2],[g.x,g.y+g.h,3]].forEach(([lx,ly,k])=>{
           const q=dreh(lx,ly);
@@ -3637,10 +3837,11 @@ function objMarks(r, lbl, interactive){
       // Eine durchgehende Trefferfläche für die ganze Linie — Ziehen verschiebt das Objekt
       if(interactive)
         out+=`<polyline points="${ptsStr}" fill="none" stroke="transparent" stroke-width="${lbl*1.4}" stroke-linecap="round" stroke-linejoin="round" data-obj="${g.id}" style="cursor:move"/>`;
-      // Nummern-Plakette mittig auf dem mittleren Segment
+      // Nummern-Plakette mittig auf dem mittleren Segment — und bei Gedränge die Linie
+      // entlang, über die Knicke hinweg. Sie gehört zu dieser Linie, also bleibt sie darauf.
       const mi=Math.floor((g.points.length-1)/2);
       const ma=g.points[mi], mb=g.points[Math.min(mi+1,g.points.length-1)];
-      out+=objBadge(g, (ma.x+mb.x)/2, (ma.y+mb.y)/2, lbl, interactive);
+      out+=objBadge(g, (ma.x+mb.x)/2, (ma.y+mb.y)/2, lbl, interactive, badgeWeg(g.points));
       if(isSel){
         g.points.forEach((pt,k)=>{
           const an = sel.objH===k;                     // angewählter Punkt ist gefüllt und größer
@@ -3736,6 +3937,7 @@ function renderCanvas(){
   // Raumansicht: Nachbarräume ausgegraut dahinter, fokussierter Raum zuletzt (oben)
   const rooms=fr?[...floorRooms().filter(x=>x.id!==fr.id), fr]:floorRooms();
   plakettenAus=!fr;                    // Etagenansicht: ohne Nummern (am Ende zurückgesetzt)
+  badgeReset(true);                    // Plaketten je Bild neu entzerren
   const lbl=Math.max(0.14, Math.min(0.6, vb.w/55));
   /* `<defs>`, Raster und Planbild stehen in `#planlage` und werden **nicht** bei jedem
      Bild neu gebaut (siehe `planLageZeichnen`). Muster und Verlauf sind unveränderlich;
@@ -3806,10 +4008,12 @@ function renderCanvas(){
       const zeigWahl = i => offen && sel.wall===i;   // blaue Linie nur, wenn auch ziehbar
       r.points.forEach((a,i)=>{
         const b=r.points[(i+1)%r.points.length], L=dist(a,b);
-        const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
-        let nx=-(b.y-a.y)/L, ny=(b.x-a.x)/L;
-        const c2=centroid(r.points);
-        if((mx+nx*0.1-c2.x)**2+(my+ny*0.1-c2.y)**2 < (mx-nx*0.1-c2.x)**2+(my-ny*0.1-c2.y)**2){nx=-nx;ny=-ny;}
+        /* Richtung der Maßkette: über den UMLAUFSINN des Polygons, nicht über den
+           Schwerpunkt. Der Schwerpunkt liegt bei L- und U-Formen im Knick oder ganz
+           außerhalb — dann zeigte „vom Schwerpunkt weg" für die einspringenden Wände
+           nach INNEN, und die Maßkette lag im Raum. `aussenNormale` ist genau dafür da
+           und wird drei Zeilen weiter unten schon für den Wandkörper benutzt. */
+        const anM=aussenNormale(r,i), nx=anM.x, ny=anM.y;
         const isSelW = sel.wall===i;
         /* Sichtbare Linie und Trefferband sind ZWEI Elemente (Ticket #6 vom 3.8.2026).
            Vorher war es eines: unangewählt 0,40 m transparent, angewählt 0,16 m blau.
@@ -3843,14 +4047,14 @@ function renderCanvas(){
           lock:!imDruck && wandGesperrt(r,i),   // Schloss vor der Maßzahl — nur Bildschirm
           data: ` data-massw="${i}"`+dbasis};
         const segs=wallChainCuts(r,i);
-        if(segs.length>1){
-          // Wand mit Türen/Fenstern: Maßkette (Abstand – Öffnung – Abstand) + Gesamtmaß in zweiter Reihe
-          segs.forEach(([p,q],k)=>{ out+=dimSvg(p, q, nx, ny, lbl, {...dopts, fs:lbl*0.8, lock:false,
-            data: ` data-massseg="${i}:${k}"`+dbasis}); });
-          out+=dimSvg(a, b, nx, ny, lbl, {...dopts, off:lbl*3.4});
-        } else {
-          out+=dimSvg(a, b, nx, ny, lbl, dopts);
-        }
+        // Wand mit Türen/Fenstern: Maßkette (Abstand – Öffnung – Abstand) + Gesamtmaß in
+        // zweiter Reihe. Die Kette rückt als Ganzes nach außen, wenn es eng wird.
+        const teile = segs.length>1
+          ? segs.map(([p,q],k)=>({a:p, b:q, opts:{...dopts, fs:lbl*0.8, lock:false,
+              data: ` data-massseg="${i}:${k}"`+dbasis}}))
+              .concat([{a, b, opts:{...dopts, off:lbl*3.4}}])
+          : [{a, b, opts:dopts}];
+        out+=massKetteSvg(teile, nx, ny, lbl, lbl*1.4, 2);
         const isSelV = sel.vertex===i;
         /* Farbe der Ecke sagt in der Raumansicht, ob der Winkel gerade ist: schwarz bei
            90° oder 180°, sonst rot. Die Auswahl steckt im blauen Ring statt in der Füllung
@@ -5935,7 +6139,9 @@ function hwMarks(r, lbl, aktiv){
       out+=`<circle cx="${q.x}" cy="${q.y}" r="${tr}" fill="transparent"
         data-obj="${g.id}" data-objh="${k}" style="cursor:nwse-resize"/>`;
     });
-    if(g.nr) out+=objBadge(g, geo.mitte.x, geo.mitte.y, lbl, aktiv);
+    // Ausweichweg des Schachts/der Halbwand: sein eigener Außenumriss
+    if(g.nr) out+=objBadge(g, geo.mitte.x, geo.mitte.y, lbl, aktiv,
+      badgeWeg(geo.aussen, true));
     return out;
   }).join('');
 }
@@ -6822,9 +7028,15 @@ function panelObjekt(p, selObj){
             <button class="btn small" id="fmFotoAdd" ${fo.length>=FM_MAX_FOTOS?'disabled title="Mehr als drei Fotos gehen nicht"':''}>${ico('foto')}＋ Foto</button>
           </div>
           ${fo.length?`<div class="row" style="gap:6px; flex-wrap:wrap">${fo.map((f,k)=>`
-            <button class="btn small" data-fmfoto="${k}" title="Foto ${k+1} — zum Messen antippen"
+            <button class="btn small" data-fmfoto="${k}" ${f.src?'':'disabled'}
+              title="${f.src?`Foto ${k+1} — zum Messen antippen`
+                :'Dieses Foto ist nicht geladen — über „🏗 Baustelle“ nachladen'}"
               style="flex:0 0 auto; padding:3px 7px 3px 3px; display:inline-flex; align-items:center; gap:5px">
-              <img src="${f.src||''}" style="width:30px; height:30px; object-fit:cover; border-radius:4px; display:block">
+              ${f.src
+                ? `<img src="${f.src}" style="width:30px; height:30px; object-fit:cover; border-radius:4px; display:block">`
+                : `<span style="width:30px; height:30px; border-radius:4px; display:flex; align-items:center;
+                     justify-content:center; background:repeating-linear-gradient(45deg,#eef1f5 0 5px,#e4e8ee 5px 10px);
+                     color:#9aa3ad">${ico('foto', true)}</span>`}
               ${(f.marken||[]).length}${f.kal?' ⇄':''}</button>`).join('')}</div>`
             : '<p class="hint">Noch kein Foto — ohne Foto lässt sich nichts messen.</p>'}
           <p class="hint">Ein Tipp aufs Foto öffnet das Messen — dort wird auch gelöscht.</p></div>`;
@@ -7394,13 +7606,34 @@ function wireEtage(on, r){
   /* ---- Plan als Hintergrund ---- */
   on('#planadd','onclick',()=>$('#planfile').click());
   on('#planat','onclick',planAusAirtable);
+  on('#planvek','onclick',()=>$('#planvekfile').click());
   renderPlanListe();
   on('#plandel','onclick',()=>{
     const f=etage(); if(!f.plan) return;
-    if(!confirm('Planbild dieser Etage entfernen?')) return;
+    const was=istVektor(f.plan) ? 'Vektorplan' : 'Planbild';
+    if(!confirm(was+' dieser Etage entfernen?')) return;
     if(f.plan.id) idbLoeschen([f.plan.id]).catch(()=>{});
-    delete f.plan; mode='select'; kalibPunkte=[]; save(); renderAll();
-    melde('Planbild entfernt.');
+    delete f.plan; mode='select'; kalibPunkte=[];
+    vekCache=null; vekDomJetzt=null;      // sonst bliebe die ausgewertete Datei im Speicher liegen
+    save(); renderAll();
+    melde(was+' entfernt.');
+  });
+  /* Lagen des Vektorplans schalten. Die Entscheidung landet in `pl.lagenAn` und gilt
+     damit auch nach dem nächsten Start — sie gehört zum Plan, nicht zur Sitzung. */
+  document.querySelectorAll('[data-vlage]').forEach(b=>{
+    b.onclick=()=>{
+      const pl=planVon(); if(!pl) return;
+      const vd=vekDaten(pl); if(!vd) return;
+      const an=vekLagenAn(pl, vd), i=+b.dataset.vlage;
+      an[i]=!an[i];
+      /* Die letzte Lage bleibt an. Ein Plan ohne jede Linie sieht aus wie ein Fehler,
+         und den Weg dahin gibt es schon: „Ausblenden" nimmt ihn ganz aus dem Speicher. */
+      if(!an.some(Boolean)){
+        melde('Die letzte Lage bleibt an — zum Wegnehmen gibt es oben „Ausblenden".');
+        return;
+      }
+      pl.lagenAn=an; save(); renderAll();
+    };
   });
   on('#planbreite','onchange',e=>{
     const pl=planVon(), v=parseNum(e.target.value);
@@ -7698,11 +7931,250 @@ function wireEcke(on, r){
     on('#eckedesel','onclick',()=>{ sel={roomId:focusRoomId, wall:null, vertex:null}; renderAll(); });
 }
 
+/* ================= LV-Zuordnung in den Plan ziehen (seit 2026-08-07) =================
+   Eine Zeile aus „Verknüpfte LV-Positionen" anfassen und im Plan auf einen anderen
+   Träger legen: Raum, Wand, Objekt, Tür oder Fenster — auch in einem anderen Raum.
+
+   **Bewusst mit Zeigerereignissen, nicht mit HTML5-Drag-and-Drop.** Letzteres trägt auf
+   dem Tablett nicht (kein `dragstart` aus einem Fingerzug), und die App macht jedes
+   andere Ziehen ohnehin über `pointerdown`/`move`/`up`.
+
+   **Wo etwas abgelegt werden kann, hängt an der Ansicht.** Wände, Objekte und Öffnungen
+   tragen ihre Trefferflächen nur, solange ihr Raum offen ist (`focusRoomId`) — in der
+   Etagenansicht gibt es deshalb nur ganze Räume als Ziel. Das ist keine Einschränkung
+   dieser Funktion, sondern die des Plans darunter. */
+const LV_ZIEH_SCHWELLE=8;                 // px; darunter bleibt es ein Tipp
+let lvZieh=null, lvHervor=null, lvZiehTat=false;
+
+/* Was liegt unter dem Finger? Reihenfolge nach Genauigkeit: Objekt und Öffnung sind
+   kleiner als die Wand, die Wand kleiner als der Raum. Eine Wandlinie trägt BEIDES
+   (`data-roomid` und `data-wall`), darum wird das dataset gefragt und nicht `closest`
+   allein — sonst gewänne je nach Suchreihenfolge das Falsche. */
+function lvZielAusPunkt(x, y){
+  /* `elementsFromPoint` — der ganze STAPEL unter dem Finger, nicht nur das oberste
+     Element. Damit werden Maßketten, Maßzahlen, Raumnamen und Plaketten schlicht
+     durchschaut: sie tragen keine Kennung, also liefert `closest` dort nichts und die
+     Suche geht eine Lage tiefer. Mit `elementFromPoint` (Einzahl) hätte ein Maß über
+     einer Wand die Wand verdeckt und man wäre beim Raum gelandet. */
+  const stapel = document.elementsFromPoint
+    ? document.elementsFromPoint(x, y) : [document.elementFromPoint(x, y)];
+  let obj=null, oeff=null, wand=null, raum=null;
+  const fr=focusRoomId;
+  for(const el of stapel){
+    if(!el || !el.closest || !svg.contains(el)) continue;
+    const t=el.closest('[data-obj],[data-open],[data-wall],[data-roomid]');
+    if(!t) continue;
+    const d=t.dataset;
+    const hatWand = d.wall!=null && d.wall!=='';
+    if(!obj  && d.obj  && fr) obj ={el:t, roomId:fr, objId:d.obj};
+    if(!oeff && d.open && fr) oeff={el:t, roomId:fr, objId:d.open};
+    /* Eine Wand trägt ZWEI Trefferflächen: die Achse als Linie mit absichtlich breitem
+       Strich, und den Wandkörper als Pfad über die ganze Stärke. Zum Hervorheben ist der
+       Pfad der richtige — er IST die Form der Wand, die Linie nur ein fetter Balken
+       darüber. Beide zeigen auf dieselbe Wand, es geht allein ums Aussehen. */
+    if(hatWand && d.roomid && (!wand || (wand.el.tagName==='line' && t.tagName==='path')))
+      wand={el:t, roomId:d.roomid, wall:+d.wall};
+    if(!raum && d.roomid && !hatWand) raum={el:t, roomId:d.roomid};
+  }
+  /* Vorrang nach Genauigkeit, nicht nach Zeichenreihenfolge: Objekt und Öffnung sind
+     kleiner als die Wand, die Wand kleiner als der Raum. */
+  return obj || oeff || wand || raum || lvRaumUnterPunkt(x, y);
+}
+/* Rückfallebene über die GEOMETRIE. Nicht jeder Punkt in einem Raum gehört auch zu
+   dessen Pfad: die Raumbeschriftung, die Maßketten und die Plaketten liegen darüber und
+   tragen keine Kennung — wer mitten in den Raum zielt, trifft mit einiger Wahrschein-
+   lichkeit den Namen statt den Boden. Darum am Schluss die Frage, in welchem Raumumriss
+   der Punkt liegt. Das Element zum Hervorheben wird dann nachgeschlagen. */
+function lvRaumUnterPunkt(x, y){
+  /* Erst die Frage, ob der Punkt ueberhaupt auf der Zeichenflaeche liegt. Ohne sie
+     rechnete die Umkehrmatrix auch einen Punkt in der Seitenleiste in Planmeter um —
+     und der faende dort womoeglich einen Raum, den man gar nicht sieht. */
+  const k=svg.getBoundingClientRect();
+  if(x < k.left || x > k.right || y < k.top || y > k.bottom) return null;
+  const pt=svg.createSVGPoint(); pt.x=x; pt.y=y;
+  const m=svg.getScreenCTM(); if(!m) return null;
+  const q=pt.matrixTransform(m.inverse());
+  const r=floorRooms().find(r=>(r.points||[]).length>2 && pointInPoly(q, innenPolygon(r)));
+  if(!r) return null;
+  const el=svg.querySelector(`[data-roomid="${r.id}"]:not([data-wall]):not([data-vertex])`);
+  return {el:el||null, roomId:r.id};
+}
+// Beschreibung des Ziels — über `lvHerkunft`, damit Liste und Ziehhinweis dieselbe Sprache sprechen
+function lvZielName(z){
+  const r=roomById(z.roomId);
+  if(!r) return '—';
+  const h=lvHerkunft({roomId:z.roomId, wall:z.wall, objId:z.objId});
+  return `${r.name} · ${h.titel}`;
+}
+/* Die Trefferflächen von Wänden und Öffnungen sind **transparent** — ohne eigenes Zutun
+   sieht man nicht, worauf man gerade zielt. Hervorgehoben wird darum das Trefferelement
+   selbst, aber **mit dünnem Strich**: seine eigene Strichstärke ist absichtlich
+   aufgeblasen (eine Wandlinie fängt 0,4 m breit, damit man sie auf dem Tablett trifft),
+   und würde man die stehen lassen, läge ein klobiger blauer Balken über dem Plan statt
+   der Form, die gemeint ist. Ein dünner Strich auf demselben Pfad zeichnet dagegen
+   **genau den Umriss** — Wandlinie, Raumpolygon, Objektkante, Türflügel.
+
+   Beim Verlassen wird der Stil wiederhergestellt, wie er war — auch „gar keiner". */
+function lvHervorSetzen(el){
+  if(lvHervor && lvHervor.el===el) return;
+  if(lvHervor){
+    if(lvHervor.stil==null) lvHervor.el.removeAttribute('style');
+    else lvHervor.el.setAttribute('style', lvHervor.stil);
+    lvHervor=null;
+  }
+  if(!el) return;
+  lvHervor={el, stil:el.getAttribute('style')};
+  el.style.stroke='#2f6fed';
+  el.style.strokeOpacity='0.9';
+  el.style.strokeWidth=Math.max(0.02, vb.w/420);      // in Metern, wie alles im Plan
+  el.style.strokeDasharray='none';
+  el.style.fill='#2f6fed';
+  el.style.fillOpacity='0.08';                        // nur ein Hauch, kein Farbklotz
+}
+function lvGeist(x, y, z, a){
+  let g=$('#lvgeist');
+  if(!g){ g=document.createElement('div'); g.id='lvgeist'; document.body.appendChild(g); }
+  g.innerHTML=`<b>${esc(a.lv)}</b>`+(z
+    ? `<span class="ziel">→ ${esc(lvZielName(z))}</span>`
+    : `<span class="kein">hier nicht ablegbar</span>`);
+  /* Im Fenster halten: rechts unten am Finger ist der Normalfall, aber am rechten oder
+     unteren Rand klappt der Hinweis auf die andere Seite. Sonst steht dort, wo man
+     gerade zielt, ein abgeschnittener Text — und das ist die Stelle, an der man liest. */
+  const b=g.getBoundingClientRect();
+  const gx = (x+14+b.width  > innerWidth -6) ? x-b.width -14 : x+14;
+  const gy = (y+14+b.height > innerHeight-6) ? y-b.height-14 : y+14;
+  g.style.transform=`translate(${Math.round(Math.max(6, gx))}px, ${Math.round(Math.max(6, gy))}px)`;
+}
+function lvZiehAufraeumen(){
+  window.removeEventListener('pointermove', lvZiehBewegen);
+  window.removeEventListener('pointerup', lvZiehLoslassen);
+  window.removeEventListener('pointercancel', lvZiehAufraeumen);
+  lvHervorSetzen(null);
+  const g=$('#lvgeist'); if(g) g.remove();
+  document.body.classList.remove('lvzieht');
+  lvZieh=null;
+}
+function lvZiehAnfassen(e, id){
+  if(e.button) return;                                  // nur die linke Taste
+  const a=(proj().attrs||[]).find(x=>x.id===id);
+  if(!a) return;
+  lvZieh={a, zeiger:e.pointerId, x0:e.clientX, y0:e.clientY, aktiv:false, ziel:null};
+  lvZiehTat=false;
+  window.addEventListener('pointermove', lvZiehBewegen, {passive:false});
+  window.addEventListener('pointerup', lvZiehLoslassen);
+  window.addEventListener('pointercancel', lvZiehAufraeumen);
+}
+function lvZiehBewegen(e){
+  if(!lvZieh || e.pointerId!==lvZieh.zeiger) return;
+  const dx=e.clientX-lvZieh.x0, dy=e.clientY-lvZieh.y0;
+  if(!lvZieh.aktiv){
+    if(Math.hypot(dx, dy) < LV_ZIEH_SCHWELLE) return;
+    // Überwiegend senkrecht: das war Rollen, nicht Ziehen — Finger wieder freigeben
+    if(Math.abs(dy) > Math.abs(dx)){ lvZiehAufraeumen(); return; }
+    lvZieh.aktiv=true; lvZiehTat=true;
+    document.body.classList.add('lvzieht');
+  }
+  e.preventDefault();
+  lvZieh.ziel=lvZielAusPunkt(e.clientX, e.clientY);
+  lvHervorSetzen(lvZieh.ziel ? lvZieh.ziel.el : null);
+  lvGeist(e.clientX, e.clientY, lvZieh.ziel, lvZieh.a);
+}
+function lvZiehLoslassen(e){
+  if(!lvZieh || e.pointerId!==lvZieh.zeiger) return;
+  const {a, aktiv, ziel}=lvZieh;
+  lvZiehAufraeumen();
+  if(!aktiv) return;                                    // war ein Tipp — der Klick öffnet den Dialog
+  if(!ziel){ melde('Neben dem Plan losgelassen — nichts verschoben.'); return; }
+  lvVerschieben(a, ziel);
+}
+
+/* Der eigentliche Umzug. Zwei Dinge machen ihn heikler, als er aussieht:
+
+   1. **Gekoppelte Maße folgen dem neuen Träger.** `autoL` nimmt die Länge der Wand,
+      an einer Tür deren Breite; `autoH` die Raumhöhe bzw. die Türhöhe; `autoObj` die
+      Maße der Fläche/Linie. `lvMasseNachziehen()` zieht das nach und löst Kopplungen,
+      die am neuen Ort keinen Sinn mehr ergeben.
+   2. **Die Automatikschalter rechnen mit dem RAUM.** Grundfläche, Ansichtsfläche,
+      Volumen und „Umfang als Länge" beziehen sich auf `roomStats` — nach einem
+      Raumwechsel steht dort eine andere Zahl.
+
+   Beides kann die abgerechnete Menge ändern, ohne dass man es sieht. Darum wird vorher
+   und nachher gerechnet und bei Abweichung gefragt. `alleNein` wird EINMAL bestimmt und
+   für beide Seiten benutzt — es hängt an der Gruppe gleicher LV-Nummern und ändert sich
+   durch den Umzug nicht; zweimal zu bestimmen hieße, Äpfel mit Birnen zu vergleichen. */
+function lvVerschieben(a, ziel){
+  /* Fotoaufmaß: die Zuordnung wird bei jedem `save()` aus den Markierungen im Bild neu
+     gesetzt (`fmAttrsNachziehen`). Ein Umzug hielte keine Sekunde — also gar nicht erst. */
+  if(a.fmMark){
+    melde('Diese Zuordnung gehört zu einer Messung im Foto und bleibt an ihrem Bild.', true);
+    return;
+  }
+  const gleich = a.roomId===ziel.roomId
+    && (a.wall??null)===(ziel.wall??null) && (a.objId||null)===(ziel.objId||null);
+  if(gleich){ melde('Liegt schon dort.'); return; }
+
+  const vonText=lvZielName({roomId:a.roomId, wall:a.wall, objId:a.objId});
+  const nachText=lvZielName(ziel);
+  const alleNein=lvGroupAlleNein([a]);
+  const vorher=lvCalc(a, alleNein);
+  const sicherung=JSON.parse(JSON.stringify(a));
+
+  a.roomId=ziel.roomId;
+  delete a.projekt;                       // liegt jetzt an einem Träger, nicht mehr am Projekt
+  if(ziel.objId){ a.objId=ziel.objId; delete a.wall; }
+  else if(ziel.wall!=null){ a.wall=ziel.wall; delete a.objId; }
+  else { delete a.wall; delete a.objId; }
+  lvMasseNachziehen();                    // Kopplungen neu ziehen, ungültige lösen
+  const nachher=lvCalc(a, alleNein);
+
+  if(Math.abs(nachher.wert-vorher.wert) > 0.0005){
+    const grund=[];
+    if(a.autoL || sicherung.autoL) grund.push('die Länge folgt dem Träger');
+    if(a.autoH || sicherung.autoH) grund.push('die Höhe folgt dem Träger');
+    if(a.autoObj || sicherung.autoObj) grund.push('die Maße folgen dem Objekt');
+    if(a.nutzGrund) grund.push('gerechnet wird mit der Bodenfläche des Raums');
+    if(a.nutzAnsicht) grund.push('gerechnet wird mit der Ansichtsfläche des Raums');
+    if(a.nutzVolumen) grund.push('gerechnet wird mit dem Raumvolumen');
+    if(a.nutzUmfang) grund.push('gerechnet wird mit dem Raumumfang');
+    const ok=confirm(
+      `„${a.lv}" von „${vonText}" nach „${nachText}" verschieben?\n\n`+
+      `DAS ERGEBNIS ÄNDERT SICH DABEI:\n`+
+      `    vorher    ${fmt3(vorher.wert)} ${vorher.sym}\n`+
+      `    nachher   ${fmt3(nachher.wert)} ${nachher.sym}\n\n`+
+      (grund.length ? `Grund: ${grund.join('; ')}.\n\n` : '')+
+      `„Abbrechen" lässt alles, wie es war.`);
+    if(!ok){
+      // Bezeichner behalten, Inhalt zurück: andere Stellen halten eine Referenz auf `a`
+      Object.keys(a).forEach(k=>delete a[k]);
+      Object.assign(a, sicherung);
+      lvMasseNachziehen();
+      renderAll();
+      melde('Nicht verschoben.');
+      return;
+    }
+  }
+  /* Der neue Träger braucht eine Nummer — sonst steht in Bericht und Tabelle „Wand 3"
+     bzw. „Fläche", und im Plan ist nichts, woran man das wiederfindet. Vergeben wird
+     erst jetzt, weil eine Nummer erst dann etwas bedeutet, wenn wirklich eine Position
+     daran hängt; dieselbe Regel gilt beim Anlegen und beim Kopieren. */
+  lvNummerVergeben(ziel);
+  save(); renderAll();
+  /* Den Namen ERST JETZT wieder bilden. `lvHerkunft` nennt die Nummer des Trägers, und
+     die gibt es erst seit einer Zeile — vorher stand dort die Ersatzangabe „Wand (2)"
+     aus dem Index, gleich neben der frisch vergebenen Nr. 1. Zwei Zahlen für dieselbe
+     Wand in einem Satz sind schlimmer als gar keine. */
+  melde(`„${a.lv}" liegt jetzt bei ${lvZielName(ziel)}.`);
+}
+
 // Die Liste verknuepfter LV-Positionen. Steht in mehreren Panels (Raum, Wand,
 // Objekt, Tuer/Fenster) und hat darum keinen eigenen Ort.
 function wireLvListe(){
     document.querySelectorAll('[data-lvopen]').forEach(el=>{
-      el.onclick=()=>openLvDialog(el.dataset.lvopen);
+      el.title=(el.title||'')+' — oder in den Plan ziehen, um sie zu verschieben';
+      el.onpointerdown=e=>lvZiehAnfassen(e, el.dataset.lvopen);
+      // Nach einem echten Zug ist der nachfolgende Klick keiner — sonst ginge zum
+      // Schluss noch der Dialog auf, den man gar nicht wollte.
+      el.onclick=()=>{ if(lvZiehTat){ lvZiehTat=false; return; } openLvDialog(el.dataset.lvopen); };
     });
 }
 
@@ -9539,9 +10011,15 @@ function fotoKacheln(list){
   const l=list||[];
   return l.slice(0, FOTO_RASTER).map((f,i)=>{
     const rest = (i===FOTO_RASTER-1) ? l.length-FOTO_RASTER : 0;   // was nicht mehr zu sehen ist
+    const mehr = rest>0 ? `<span class="mehr">+${rest}</span>` : '';
+    /* Kein `data-fview`: ohne Bilddaten gibt es nichts anzusehen, nichts zu bearbeiten
+       und — wichtiger — nichts zu löschen. Ein Fehlgriff auf einen Platzhalter darf
+       nicht das Foto von der Baustelle kosten. */
+    if(!f.src) return `<div class="fw"><div class="fehlt"
+        title="Dieses Foto ist nicht geladen. Über „🏗 Baustelle“ → „Fotos nachladen“ holen."
+        >${ico('foto', true)}</div>${mehr}</div>`;
     return `<div class="fw"><img src="${f.src}" data-fview="${f.id}" alt="Foto"
-        title="Anklicken: groß ansehen, bearbeiten, löschen">${
-      rest>0 ? `<span class="mehr">+${rest}</span>` : ''}</div>`;
+        title="Anklicken: groß ansehen, bearbeiten, löschen">${mehr}</div>`;
   }).join('');
 }
 function fotoStrip(list){
@@ -9566,8 +10044,15 @@ function rolleZeigen(){
   if(!l.length){ dlgFotoRolle.close(); return; }        // letztes Foto gelöscht
   rolle.i=Math.max(0, Math.min(rolle.i, l.length-1));
   const f=l[rolle.i];
-  $('#frBild').src=f.src;
-  $('#frZahl').textContent=`Foto ${rolle.i+1} von ${l.length}`;
+  /* Ein nicht geladenes Foto („Ohne Fotos laden") hat keine Bilddaten. Blättern darf man
+     trotzdem darüber hinweg — nur zeigen und bearbeiten lässt sich nichts. Löschen bleibt
+     erlaubt: wer es hier wegwirft, meint es auch, und dann darf es beim Sichern gehen. */
+  const da=!!f.src;
+  $('#frBild').src = da ? f.src : '';
+  $('#frBild').style.visibility = da ? '' : 'hidden';
+  $('#frZahl').textContent=`Foto ${rolle.i+1} von ${l.length}`+
+    (da ? '' : ' — nicht geladen (über „🏗 Baustelle“ nachladen)');
+  $('#frBearb').disabled = !da;
   $('#frZur').disabled = rolle.i===0;
   $('#frVor').disabled = rolle.i>=l.length-1;
 }
@@ -10104,6 +10589,14 @@ function lvWahlListe(){
        Fotoaufmasses. `fmSlotWahl` sagt, welches — gesetzt wird es unmittelbar vor dem
        Oeffnen und danach wieder geleert. Ein zweiter Waehler waere dieselbe Liste
        gewesen, nur mit eigenen Fehlern. */
+    /* Drittes Ziel: die angehakten Zuordnungen der Detailansicht umhängen. Derselbe
+       Wähler, dieselbe Liste — ein eigener wäre dieselbe Liste mit eigenen Fehlern. */
+    if(lvUmhaengenWahl){
+      const {ids, kopieren}=lvUmhaengenWahl; lvUmhaengenWahl=null;
+      dlgLvWahl.close();
+      lvUmhaengen(ids, it, kopieren);
+      return;
+    }
     if(fmSlotWahl){
       const {g, i}=fmSlotWahl; fmSlotWahl=null;
       const x=fmSlots(g)[i];
@@ -10128,7 +10621,14 @@ function lvWahlListe(){
 }
 /* Gesetzt, solange der Positionswaehler fuer ein Farbfeld des Fotoaufmasses offen ist */
 let fmSlotWahl=null;
-function lvWahlOeffnen(){
+/* `absicht` sagt, wofür der Wähler diesmal offen ist: `{ids, kopieren}` zum Umhängen
+   bzw. Kopieren, sonst nichts. **Gesetzt wird sie hier und nirgends sonst** — damit kann
+   eine Absicht nicht in die nächste Sitzung des Wählers hinüberlecken, wenn er ohne
+   Auswahl geschlossen wird. Auf das `close`-Ereignis ist dabei bewusst kein Verlass:
+   nachgemessen liefert es diese Umgebung gar nicht, und ob es das Gerät des Nutzers tut,
+   wäre eine Wette. Jeder andere Aufrufer ruft ohne Argument und räumt damit auf. */
+function lvWahlOeffnen(absicht){
+  lvUmhaengenWahl=absicht||null;
   $('#lwSuche').value='';
   lvKatKnoepfe(); lvWahlListe();
   if(!dlgLvWahl.open) dlgLvWahl.showModal();
@@ -10710,8 +11210,15 @@ function imAbschlag(a){
    einem anderen Abschlag gehört — Objekte ohne jede LV-Zuordnung bleiben normal,
    die sind ja nur noch nicht zugeordnet und nicht etwa schon abgerechnet. */
 const attrsFuer = pred => (proj().attrs||[]).filter(a=>a.lv && pred(a));
+/* Schalter „Alle Räume" aus dem Ausgabe-Dialog: der Abschlag bestimmt weiter, WAS
+   abgerechnet wird — aber nicht mehr, was GEZEICHNET wird. Räume ohne Zuordnung in
+   diesem Umfang bekommen wieder ihre Seite, Etagen fallen nicht mehr weg, und nichts
+   wird blass. Die Listen bleiben beim Umfang: sonst wäre es kein Abschlag mehr,
+   sondern das gesamte Aufmaß — und dafür gibt es die Auswahl darüber.
+   Am Bildschirm (`druckFilter` null) ist ohnehin alles kräftig, darum die Kopplung. */
+const alleZeichnen = () => !!druckFilter && proj().druckAlleRaeume===true;
 function bauteilAktiv(list){
-  if(druckFilter) return list.some(imAbschlag);
+  if(druckFilter) return alleZeichnen() || list.some(imAbschlag);
   return !list.length || list.some(a=>abschlagVon(a)===proj().abschlag);
 }
 const objAktiv  = g => bauteilAktiv(attrsFuer(a=>a.objId===g.id));
@@ -10721,11 +11228,12 @@ const objAktiv  = g => bauteilAktiv(attrsFuer(a=>a.objId===g.id));
    Raumfotos immer mitkamen. Ein Bauteil ohne Zuordnung ist aber nicht „nicht
    abgerechnet", sondern nur noch nicht zugeordnet; seine Aufnahmen dokumentieren den
    Zustand und gehören in jeden Bericht. Dieselbe Regel gilt am Bildschirm schon. */
-const fotoAktiv = list => !list.length || list.some(imAbschlag);
+const fotoAktiv = list => alleZeichnen() || !list.length || list.some(imAbschlag);
 const wandFotoAktiv = (r,i) => fotoAktiv(attrsFuer(a=>a.roomId===r.id && a.wall===i));
 const objFotoAktiv  = g => fotoAktiv(attrsFuer(a=>a.objId===g.id));
 // Räume und Etagen werden nur im Druck ausgegraut — am Bildschirm wäre das zu viel
-const raumAktiv = r => !druckFilter || attrsFuer(a=>a.roomId===r.id).some(imAbschlag);
+const raumAktiv = r => !druckFilter || alleZeichnen()
+  || attrsFuer(a=>a.roomId===r.id).some(imAbschlag);
 // Bezeichnung fürs Deckblatt und die Fußzeile
 const abschlagText = f => !f ? '' : (f.art==='schluss' ? 'Schlussrechnung' : `Abschlag ${f.nr}`);
 
@@ -10759,6 +11267,13 @@ function lvGroups(){
   });
 }
 let lvDrill=null;   // gesetzt = Detailansicht einer LV-Position
+/* ---------- Mehrfachauswahl in der Detailansicht (seit 2026-08-07) ----------
+   Statt eines Papierkorbs je Zeile trägt jede Zuordnung ein Kästchen; gehandelt wird
+   oben für alle angehakten. Damit gibt es Löschen und Umhängen in einem Zug — und
+   „die ganze Position" ist einfach „Alle" angehakt, ohne zweiten Bedienweg. */
+let lvMarkiert=new Set();
+// Gesetzt, solange der Positionswähler zum UMHÄNGEN offen ist (wie `fmSlotWahl`)
+let lvUmhaengenWahl=null;
 /* Abschlags-Auswahl im LV-Tab. null = alles. Umgesetzt über denselben `druckFilter`,
    den der Druck benutzt — so rechnet der Bildschirm garantiert wie der Ausdruck, statt
    die Filterlogik ein zweites Mal nachzubauen. Gesetzt wird er nur um `lvGroups()`
@@ -11021,10 +11536,32 @@ function renderLvDetail(){
       ${Number.isFinite(g.preis)?`<span class="hint">EP: ${fmtGeld(g.preis)} €</span>`:''}
       <span data-lvkopfsum="1">${lvKopfSumme(g)}</span>
     </div>
+    <!-- Anwahlleiste: gehandelt wird oben für alle angehakten Zeilen. „Alle" ist zugleich
+         der Weg, die GANZE Position umzuhängen — ein zweiter Bedienweg dafür wäre nur
+         eine weitere Stelle, an der sich Fehler verstecken. -->
+    <div class="row" style="gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:6px">
+      <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer">
+        <input type="checkbox" id="lvSelAlle" style="width:17px; height:17px"
+          ${rows.length && rows.every(a=>lvMarkiert.has(a.id))?'checked':''}>
+        <span>Alle</span></label>
+      <span class="hint" id="lvSelZahl">${lvMarkiert.size} ausgewählt</span>
+      <button class="btn small" id="lvSelUm" ${lvMarkiert.size?'':'disabled'}
+        title="Die ausgewählten Zuordnungen auf eine andere LV-Position umhängen — sie bleiben, wo sie sind">
+        ${ico('kette')}Neu zuordnen</button>
+      <button class="btn small" id="lvSelKopie" ${lvMarkiert.size?'':'disabled'}
+        title="Dasselbe, aber kopierend: das Original bleibt an dieser Position, die Kopie hängt an der neuen. Ohne Fotos.">
+        ${ico('kopie')}Kopieren</button>
+      <button class="btn small danger" id="lvSelDel" ${lvMarkiert.size?'':'disabled'}
+        >${ico('papierkorb')}Löschen</button>
+    </div>
     <!-- Dreizehn Spalten mit Eingabefeldern lassen sich nicht sinnvoll auf 768 px
          quetschen — diese Tabelle scrollt darum in ihrem eigenen Rahmen, statt die
          ganze Seite mitzunehmen. -->
     <div class="tabrahmen"><table><thead><tr>
+      <!-- Das Kästchen steht VORNE. Ganz rechts wäre es auf dem Telefon aus dem Bild
+           gescrollt — die Tabelle rollt in ihrem eigenen Rahmen, und zum Anhaken müsste
+           man erst seitwärts wandern. -->
+      <th style="width:1%"></th>
       <th>Etage</th><th>Raum</th><th>Objekt</th><th>Menge</th><th>Einheit</th>
       <th>L</th><th>B</th><th>H</th><th>Ø</th><th>Ansichtsfl.</th><th>Flags</th><th>Abschl.</th>
       <th style="text-align:right">Ergebnis</th><th></th>
@@ -11048,6 +11585,9 @@ function renderLvDetail(){
           value="${isFinite(wert)?fmt3(wert):(leerErlaubt?'':'')}">`;
       };
       return `<tr data-lvrow="${a.id}">
+        <td><input type="checkbox" data-lvsel="${a.id}" ${lvMarkiert.has(a.id)?'checked':''}
+          title="Für Löschen, Neu zuordnen oder Kopieren auswählen"
+          style="width:17px; height:17px; display:block"></td>
         <td>${esc(r?floorName(r.floorId):'?')}</td><td>${esc(r?r.name:'– gelöscht –')}</td>
         <td>${esc(lvZielText(a))}</td>
         <td class="num">${zahl('menge', a.menge, false)}</td>
@@ -11066,18 +11606,17 @@ function renderLvDetail(){
         <td style="white-space:nowrap">
           <button class="btn small" data-lvedit="${a.id}">✎</button>
           <button class="btn small" data-lvcopy="${a.id}">⧉</button>
-          <button class="btn small danger" data-lvdel="${a.id}">🗑</button>
         </td></tr>`;
-    }).join('') || `<tr><td colspan="15" style="color:var(--muted)">Zu dieser Position gibt es
+    }).join('') || `<tr><td colspan="16" style="color:var(--muted)">Zu dieser Position gibt es
       ${lvAbschlagWahl!=null?`im Abschlag ${lvAbschlagWahl} `:''}noch keine Zuordnung im Aufmaß.</td></tr>`}
     </tbody>
-    <tfoot><tr><td colspan="13" style="text-align:right"><b>Summe</b></td>
+    <tfoot><tr><td colspan="14" style="text-align:right"><b>Summe</b></td>
       <td class="num" data-lvsum="1"><b>${g.einheiten.length>1?'—':fmt3(g.summe)+' '+g.sym}</b></td><td></td></tr></tfoot>
     </table></div>
     <p class="hint" style="margin-top:8px">Menge, Einheit, Maße und Abschlag lassen sich <b>direkt in der Zeile</b>
       ändern — beim Abschlag auch mit den Pfeiltasten. Ergebnis je Zeile wie in magicplan gerechnet — Formel als Tooltip.
       ${g.alleNein&&g.einheiten[0]==='Flache'?'Ohne gesetzte Richtungen gilt für diese Position L×H + L×B.':''}</p>`;
-  $('#lvback').onclick=()=>{ lvDrill=null; renderLv(); };
+  $('#lvback').onclick=()=>{ lvDrill=null; lvMarkiert.clear(); renderLv(); };
   $('#lvneuhier').onclick=()=>openLvDialog(null, sel.roomId||((proj().rooms[0]||{}).id), null,
     {projekt:true, lv:g.lv});
   document.querySelectorAll('#lvview [data-lvfeld]').forEach(el=>{
@@ -11089,9 +11628,146 @@ function renderLvDetail(){
     proj().attrs.push({...ohneFotos(a), id:uid(), abschlag:proj().abschlag});   // Kopie = neue Leistung, ohne Fotos
     save(); renderLv();
   });
-  document.querySelectorAll('[data-lvdel]').forEach(b=>b.onclick=()=>{
-    if(lvZuordnungLoeschen(b.dataset.lvdel)) renderLv();
+  /* Anwahl: nur die Leiste auffrischen, NICHT die ganze Tabelle neu bauen. Ein
+     `renderLv()` je Häkchen würde bei jeder Zeile alle Eingabefelder verwerfen — und
+     wer gerade eine Zahl tippt, verlöre sie. */
+  const leisteFrisch=()=>{
+    const z=$('#lvSelZahl'); if(z) z.textContent=`${lvMarkiert.size} ausgewählt`;
+    const alle=$('#lvSelAlle');
+    if(alle) alle.checked = rows.length>0 && rows.every(a=>lvMarkiert.has(a.id));
+    ['#lvSelUm','#lvSelKopie','#lvSelDel'].forEach(s=>{
+      const b=$(s); if(b) b.disabled=!lvMarkiert.size;
+    });
+  };
+  document.querySelectorAll('[data-lvsel]').forEach(cb=>cb.onchange=()=>{
+    if(cb.checked) lvMarkiert.add(cb.dataset.lvsel); else lvMarkiert.delete(cb.dataset.lvsel);
+    leisteFrisch();
   });
+  $('#lvSelAlle').onchange=e=>{
+    rows.forEach(a=>{ if(e.target.checked) lvMarkiert.add(a.id); else lvMarkiert.delete(a.id); });
+    document.querySelectorAll('[data-lvsel]').forEach(cb=>{ cb.checked=e.target.checked; });
+    leisteFrisch();
+  };
+  $('#lvSelDel').onclick=lvMarkierteLoeschen;
+  const waehlen=kopieren=>()=>{
+    if(!lvMarkiert.size) return;
+    lvWahlOeffnen({ids:[...lvMarkiert], kopieren});
+  };
+  $('#lvSelUm').onclick=waehlen(false);
+  $('#lvSelKopie').onclick=waehlen(true);
+}
+
+/* ---------- Ausgewählte Zuordnungen löschen ---------- */
+function lvMarkierteLoeschen(){
+  const p=proj();
+  const ids=[...lvMarkiert].filter(id=>(p.attrs||[]).some(a=>a.id===id));
+  if(!ids.length) return;
+  const liste=(p.attrs||[]).filter(a=>ids.includes(a.id));
+  /* Einzeln fragen wäre bei zwanzig Zeilen zwanzig Rückfragen. Also EINE, die alles
+     nennt, was sonst unbemerkt mitgeht: Fotos und bereits abgerechnete Abschläge. */
+  const fotos=liste.reduce((n,a)=>n+(a.fotos||[]).length, 0);
+  const alt=liste.filter(a=>abschlagVon(a)<p.abschlag).length;
+  if(!confirm(`${ids.length} LV-Zuordnung(en) löschen?`
+    + (fotos ? `\n\n${fotos===1?'Ein Foto wird':fotos+' Fotos werden'} mit gelöscht.` : '')
+    + (alt ? `\n\nAchtung: ${alt} davon ${alt===1?'gehört':'gehören'} zu einem bereits `
+             +`abgeschlossenen Abschlag.` : '')
+    + `\n\nRückgängig macht es wieder.`)) return;
+  liste.forEach(a=>fmMarkeLoeschen(a.fmMark));      // Fotoaufmaß: auch die Markierung im Bild
+  p.attrs=(p.attrs||[]).filter(a=>!ids.includes(a.id));
+  lvMarkiert.clear();
+  save(); renderAll(); renderLv();
+  melde(`${ids.length} Zuordnung(en) gelöscht.`);
+}
+
+/* ---------- Ausgewählte Zuordnungen auf eine andere LV-Position legen ----------
+   Zwei Betriebsarten, ein Weg:
+
+   | `kopieren` | was geschieht |
+   |---|---|
+   | `false` | **Umhängen** — dieselbe Zuordnung zeigt künftig auf die andere Position |
+   | `true`  | **Kopieren** — das Original bleibt, eine Kopie hängt an der neuen Position |
+
+   In beiden Fällen bleibt der TRÄGER derselbe: Raum, Wand, Objekt oder Tür behalten ihre
+   Zuordnung(en), beim Kopieren hat der Träger danach schlicht eine mehr. Maße, Mengen und
+   Richtungen bleiben unangetastet — gewechselt wird die Nummer, nicht die Messung.
+
+   Die EINHEIT wird nicht übernommen. Sie steckt in der Messung, nicht in der Nummer: eine
+   in m² gemessene Fläche wird nicht dadurch zu Metern, dass sie künftig unter einer
+   anderen Position abgerechnet wird. Weicht sie ab, steht das in der Rückfrage — man soll
+   es sehen, statt es zu erben. */
+function lvUmhaengen(ids, it, kopieren){
+  const p=proj();
+  const liste=(p.attrs||[]).filter(a=>ids.includes(a.id));
+  if(!liste.length) return;
+  const sym=e=>EINH_SYM[e]||e;
+  const zielEinheit=(p.lvUnits||{})[it.lv];
+  const einheitHinweis=menge=>{
+    const ab=menge.filter(a=>a.einheit && zielEinheit && a.einheit!==zielEinheit);
+    return ab.length
+      ? `\n\nAchtung: ${ab.length===1 ? 'eine davon rechnet' : ab.length+' davon rechnen'} `
+        +`in ${sym(ab[0].einheit)}, die Zielposition ist in ${sym(zielEinheit)} geführt. `
+        +`Die Einheit der Zuordnung bleibt, wie sie ist.`
+      : '';
+  };
+  const ziel=`„${it.lv}${it.kurz?' — '+it.kurz:''}"`;
+
+  if(kopieren){
+    /* Fotos bleiben beim Original — dieselbe Regel wie bei jedem Kopieren in dieser App
+       (Ticket #2 vom 3.8.2026): sonst stünde dasselbe Bild mehrfach im Bericht und jede
+       Sicherung wüchse mit. `fmMark` fällt ebenfalls weg: die Kopie ist eine eigenständige
+       Zuordnung, keine zweite Messung im selben Foto — mit der Marke würde sie beim
+       nächsten `save()` von `fmAttrsNachziehen` wieder eingesammelt. */
+    const fotos=liste.reduce((n,a)=>n+(a.fotos||[]).length, 0);
+    if(!confirm(`${liste.length} Zuordnung(en) nach ${ziel} kopieren?`
+      + `\n\nDie Kopien bleiben am selben Träger (Raum, Wand, Objekt) — dort steht danach `
+      + `eine Zuordnung mehr. Das Original bleibt unverändert an seiner Position.`
+      + (fotos ? `\n\n${fotos===1?'Das Foto wird':'Die '+fotos+' Fotos werden'} nicht `
+                 +`mitkopiert — es bleibt beim Original.` : '')
+      + einheitHinweis(liste)
+      + `\n\nRückgängig macht es wieder.`)) return;
+    const neu=liste.map(a=>{
+      const k={...ohneFotos(a), id:uid(), lv:it.lv, abschlag:p.abschlag};
+      if(it.kurz) k.kurz=it.kurz;
+      delete k.fmMark;
+      return k;
+    });
+    p.attrs.push(...neu);
+    assignLvColors(p);
+    lvMarkiert.clear();
+    lvDrill=it.lv;
+    save(); renderAll(); renderLv();
+    melde(`${neu.length} Kopie(n) hängen jetzt an „${it.lv}" — ohne Fotos.`);
+    return;
+  }
+
+  /* Fotoaufmaß bleibt beim Umhängen aussen vor: `fmAttrsNachziehen` setzt `a.lv` bei
+     jedem `save()` aus dem Farbfeld der Messung neu — die neue Nummer hielte keine
+     Sekunde. Dort wird die Position am Foto selbst gewechselt. (Beim KOPIEREN ist das
+     kein Problem, die Kopie trägt die Marke ja nicht mehr.) */
+  const fest=liste.filter(a=>a.fmMark);
+  const machbar=liste.filter(a=>!a.fmMark && a.lv!==it.lv);
+  const schon=liste.filter(a=>!a.fmMark && a.lv===it.lv).length;
+  if(!machbar.length){
+    melde(fest.length && !schon
+      ? 'Nur Fotoaufmaß-Zuordnungen ausgewählt — die wechseln ihre Position am Foto.'
+      : 'Alle ausgewählten zeigen schon auf diese Position.', true);
+    return;
+  }
+  if(!confirm(`${machbar.length} Zuordnung(en) auf ${ziel} umhängen?`
+    + `\n\nSie bleiben, wo sie sind (Raum, Wand, Objekt). Maße, Mengen und Fotos ändern `
+    + `sich nicht — nur die LV-Nummer.`
+    + (schon ? `\n\n${schon} zeigen schon dorthin und bleiben unberührt.` : '')
+    + (fest.length ? `\n\n${fest.length} Fotoaufmaß-Zuordnung(en) bleiben aussen vor — `
+                     +`die Position wechselt man dort am Foto.` : '')
+    + einheitHinweis(machbar)
+    + `\n\nRückgängig macht es wieder.`)) return;
+
+  machbar.forEach(a=>{ a.lv=it.lv; if(it.kurz) a.kurz=it.kurz; });
+  assignLvColors(p);                       // die Zielposition braucht ihre Farbe
+  lvMarkiert.clear();
+  lvDrill=it.lv;                           // gleich dort weiterschauen, wo sie gelandet sind
+  save(); renderAll(); renderLv();
+  melde(`${machbar.length} Zuordnung(en) hängen jetzt an „${it.lv}".`);
 }
 
 /* ================= LV editieren (Katalog) =================
@@ -11437,6 +12113,84 @@ function planDurchsicht(){
   return Number.isFinite(v) && v>0 ? Math.min(1, v) : 0.6;
 }
 
+/* ================= Vektorplan (seit 2026-08-07) =================
+   Ein Hintergrundplan als LINIEN statt als Bild. Kommt aus einer DXF/DWG und wird am
+   Rechner umgewandelt — das Format steht in `docs/austauschformat.md`.
+
+   Der Gewinn gegenüber dem gerasterten Plan: scharf in jedem Zoom, ein Bruchteil der
+   Dateigröße, **kein 48-MB-Bitmap im Arbeitsspeicher** — und der Maßstab stimmt von
+   selbst, weil eine DXF echte Einheiten trägt. „Maßstab setzen" wird damit zur
+   Korrektur statt zur Pflicht.
+
+   Der Trick beim Einbau: die Linien liegen als `data:application/json;base64,…` in
+   **`pl.src`**, also im selben Feld wie sonst die Bilddaten. Dadurch gelten unverändert
+   und ohne eine einzige neue Zeile:
+     · IndexedDB-Sichern und -Nachladen (`bilderSichern` prüft nur `f.id` und `f.src`),
+     · der Ausblenden-Schalter samt Speicherfreigabe (`planAusblenden`),
+     · der Airtable-Hin- und Rückweg (der Dateityp wird aus der Datenzeile gelesen,
+       daraus wird `foto_<id>.json` statt `.jpg`),
+     · das Heraushalten aus dem localStorage (`standErfassen` leert jedes `src`,
+       das mit `data:` beginnt).
+   Zu ändern war damit nur noch das Zeichnen. `pl.art==='vec'` sagt, was drinsteht. */
+const istVektor = pl => !!(pl && pl.art==='vec');
+/* Obergrenze für die Anzahl Koordinaten. 400.000 sind rund 100.000 Strecken — weit mehr,
+   als ein Geschossplan braucht (500–3.000). Wer darüber liegt, hat Schraffuren
+   mitgenommen; die gehören im Importprogramm weggelassen, nicht hier abgefangen. */
+const VEK_MAXZAHL=400000;
+
+function textVonB64(b64){                            // Gegenstück zu b64VonText, UTF-8-sicher
+  const bin=atob(b64), by=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) by[i]=bin.charCodeAt(i);
+  return new TextDecoder().decode(by);
+}
+
+/* Aus der Datenzeile fertige `d`-Angaben bauen — eine je Lage, alle Streckenzüge der Lage
+   in EINEM Pfad. Das ist der teure Schritt (bei 3.000 Strecken einige Millisekunden), und
+   er darf darum nicht bei jedem Bild laufen. Der Zwischenspeicher hängt an `pl.src`:
+   dieselbe Zeichenkette → dieselben Daten. Genau die Denkweise wie bei `planHrefJetzt`.
+   Auch ein FEHLSCHLAG wird gemerkt (`daten:null`), sonst stünde die Meldung bei jedem
+   Bild neu auf dem Schirm. */
+let vekCache=null;                        // {src, daten:{breite,hoehe,lagen:[…]}|null}
+function vekDaten(pl){
+  if(!istVektor(pl) || !pl.src) return null;
+  if(vekCache && vekCache.src===pl.src) return vekCache.daten;
+  let daten=null;
+  try{
+    const komma=pl.src.indexOf(',');
+    if(komma<0) throw new Error('keine Datenzeile');
+    daten=vekAuswerten(JSON.parse(textVonB64(pl.src.slice(komma+1))));
+  }catch(err){ melde('Vektorplan nicht lesbar: '+err.message, true); }
+  vekCache={src:pl.src, daten};
+  return daten;
+}
+function vekAuswerten(o){
+  if(!o || o.typ!=='grundriss-vektorplan') throw new Error('das ist kein Vektorplan');
+  const breite=+o.breite, hoehe=+o.hoehe;
+  if(!(breite>0) || !(hoehe>0)) throw new Error('Breite und Höhe fehlen oder sind ≤ 0');
+  let zahlen=0;
+  const lagen=(o.lagen||[]).map(l=>{
+    let d='';
+    (l.pfade||[]).forEach(p=>{
+      if(!Array.isArray(p) || p.length<4) return;    // eine einzelne Koordinate ist keine Strecke
+      zahlen+=p.length;
+      d+='M'+p[0]+' '+p[1];
+      for(let i=2;i<p.length-1;i+=2) d+='L'+p[i]+' '+p[i+1];
+    });
+    return {name:String(l.name||'Lage'), farbe:String(l.farbe||'#333'),
+            dicke:(+l.dicke>0 ? +l.dicke : 0.02), an:l.an!==false, d};
+  }).filter(l=>l.d);
+  if(!lagen.length) throw new Error('keine Linien enthalten');
+  if(zahlen>VEK_MAXZAHL) throw new Error(
+    `${Math.round(zahlen/2).toLocaleString('de-DE')} Punkte — das ist zu viel für einen `+
+    'Hintergrundplan. Im Importprogramm die Schraffuren weglassen.');
+  return {breite, hoehe, lagen};
+}
+/* Welche Lagen sichtbar sind: die Vorgabe steht in der Datei (`an`), die Entscheidung des
+   Anwenders in `pl.lagenAn`. Das Feld ist klein und darf im localStorage stehen. */
+function vekLagenAn(pl, vd){
+  return vd.lagen.map((l,i)=> (pl.lagenAn && pl.lagenAn[i]!=null) ? !!pl.lagenAn[i] : l.an);
+}
+
 /* ---------- Warum der Plan in einer EIGENEN Lage liegt (seit 2026-08-07) ----------
    `renderCanvas` baut die ganze Zeichnung als Zeichenkette und setzt sie mit
    `innerHTML`. Stand das Planbild darin, wurde bei **jedem** Bild die komplette
@@ -11453,9 +12207,10 @@ function planDurchsicht(){
 
    Das Raster liegt mit in der stehenden Lage, weil es HINTER dem Plan liegen muss. */
 let planHrefJetzt=null;                  // was gerade im DOM steht — nur bei Wechsel neu setzen
+let vekDomJetzt=null;                    // {src, schalter} — welcher Vektorplan im Baum steht
 function planLageZeichnen(){
   const g=$('#planlage'); if(!g) return;
-  let rast=g.querySelector('[data-bg]'), bild=g.querySelector('#planimg');
+  let rast=g.querySelector('[data-bg]'), bild=g.querySelector('#planimg'), gv=g.querySelector('#planvec');
   if(!rast){
     g.insertAdjacentHTML('beforeend',
       `<defs>
@@ -11468,25 +12223,36 @@ function planLageZeichnen(){
            <stop offset="100%" stop-color="#0ea06f" stop-opacity="0"/>
          </radialGradient>
        </defs>
-       <rect data-bg="1" fill="url(#grid)"/><image id="planimg" preserveAspectRatio="none"/>`);
-    rast=g.querySelector('[data-bg]'); bild=g.querySelector('#planimg');
+       <rect data-bg="1" fill="url(#grid)"/><image id="planimg" preserveAspectRatio="none"/><g id="planvec"></g>`);
+    rast=g.querySelector('[data-bg]'); bild=g.querySelector('#planimg'); gv=g.querySelector('#planvec');
   }
   rast.setAttribute('x', vb.x-50); rast.setAttribute('y', vb.y-50);
   rast.setAttribute('width', vb.w+100); rast.setAttribute('height', vb.h+100);
-  const pl=planVon();
-  if(!pl){
-    /* Kein Plan oder ausgeblendet: die Bildquelle **weg**, nicht nur unsichtbar. Erst
-       damit gibt der Browser das dekodierte Bild frei — bei 4000 × 3000 sind das rund
-       48 MB, und die sind auf dem iPad der Unterschied zwischen flüssig und zäh. */
-    /* Gefragt wird das ELEMENT, nicht nur der Merker: der kann vom Baum abweichen (beim
-       Entfernen des Plans, nach einem Wiederherstellen). Ein Merker, der etwas behauptet,
-       das im Baum nicht steht, lässt das alte Bild stehen — und das ist genau das, was
-       hier weg soll. */
-    if(bild.hasAttribute('href')) bild.removeAttribute('href');
-    planHrefJetzt=null;
-    bild.setAttribute('width', 0); bild.setAttribute('height', 0);
-    return;
-  }
+  const pl=planVon(), vek=istVektor(pl);
+  // Immer nur eines von beiden steht im Baum — das andere wird geräumt, nicht versteckt
+  if(!pl || vek)  planBildWeg(bild);
+  if(!pl || !vek) planVekWeg(gv);
+  if(!pl) return;
+  if(vek) planVekZeichnen(gv, pl); else planBildZeichnen(bild, pl);
+}
+/* Die Bildquelle **weg**, nicht nur unsichtbar. Erst damit gibt der Browser das dekodierte
+   Bild frei — bei 4000 × 3000 sind das rund 48 MB, und die sind auf dem iPad der
+   Unterschied zwischen flüssig und zäh.
+   Gefragt wird das ELEMENT, nicht nur der Merker: der kann vom Baum abweichen (beim
+   Entfernen des Plans, nach einem Wiederherstellen). Ein Merker, der etwas behauptet, das
+   im Baum nicht steht, ließe das alte Bild stehen — und das ist genau das, was hier weg soll. */
+function planBildWeg(bild){
+  if(bild.hasAttribute('href')) bild.removeAttribute('href');
+  planHrefJetzt=null;
+  bild.setAttribute('width', 0); bild.setAttribute('height', 0);
+}
+// Beim Vektorplan ist der Speicher der DOM-Baum selbst: die Pfade müssen wirklich raus.
+function planVekWeg(gv){
+  if(gv.firstChild) gv.textContent='';
+  vekDomJetzt=null;
+  gv.removeAttribute('transform');
+}
+function planBildZeichnen(bild, pl){
   if(planHrefJetzt!==pl.src || !bild.hasAttribute('href')){
     bild.setAttribute('href', pl.src); planHrefJetzt=pl.src;
   }
@@ -11495,13 +12261,40 @@ function planLageZeichnen(){
   bild.setAttribute('opacity', pl.deckkraft);
   if(pl.drehung) bild.setAttribute('transform', `rotate(${pl.drehung} ${pl.x} ${pl.y})`);
   else bild.removeAttribute('transform');
-  // Gesperrt liegt der Plan völlig durchlässig da — Klicks gehen an Räume und Ansicht
+  planGriff(bild, pl);
+}
+/* Die Pfade werden nur neu gebaut, wenn sich die Datei ODER die Lagenschalter ändern.
+   Lage, Maßstab, Drehung und Deckkraft hängen dagegen an der GRUPPE — die ändern sich
+   beim Ziehen laufend und kosten dann nur ein `transform`-Attribut, nicht 3.000 Pfade. */
+function planVekZeichnen(gv, pl){
+  const vd=vekDaten(pl);
+  if(!vd){ planVekWeg(gv); return; }
+  const an=vekLagenAn(pl, vd), schalter=an.map(x=>x?'1':'0').join('');
+  if(!vekDomJetzt || vekDomJetzt.src!==pl.src || vekDomJetzt.schalter!==schalter){
+    /* Der durchsichtige Deckel liegt ZULETZT und damit obenauf: ein `<path>` mit
+       `fill:none` würde nur auf dem Strich anspringen, und der Plan wäre kaum zu fassen. */
+    gv.innerHTML =
+      vd.lagen.map((l,i)=> an[i]
+        ? `<path d="${l.d}" fill="none" stroke="${esc(l.farbe)}" stroke-width="${l.dicke}"
+             stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>` : '').join('')
+      + `<rect id="planvechit" x="0" y="0" width="${vd.breite}" height="${vd.hoehe}" fill="transparent"/>`;
+    vekDomJetzt={src:pl.src, schalter};
+  }
+  const s=pl.breite/vd.breite;
+  const setz=`translate(${pl.x} ${pl.y}) scale(${s})`;
+  gv.setAttribute('transform', pl.drehung ? `rotate(${pl.drehung} ${pl.x} ${pl.y}) ${setz}` : setz);
+  gv.setAttribute('opacity', pl.deckkraft);
+  planGriff(gv.querySelector('#planvechit'), pl);
+}
+// Gesperrt liegt der Plan völlig durchlässig da — Klicks gehen an Räume und Ansicht
+function planGriff(el, pl){
+  if(!el) return;
   if(pl.gesperrt||mode==='kalib'){
-    bild.setAttribute('pointer-events','none'); bild.removeAttribute('data-plan');
-    bild.style.cursor='';
+    el.setAttribute('pointer-events','none'); el.removeAttribute('data-plan');
+    el.style.cursor='';
   } else {
-    bild.removeAttribute('pointer-events'); bild.setAttribute('data-plan','1');
-    bild.style.cursor='move';
+    el.removeAttribute('pointer-events'); el.setAttribute('data-plan','1');
+    el.style.cursor='move';
   }
 }
 // Nur noch das Bewegliche: Rahmen und Maßstabsmarken. Das Bild selbst steht in `#planlage`.
@@ -11548,10 +12341,15 @@ function planPanel(){
       <button class="btn small primary" id="planat" style="flex:1">${ico('wolke')}Aus Airtable</button>
       <button class="btn small" id="planadd" style="flex:1">${ico('bild')}Aus Datei</button>
     </div>
+    <div class="row">
+      <button class="btn small" id="planvek" style="flex:1">${ico('massstab')}Vektorplan (.json)</button>
+    </div>
     <div id="planListe"></div>
     <p class="hint" style="margin-top:6px">Pläne liegen bei der Baustelle im Feld <b>Aufmaß Pläne</b>.
       PDFs vorher am Rechner umwandeln — <code>plan-export.py</code> schreibt die Breite in den Dateinamen,
-      dann stimmt der Maßstab von selbst.</p></div>`;
+      dann stimmt der Maßstab von selbst.
+      <br>Ein <b>Vektorplan</b> kommt aus einer DXF/DWG und bringt seinen Maßstab selbst mit —
+      er bleibt in jedem Zoom scharf und braucht keinen Speicher fürs Bild.</p></div>`;
   const aus=!!pl.aus;
   /* Der Schalter steht GANZ OBEN und ist das Erste im Panel: er ist der Ausweg, wenn die
      App am Plan hängt, und dann sucht man ihn nicht erst unten. Grün heißt sichtbar,
@@ -11571,10 +12369,14 @@ function planPanel(){
       <button class="btn small" id="planadd" style="flex:1">${ico('bild')}Datei</button>
       <button class="btn small danger" id="plandel">${ico('papierkorb')}Entfernen</button>
     </div>
+    <div class="row">
+      <button class="btn small" id="planvek" style="flex:1">${ico('massstab')}Vektorplan (.json)</button>
+    </div>
     <div id="planListe"></div>
-    <p class="hint" style="margin-top:6px">Der Plan ist <b>ausgeblendet</b> und sein Bild ist aus dem
+    <p class="hint" style="margin-top:6px">Der Plan ist <b>ausgeblendet</b> und ${istVektor(pl)
+      ? 'seine Linien sind' : 'sein Bild ist'} aus dem
       Arbeitsspeicher genommen — Maßstab, Lage und Drehung sind gemerkt und kommen beim Anzeigen
-      unverändert zurück. Das Bild selbst liegt weiter im Bildspeicher des Geräts.
+      unverändert zurück. Die Daten selbst liegen weiter im Bildspeicher des Geräts.
       <br>Wenn die App mit einem großen Planfoto zäh wird, ist das hier der Ausweg.</p></div>`;
   return `<div class="panel"><h3>Plan als Hintergrund</h3>
     ${schalter}
@@ -11583,8 +12385,9 @@ function planPanel(){
     <div class="row"><label>Drehung °</label><input id="plandreh" type="text" inputmode="decimal" value="${fmt(pl.drehung||0,1)}"></div>
     <div class="row"><label>Deckkraft Plan</label><input id="plandeck" type="range" min="10" max="100" value="${Math.round(pl.deckkraft*100)}" style="flex:1"></div>
     <div class="row"><label>Deckkraft Zeichnung</label><input id="plandurch" type="range" min="15" max="100" value="${Math.round(planDurchsicht()*100)}" style="flex:1"></div>
+    ${vekLagenPanel(pl)}
     <div class="row">
-      <button class="btn small" id="plankalib" style="flex:1">${ico('massstab')}Maßstab setzen</button>
+      <button class="btn small" id="plankalib" style="flex:1">${ico('massstab')}Maßstab ${istVektor(pl)?'nachstellen':'setzen'}</button>
       <button class="btn small ${pl.gesperrt?'zu':'auf'}" id="planlock" style="flex:1">${
         ico(pl.gesperrt?'schlossZu':'schlossAuf')}${pl.gesperrt?'Gesperrt':'Beweglich'}</button>
     </div>
@@ -11593,12 +12396,31 @@ function planPanel(){
       <button class="btn small" id="planadd" style="flex:1">${ico('bild')}Datei</button>
       <button class="btn small danger" id="plandel">${ico('papierkorb')}Entfernen</button>
     </div>
+    <div class="row">
+      <button class="btn small" id="planvek" style="flex:1">${ico('massstab')}Vektorplan (.json)</button>
+    </div>
     <div id="planListe"></div>
     <p class="hint" style="margin-top:6px">${pl.gesperrt
       ? 'Gesperrt: Ziehen verschiebt wieder die Ansicht.'
       : 'Beweglich: Ziehen auf dem Plan verschiebt ihn. Zum Zeichnen besser sperren.'}
-      <br><b>Deckkraft Zeichnung</b> lässt Räume und Wände durchscheinen, damit der Plan darunter
-      sichtbar bleibt — nur am Bildschirm, der Ausdruck bleibt voll deckend.</p></div>`;
+      ${istVektor(pl)
+        ? '<br>Der Maßstab kam mit der Datei und stimmt schon — <b>Maßstab nachstellen</b> braucht es '+
+          'nur, wenn im CAD falsch gezeichnet wurde.'
+        : '<br><b>Deckkraft Zeichnung</b> lässt Räume und Wände durchscheinen, damit der Plan darunter '+
+          'sichtbar bleibt — nur am Bildschirm, der Ausdruck bleibt voll deckend.'}</p></div>`;
+}
+
+/* Die Lagen des Vektorplans als Schalterreihe. Möblierung und Bemaßung wegzuschalten ist
+   der Hauptgrund, warum das Format überhaupt Lagen hat — beim Aufmessen stört beides.
+   Grün heißt an, rot heißt aus: dieselbe Farbregel wie bei jedem Schloss in der App. */
+function vekLagenPanel(pl){
+  if(!istVektor(pl)) return '';
+  const vd=vekDaten(pl); if(!vd) return '';
+  const an=vekLagenAn(pl, vd);
+  return `<div class="row" style="flex-wrap:wrap; gap:4px; margin-top:2px">${
+    vd.lagen.map((l,i)=>`<button class="btn small ${an[i]?'auf':'zu'}" data-vlage="${i}"
+      title="Lage „${esc(l.name)}" ${an[i]?'ausblenden':'einblenden'}">${esc(l.name)}</button>`).join('')
+  }</div>`;
 }
 
 /* Seitenleiste im Maßstabs-Modus: nur dieses eine Panel, wie beim Sanierungsbereich.
@@ -11671,6 +12493,49 @@ async function planUebernehmen(file, opt){
     melde(`„${file.name}" geladen (${bild.w}×${bild.h} px)`+
       (ausName||opt.breite ? ` — Maßstab aus dem Dateinamen: ${fmt(breite,3)} m breit.` : ' — jetzt den Maßstab setzen.'));
   }catch(err){ melde('Planbild konnte nicht geladen werden: '+err.message, true); }
+}
+
+/* ---- Vektorplan aus einer Datei ----
+   Bewusst mit FileReader statt `file.text()`: Bluefy auf dem iPad ist WebKit, und der
+   Rest der App liest Dateien genauso. */
+const textVonDatei = f => new Promise((res,rej)=>{
+  const r=new FileReader();
+  r.onload=()=>res(r.result);
+  r.onerror=()=>rej(new Error('Datei nicht lesbar'));
+  r.readAsText(f);
+});
+async function planVekUebernehmen(file){
+  try{
+    const roh=JSON.parse(await textVonDatei(file));
+    /* Erst prüfen, dann übernehmen: `vekAuswerten` wirft bei allem, was nicht stimmt.
+       Ein halb übernommener Plan wäre schlimmer als gar keiner. */
+    const vd=vekAuswerten(roh);
+    const f=etage(), alt=f.plan;
+    f.plan={
+      id:'plan_'+uid(), art:'vec',
+      src:'data:application/json;base64,'+b64VonText(JSON.stringify(roh)),
+      name: roh.name || file.name.replace(/\.json$/i,''),
+      /* Maßstab: die Datei hat echte Meter — hier wird NICHT geraten. Genau das ist der
+         Gewinn gegenüber dem Bild, wo „Maßstab setzen" der erste Handgriff war. */
+      breite: vd.breite, hoehe: vd.hoehe,
+      x: alt ? alt.x : mm(vb.x+vb.w*0.1), y: alt ? alt.y : mm(vb.y+vb.h*0.1),
+      drehung: alt ? alt.drehung||0 : 0,
+      /* Linien vertragen mehr Deckkraft als ein Bild: 0,55 wie beim Foto ließe einen
+         0,01-m-Strich fast verschwinden. Und die Zeichnung darüber darf voll deckend
+         bleiben — ein Vektorplan verdeckt nichts, er besteht ja aus Lücken. */
+      deckkraft: alt && istVektor(alt) ? alt.deckkraft : 0.9,
+      durchsicht: alt && Number.isFinite(alt.durchsicht) && istVektor(alt) ? alt.durchsicht : 1,
+      gesperrt:false,
+      lagenAn: vd.lagen.map(l=>l.an)
+    };
+    if(alt && alt.id) idbLoeschen([alt.id]).catch(()=>{});
+    vekCache=null; vekDomJetzt=null;
+    save(); renderAll();
+    const strecken=vd.lagen.reduce((a,l)=>a+(l.d.match(/L/g)||[]).length, 0);
+    melde(`„${f.plan.name}" geladen — ${fmt(vd.breite,2)} × ${fmt(vd.hoehe,2)} m, `+
+      `${vd.lagen.length} Lage(n), ${strecken.toLocaleString('de-DE')} Strecken. `+
+      'Der Maßstab steht schon richtig.');
+  }catch(err){ melde('Vektorplan konnte nicht geladen werden: '+err.message, true); }
 }
 
 /* ---- Pläne aus Airtable (Feld „Aufmaß Pläne" der gebundenen Baustelle) ---- */
@@ -11789,6 +12654,28 @@ const AT_F_SITE=['Title','Ort','Beginn','Ende','Start','End','Status'];
    gleich verworfen. Reihenfolge = Reihenfolge der Filterknöpfe. */
 const CL_STATUS=['Baustelle','Wohnung','Beendet'];
 const CL_STATUS_KEY='grundriss-cl-status';
+/* ---------- „Fotos mitladen" (seit 2026-08-07) ----------
+   Gemeldet: bei großen Aufmaßen und schlechtem Netz dauert das Laden zu lange, obwohl
+   zum Weitermessen nur der Grundriss gebraucht wird.
+
+   Der Schalter **bleibt stehen** und wird nicht je Ladevorgang gefragt: die Entscheidung
+   hängt an der Verbindung, nicht am einzelnen Aufmaß. Wer auf der Baustelle einen Balken
+   hat, will sie den ganzen Tag aus haben.
+
+   Ausgelassene Fotos sind **nicht verloren** — sie bleiben als Eintrag im Projekt stehen
+   (`f.spaeter`), lassen sich mit „Fotos nachladen" holen, und `fotoAbgleich` schützt ihre
+   Anhänge beim nächsten Sichern. Der Hintergrundplan wird bewusst **immer** geladen: das
+   ist eine Datei, nicht hunderte, und ohne ihn ist ein Aufmaß auf der Baustelle wenig
+   wert. */
+const CL_FOTOS_KEY='grundriss-cl-fotos';
+let clFotosAn = localStorage.getItem(CL_FOTOS_KEY)!=='aus';
+function clFotosSchalten(){
+  clFotosAn=!clFotosAn;
+  try{ localStorage.setItem(CL_FOTOS_KEY, clFotosAn?'an':'aus'); }catch(e){}
+  renderClAufmasse();
+}
+// Fotos, die beim Laden ausgelassen wurden — im ganzen Projekt
+const fotosOffen = p => alleFotos(p||proj()).filter(f=>f && f.spaeter && !f.src);
 // Vorauswahl: die laufenden Vorhaben; „Beendet" (mit Abstand die meisten) auf Wunsch
 let clStatusAn=(()=>{
   try{
@@ -12427,6 +13314,13 @@ function renderClAufmasse(){
   }
   const b=proj().baustelle;
   el.innerHTML=`<h3 style="margin:10px 0 6px">Gespeicherte Aufmaße (${liste.length})</h3>
+    <div class="row" style="margin-bottom:6px">
+      <button class="btn small ${clFotosAn?'auf':'zu'}" id="clFotosSchalter" style="flex:1"
+        title="${clFotosAn
+          ? 'Fotos werden mitgeladen — bei schlechtem Netz kann das lange dauern'
+          : 'Nur der Grundriss wird geladen. Die Fotos bleiben in Airtable und lassen sich später nachladen.'}"
+        >${ico('foto')}${clFotosAn?'Fotos mitladen':'Ohne Fotos laden'}</button>
+    </div>
     <div class="aufmassgitter">
     ${liste.map(s=>{
       const stand=clStand(s);
@@ -12445,7 +13339,12 @@ function renderClAufmasse(){
     }).join('')}
     </div>
     <p class="hint" style="margin-top:6px">Auf den Grundriss tippen lädt das Aufmaß —
-      das aktuelle wird dabei ersetzt.</p>`;
+      das aktuelle wird dabei ersetzt.${clFotosAn ? '' :
+      '<br><b>Ohne Fotos:</b> es kommt nur der Grundriss (samt Hintergrundplan). Die Fotos '+
+      'bleiben in Airtable liegen und lassen sich oben mit <b>„Fotos nachladen"</b> holen, '+
+      'ohne die Arbeit zu verlieren.'}</p>`;
+  const sch=el.querySelector('#clFotosSchalter');
+  if(sch) sch.onclick=clFotosSchalten;
   el.querySelectorAll('[data-clopen]').forEach(btn=>{
     btn.onclick=()=>{
       const s=clSites.find(x=>x.id===btn.dataset.clopen);
@@ -12543,7 +13442,9 @@ function renderClAktuell(){
   const el=$('#clAktuell'); if(!el) return;
   const p=proj(), b=p.baustelle, s=clGebunden();
   const stand=p.gesichertAm ? new Date(p.gesichertAm).toLocaleString('de-DE') : null;
-  const zahl=`${p.rooms.length} Raum/Räume · ${alleFotos(p).length} Foto(s) · `+
+  const offen=fotosOffen(p).length;
+  const zahl=`${p.rooms.length} Raum/Räume · ${alleFotos(p).length} Foto(s)${
+    offen?`, davon <b>${offen} nicht geladen</b>`:''} · `+
     `${Object.keys(p.lvTexts||{}).length} LV-Position(en)`;
   el.innerHTML=`
     <div class="stat" style="align-items:center">
@@ -12555,9 +13456,16 @@ function renderClAktuell(){
       ? (stand ? (istGeaendert()?`zuletzt gesichert ${stand} — seitdem geändert`:`gesichert ${stand}`)
                : 'mit dieser Baustelle verbunden, noch nicht gesichert')
       : 'Noch keiner Baustelle zugeordnet.'}</p>
+    ${offen && b ? `<p class="hint" style="margin:0 0 8px">
+      <b>${offen} Foto(s) wurden beim Laden ausgelassen.</b> Sie liegen weiter bei der
+      Baustelle und gehen beim Sichern <b>nicht</b> verloren. Nachladen hängt nur die
+      Bilder ein — gemessen wird nichts überschrieben.</p>` : ''}
     <div class="row" style="flex-wrap:wrap; gap:6px">
       ${s?`
         <button class="btn small primary" id="clSave" ${clBusy?'disabled':''}>Sichern</button>
+        ${offen?`<button class="btn small" id="clFotosNach" ${clBusy?'disabled':''}
+          title="Holt die ${offen} ausgelassenen Fotos nach. Das laufende Aufmaß bleibt unangetastet."
+          >${ico('foto')}Fotos nachladen (${offen})</button>`:''}
         <button class="btn small" id="clLv" ${clBusy?'disabled':''}
           title="Holt die LV-Positionen dieser Baustelle: neue kommen dazu, bestehende werden aufgefrischt. Die Zuordnungen im Aufmaß bleiben unberührt."
           >LV-Positionen laden</button>
@@ -12576,6 +13484,7 @@ function renderClAktuell(){
     $('#clSave').onclick=()=>cloudSpeichern(s);
     $('#clLv').onclick=()=>cloudLvHolen(s);
     $('#clLos').onclick=cloudVerbindungLoesen;
+    const nach=$('#clFotosNach'); if(nach) nach.onclick=fotosNachladen;   // nur da, wenn Fotos fehlen
   } else {
     $('#clVerbinden').onclick=()=>{
       renderClList();
@@ -12627,7 +13536,11 @@ function cloudNeuesAufmass(){
     undoStapel=[]; redoStapel=[]; renderUndoBtns();
     activeFloorId=proj().floors[0].id; focusRoomId=null; sel={roomId:null, wall:null, vertex:null};
     renderAll(); zoomFit(); renderClAktuell(); renderClAktionen();
-    clStatus('Neues, leeres Aufmaß angelegt.');
+    /* Wie beim Laden: sobald das Aufmaß steht, gehört der Blick auf den Plan — hier sogar
+       zwingender, denn der nächste Handgriff ist der erste Raum. Die Meldung geht über
+       `melde()`, sonst ginge sie mit dem Dialog verloren. */
+    dlgCloud.close();
+    melde('Neues, leeres Aufmaß angelegt.');
   };
   if(!istGeaendert() || (!proj().rooms.length && !(proj().attrs||[]).length)){ los(); return; }
   cloudFrageUeberschreiben(
@@ -12648,14 +13561,24 @@ function datenGroesse(src){
    Pixeln, Freihand) behält seine ID, wird aber neu als JPEG kodiert und hat danach
    praktisch nie dieselbe Größe. Nur über die ID zu gehen würde die Änderung verschlucken
    und in Airtable bliebe für immer die alte Fassung liegen.
-   Alles, was nicht sicher gleich ist, wandert in `neu` und wird hochgeladen. */
-function fotoAbgleich(vorhanden, lokal){
+   Alles, was nicht sicher gleich ist, wandert in `neu` und wird hochgeladen.
+
+   `ausgelassen` sind die IDs der Fotos, die beim Laden **absichtlich übersprungen**
+   wurden („Ohne Fotos laden", seit 2026-08-07). Die liegen hier gar nicht vor, sind aber
+   auch nicht gelöscht — ihr Anhang muss bleiben. Ohne diesen Zweig wäre der Schalter ein
+   stiller Löschbefehl: `cloudSpeichern` ersetzt mit `behalten` das **ganze** Anhangfeld,
+   und ein Aufmaß, das ohne Fotos geladen und danach gesichert wird, hätte in Airtable
+   keins mehr. */
+function fotoAbgleich(vorhanden, lokal, ausgelassen){
   const nachId=new Map();
   lokal.forEach(f=>nachId.set(f.id, f));
+  const wartet=new Set(ausgelassen||[]);
   const behalten=[], schon=new Set();
   (vorhanden||[]).forEach(a=>{
     const m=/^foto[_-](.+?)\.[a-z0-9]+$/i.exec(a.filename||'');
-    const f=m ? nachId.get(m[1]) : null;
+    const id=m ? m[1] : null;
+    if(id && wartet.has(id)){ behalten.push({id:a.id}); return; }  // ausgelassen: unangetastet lassen
+    const f=id ? nachId.get(id) : null;
     if(!f || schon.has(f.id)) return;                            // gelöscht, fremd oder doppelt
     if(!Number.isFinite(a.size) || a.size!==datenGroesse(f.src)) return;   // Inhalt geändert
     behalten.push({id:a.id}); schon.add(f.id);
@@ -12683,7 +13606,8 @@ async function cloudSpeichern(s, ohneRueckfrage){
        der bekannte Stand — schlimmstenfalls wird ein Foto einmal zu viel hochgeladen. */
     let stand=s;
     try{ stand=await clSiteHolen(s.id) || s; }catch(e){ /* dann eben mit dem bekannten Stand */ }
-    const {behalten, neu}=fotoAbgleich(stand.fotos, fotos);
+    // Ausgelassene Fotos gehen als IDs mit — ihre Anhänge sollen liegen bleiben
+    const {behalten, neu}=fotoAbgleich(stand.fotos, fotos, fotosOffen(p).map(f=>f.id));
     /* Der PATCH läuft immer — er tauscht die Projektdatei aus, räumt überzählige Fotos
        weg (gelöschte und geänderte) und beweist nebenbei, dass der Token schreiben darf.
        Die unveränderten Anhänge bleiben als `{id}` einfach stehen und werden dadurch
@@ -12761,7 +13685,10 @@ async function cloudLaden(s, ohneRueckfrage){
     if(!p || !Array.isArray(p.rooms) || !Array.isArray(p.floors))
       throw new Error('Die Datei enthält kein gültiges Projekt.');
     if(!p.floors.length) p.floors=[{id:uid(), name:'Erdgeschoss'}];
-    if(!confirm(`Aufmaß von „${s.name}" laden? (${p.rooms.length} Räume, ${s.fotos.length} Fotos)`)){
+    const mitFotos=clFotosAn;
+    if(!confirm(`Aufmaß von „${s.name}" laden? (${p.rooms.length} Räume, ${s.fotos.length} Fotos)`+
+      (mitFotos ? '' : '\n\nOHNE FOTOS — nur der Grundriss und der Hintergrundplan. '+
+        'Die Fotos bleiben in Airtable und lassen sich später nachladen.'))){
       clStatus('Abgebrochen.'); return;
     }
     const byId={};
@@ -12771,14 +13698,23 @@ async function cloudLaden(s, ohneRueckfrage){
     });
     const ziele=alleFotos(p).filter(f=>!f.quelle);   // Pläne aus der Ablage kommen weiter unten
     let ok=0;
-    for(let i=0;i<ziele.length;i++){
-      clStatus(`Lade Fotos … ${i+1} von ${ziele.length}`);
-      const a=byId[ziele[i].id];
-      if(!a) continue;
-      try{
-        const bild=await fetch(a.url);
-        if(bild.ok){ ziele[i].src=await blobZuDataUrl(await bild.blob()); ok++; }
-      }catch(e){ /* einzelnes Foto fehlt — der Rest wird trotzdem geladen */ }
+    if(mitFotos){
+      for(let i=0;i<ziele.length;i++){
+        clStatus(`Lade Fotos … ${i+1} von ${ziele.length}`);
+        const a=byId[ziele[i].id];
+        if(!a) continue;
+        try{
+          const bild=await fetch(a.url);
+          if(bild.ok){ ziele[i].src=await blobZuDataUrl(await bild.blob()); ok++; }
+        }catch(e){ /* einzelnes Foto fehlt — der Rest wird trotzdem geladen */ }
+      }
+    } else {
+      /* Ausgelassen, nicht gelöscht. Die Marke `spaeter` trägt drei Dinge: „Fotos
+         nachladen" weiß, was zu holen ist; der Aufräumschritt gleich darunter lässt den
+         Eintrag stehen; und `fotoAbgleich` schützt beim nächsten Sichern den Anhang in
+         Airtable. Ohne diese dritte Wirkung wäre der Schalter eine Falle — das Sichern
+         ersetzt das ganze Anhangfeld und hätte jedes ausgelassene Foto gelöscht. */
+      ziele.forEach(f=>{ f.src=''; f.spaeter=true; });
     }
     // Pläne aus der Ablage „Aufmaß Pläne" nachladen — die reisen nicht im Projekt mit
     for(const f of (p.floors||[])){
@@ -12791,8 +13727,11 @@ async function cloudLaden(s, ohneRueckfrage){
         if(bild.ok) f.plan.src=await blobZuDataUrl(await bild.blob());
       }catch(e){ /* Plan fehlt — das Aufmaß bleibt trotzdem brauchbar */ }
     }
-    fotoListen(p).forEach(l=>{                            // Fotos ohne Bilddaten nicht mitschleppen
-      const rein=l.filter(f=>f.src);
+    /* Fotos ohne Bilddaten nicht mitschleppen — ABSICHTLICH ausgelassene aber schon:
+       die sollen ja nachgeladen werden können. Ohne die zweite Bedingung wäre der
+       Schalter „Ohne Fotos" ein stiller Löschbefehl. */
+    fotoListen(p).forEach(l=>{
+      const rein=l.filter(f=>f.src || f.spaeter);
       if(rein.length!==l.length) l.splice(0, l.length, ...rein);
     });
     ohneUndo(()=>{                                       // Laden ist kein Zeichenschritt
@@ -12805,10 +13744,74 @@ async function cloudLaden(s, ohneRueckfrage){
     undoStapel=[]; redoStapel=[]; renderUndoBtns();       // Verlauf des alten Standes passt nicht mehr
     activeFloorId=p.floors[0].id; focusRoomId=null; sel={roomId:null, wall:null, vertex:null};
     renderAll(); zoomFit();
-    clStatus(`„${s.name}" geladen — ${p.rooms.length} Räume, ${ok} von ${ziele.length} Foto(s).`);
+    /* Nach dem Laden gehört der Blick auf den Plan, nicht auf die Liste, aus der man
+       gerade gewählt hat — der nächste Handgriff ist immer das Aufmaß selbst. Der Dialog
+       schließt darum von sich aus. Die Meldung wandert dabei von `clStatus` nach `melde`,
+       sonst ginge sie mit dem Dialog verloren. */
+    const fehlt=ziele.length-ok;
+    dlgCloud.close();
+    melde(`„${s.name}" geladen — ${p.rooms.length} ${p.rooms.length===1?'Raum':'Räume'}`+
+      (mitFotos
+        ? `, ${ok} von ${ziele.length} Foto(s).`
+        : (ziele.length
+            ? `. ${ziele.length} Foto(s) ausgelassen — über „🏗 Baustelle" nachladbar.`
+            : ', ohne Fotos.'))+
+      (mitFotos && fehlt>0 ? ` ${fehlt} Foto(s) waren nicht abrufbar.` : ''));
   }catch(err){
     clStatus(clFehler(err), true);
   }finally{ clBusy=false; renderClList(); renderClAktuell(); renderClAktionen(); }
+}
+
+/* ---------- Fotos nachladen (seit 2026-08-07) ----------
+   Der Gegenpart zu „Ohne Fotos laden" — und der Grund, warum der Schalter überhaupt
+   vertretbar ist. Ohne diesen Weg käme man an die Fotos nur durch **erneutes Laden**,
+   und das ersetzt das Aufmaß samt allem, was seitdem gemessen wurde. Hier wird nichts
+   ersetzt: es werden allein die fehlenden Bilddaten in die vorhandenen Einträge
+   gehängt. */
+async function fotosNachladen(){
+  if(clBusy) return;
+  const p=proj(), b=p.baustelle;
+  const offen=fotosOffen(p);
+  if(!offen.length){ clStatus('Es fehlen keine Fotos.'); return; }
+  if(!b){ clStatus('Das Aufmaß hängt an keiner Baustelle — die Fotos sind nicht zuzuordnen.', true); return; }
+  if(!atToken()){ clStatus('Kein Zugriffstoken hinterlegt — bitte unter „⚙ Einstellungen" eintragen.', true); return; }
+  clBusy=true; renderClAktuell(); renderClAktionen();
+  try{
+    /* Immer den frischen Stand holen: `clSites` kann Minuten alt sein, und die
+       Anhang-URLs von Airtable laufen ab. */
+    clStatus('Frage die Baustelle ab …');
+    const s=await clSiteHolen(b.id);
+    if(!s) throw new Error('Die Baustelle ist nicht mehr abrufbar.');
+    const byId={};
+    (s.fotos||[]).forEach(a=>{
+      const m=/^foto[_-](.+?)\.[a-z0-9]+$/i.exec(a.filename||'');
+      if(m) byId[m[1]]=a;
+    });
+    let ok=0, weg=0;
+    for(let i=0;i<offen.length;i++){
+      clStatus(`Lade Fotos … ${i+1} von ${offen.length}`);
+      const a=byId[offen[i].id];
+      if(!a){ weg++; continue; }
+      try{
+        const bild=await fetch(a.url);
+        if(bild.ok){
+          offen[i].src=await blobZuDataUrl(await bild.blob());
+          delete offen[i].spaeter;                 // ist da — die Marke hat sich erledigt
+          ok++;
+        }
+      }catch(e){ /* einzelnes Foto fehlt — der Rest wird trotzdem geholt */ }
+    }
+    /* `ohneUndo`, weil Nachladen kein Zeichenschritt ist. Und der Gesichert-Stand darf
+       davon nicht kippen: es sind dieselben Bilder, die in Airtable ohnehin liegen. */
+    const warGesichert=!istGeaendert();
+    ohneUndo(()=>save());
+    if(warGesichert) standAlsGesichert();
+    renderAll();
+    clStatus(`${ok} von ${offen.length} Foto(s) nachgeladen.`+
+      (weg ? ` ${weg===1 ? '1 liegt' : weg+' liegen'} nicht mehr bei der Baustelle.` : ''));
+  }catch(err){
+    clStatus(clFehler(err), true);
+  }finally{ clBusy=false; renderClAktuell(); renderClAktionen(); renderClList(); }
 }
 
 /* ---------- Automatisch sichern (seit 2026-08-06) ----------
@@ -13819,6 +14822,10 @@ $('#planfile').onchange=e=>{
   const f=e.target.files[0]; e.target.value='';
   if(f) planUebernehmen(f);
 };
+$('#planvekfile').onchange=e=>{
+  const f=e.target.files[0]; e.target.value='';
+  if(f) planVekUebernehmen(f);
+};
 let p360Ziel=null;                    // {objId, roomId} — gesetzt beim Klick auf „einlesen"
 $('#p360file').onchange=e=>{
   const f=e.target.files[0]; e.target.value='';
@@ -13855,24 +14862,77 @@ function agUmfangGeaendert(){
   const alt=druckFilter; druckFilter=f;
   const n=(p.attrs||[]).filter(imAbschlag).length;
   const raeume=p.rooms.filter(raumAktiv).length;
+  const alle=alleZeichnen();
   druckFilter=alt;
-  $('#agUmfangInfo').textContent=n
+  /* Ohne Zuordnung ist der Bericht leer — es sei denn, „Alle Räume" ist gesetzt: dann
+     stehen wenigstens die Pläne darin, und die Warnung wäre falsch. */
+  $('#agUmfangInfo').textContent = n
     ? `${n} LV-Zuordnung(en) in ${raeume} Raum/Räumen.`
-    : 'Achtung: keine einzige Zuordnung in diesem Umfang — der Bericht bliebe leer.';
+    : (alle ? `Keine Zuordnung in diesem Umfang — es entstehen nur die Pläne der ${raeume} Räume.`
+            : 'Achtung: keine einzige Zuordnung in diesem Umfang — der Bericht bliebe leer.');
 }
 $('#agUmfang').onchange=agUmfangGeaendert;
 $('#ausgabebtn').onclick=()=>{
   $('#agStatus').textContent='';
+  $('#agAlleRaeume').checked  = druckAlleRaeume();
   agUmfangFuellen();
   $('#agOeffMasse').checked = proj().druckOeffMasse!==false;   // Vorgabe: bemaßen
+  $('#agRaumListen').checked  = druckRaumListen();
+  $('#agAnmerkungen').checked = druckAnmerkungen();
+  $('#agRaumSeite').checked   = druckRaumSeite();
+  $('#agOhneLv').checked      = druckOhneLv();
+  $('#agOhneObjekte').checked = druckOhneObjekte();
+  $('#agOhneFotos').checked   = druckOhneFotos();
   $('#dlgAusgabe').showModal();
 };
+/* Alle Schalter werden **sparse** gemerkt: gespeichert wird nur die Abweichung von der
+   Vorgabe. Sonst trüge jedes Aufmaß ein halbes Dutzend Felder mit sich herum, die in
+   aller Regel genau das sagen, was ohnehin gilt — und beim nächsten Vorgabenwechsel
+   stünden alte Projekte auf dem alten Stand fest. */
+const druckRaumListen  = () => proj().druckRaumListen!==false;   // Vorgabe: an
+const druckAnmerkungen = () => proj().druckAnmerkungen!==false;  // Vorgabe: an
+const druckRaumSeite   = () => proj().druckRaumSeite===true;     // Vorgabe: aus
+const druckAlleRaeume  = () => proj().druckAlleRaeume===true;    // Vorgabe: aus
+/* Ausschlüsse — alle drei ab Werk AUS, ohne Häkchen enthält der Bericht alles. */
+const druckOhneLv      = () => proj().druckOhneLv===true;
+const druckOhneObjekte = () => proj().druckOhneObjekte===true;
+const druckOhneFotos   = () => proj().druckOhneFotos===true;
 // Merken im Projekt (sparse: nur die Abweichung von der Vorgabe wird gespeichert)
 $('#agOeffMasse').onchange=e=>{
   const p=proj();
   if(e.target.checked) delete p.druckOeffMasse; else p.druckOeffMasse=false;
   save();
 };
+$('#agRaumListen').onchange=e=>{
+  const p=proj();
+  if(e.target.checked) delete p.druckRaumListen; else p.druckRaumListen=false;
+  save();
+};
+$('#agAnmerkungen').onchange=e=>{
+  const p=proj();
+  if(e.target.checked) delete p.druckAnmerkungen; else p.druckAnmerkungen=false;
+  save();
+};
+$('#agRaumSeite').onchange=e=>{
+  const p=proj();
+  if(e.target.checked) p.druckRaumSeite=true; else delete p.druckRaumSeite;
+  save();
+};
+$('#agAlleRaeume').onchange=e=>{
+  const p=proj();
+  if(e.target.checked) p.druckAlleRaeume=true; else delete p.druckAlleRaeume;
+  save();
+  agUmfangGeaendert();          // die Zeile darüber zählt die Räume mit
+};
+// Die drei Ausschlüsse laufen alle gleich: gesetzt = weglassen, sonst Feld weg
+[['agOhneLv','druckOhneLv'], ['agOhneObjekte','druckOhneObjekte'],
+ ['agOhneFotos','druckOhneFotos']].forEach(([id, feld])=>{
+  $('#'+id).onchange=e=>{
+    const p=proj();
+    if(e.target.checked) p[feld]=true; else delete p[feld];
+    save();
+  };
+});
 /* Nach dem Druck anbieten, den Abschlag abzuschließen. Bewusst NICHT automatisch:
    window.print() verrät nicht, ob wirklich gespeichert oder abgebrochen wurde — ein
    Probedruck würde den Zähler sonst weiterschieben, und das ließe sich nur von Hand
@@ -13902,8 +14962,15 @@ $('#importfile').onchange=e=>{
     let p;
     try{ p=backupEinlesen(rd.result); }
     catch(err){
-      $('#agStatus').textContent='Import fehlgeschlagen: '+err.message;
-      melde('Import fehlgeschlagen: '+err.message, true); return;
+      /* `JSON.parse` meldet auf Englisch und mit Zeichenposition („Expected property name
+         … at position 1"). In einer deutschen App und auf der Baustelle hilft das
+         niemandem. `backupEinlesen` wirft dagegen selbst einen brauchbaren Satz — und ein
+         `SyntaxError` kann nur vom Parser kommen, also lässt sich beides trennen. */
+      const grund = err instanceof SyntaxError
+        ? 'Die Datei ist beschädigt oder gar keine JSON-Datei.'
+        : err.message;
+      $('#agStatus').textContent='Import fehlgeschlagen: '+grund;
+      melde('Import fehlgeschlagen: '+grund, true); return;
     }
     if(!p.floors || !p.floors.length) p.floors=[{id:uid(), name:'Erdgeschoss'}];
     if(!confirm(`„${p.name||'Aufmaß'}" aus der Datei laden? (${(p.rooms||[]).length} Räume)\n\n`+
@@ -13915,8 +14982,14 @@ $('#importfile').onchange=e=>{
     undoStapel=[]; redoStapel=[]; renderUndoBtns();   // anderer Datenbestand → alter Verlauf passt nicht mehr
     activeFloorId=p.floors[0].id; focusRoomId=null; sel={roomId:null, wall:null, vertex:null};
     renderAll(); zoomFit();
-    $('#dlgAusgabe').close();
-    melde(`„${p.name||'Aufmaß'}" geladen — ${(p.rooms||[]).length} Räume, ${alleFotos(p).length} Foto(s).`);
+    /* BEIDE schließen, und zwar vor der Meldung. „Aus Datei laden" steht seit dem
+       6.8.2026 im **Baustellen**-Dialog; geschlossen wurde hier aber noch der
+       Ausgabe-Dialog von früher — der in diesem Weg gar nicht offen ist, weshalb der
+       Baustellen-Dialog nach dem Laden stehen blieb. Und `melde()` hängt seinen Hinweis
+       in `dialog[open]`: bliebe eines offen, läge die Meldung darin statt im Bild. */
+    dlgCloud.close(); $('#dlgAusgabe').close();
+    const n=(p.rooms||[]).length;
+    melde(`„${p.name||'Aufmaß'}" geladen — ${n} ${n===1?'Raum':'Räume'}, ${alleFotos(p).length} Foto(s).`);
   };
   rd.readAsText(f);
 };
@@ -14053,9 +15126,56 @@ const KA_LOGO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAeAB4AAD/2wBDAAgGBgcGBQ
    stehen nach dem Aufruf in `planRefs` (planSvg läuft synchron und nie verschachtelt). */
 const PT7_MM=7*25.4/72, PT9_MM=9*25.4/72;     // 7 pt ≈ 2,47 mm · 9 pt ≈ 3,18 mm
 let planRefs=[];                              // Maßverweise des zuletzt gebauten Plans
+
+/* Die Maßketten eines Raums für den Druck. Herausgelöst aus `planSvg`, damit sie VOR den
+   Nummern laufen können — siehe die Begründung dort. */
+function raumMassKetten(r, lbl, o){
+  let out=angleMarks(r, lbl).replace(/var\(--danger\)/g,'#d64545');
+  r.points.forEach((a,i)=>{
+    const b=r.points[(i+1)%r.points.length], L=dist(a,b);
+    if(L<0.3) return;
+    /* **Maße gehören nach außen, immer.** Die Richtung kommt darum aus dem UMLAUFSINN des
+       Polygons und nicht aus dem Abstand zum Schwerpunkt: der liegt bei L- und U-Formen im
+       Knick oder ganz außerhalb, und dann zeigte „vom Schwerpunkt weg" für die
+       einspringenden Wände nach INNEN — die Maßkette landete mitten im Raum.
+       `aussenNormale` stimmt auch bei einspringenden Ecken. */
+    const anM=aussenNormale(r,i), nx=anM.x, ny=anM.y;
+    const po={color:'#555', tcol:'#222', off:Math.max(lbl*1.5, o.prefFs*1.3), fs:lbl*0.7,
+      wand:wandDicke(r,i), sw:0.014, halo:'#fff',
+      minFs:o.minFs, fsPref:o.prefFs, refs:o.refs};
+    // Option im Ausgabe-Dialog: ohne Tür-/Fenstermaße gibt es keine Maßkette,
+    // nur das Gesamtmaß der Wand
+    const segs = proj().druckOeffMasse===false ? [[a,b]] : wallChainCuts(r,i);
+    const teile = segs.length>1
+      ? segs.map(([q1,q2])=>({a:q1, b:q2, opts:po}))
+          .concat([{a, b, opts:{...po, off:Math.max(lbl*2.7, o.prefFs*3.0)}}])
+      : [{a, b, opts:po}];
+    /* Höchstens zwei Reihen nach außen — und der Reihenabstand ist GENAU `MASS_REIHE`
+       mal die 9-pt-Höhe, damit `planSvg` den nötigen Rand daraus zurückrechnen kann.
+       Was danach noch stört, rutscht in `dimSvg` auf seiner Linie beiseite. */
+    out+=massKetteSvg(teile, nx, ny, lbl, o.prefFs*MASS_REIHE, 2);
+  });
+  return out;
+}
+/* Der Plan wird im Regelfall EINMAL gebaut. Nur wenn eine Maßkette nach außen ausweichen
+   musste, folgt ein zweiter Bau mit so viel mehr Rand, wie sie gebraucht hat — sonst
+   stünde die ausgewichene Kette außerhalb des viewBox und wäre auf dem Papier
+   abgeschnitten. Den Rand einfach immer zu reservieren wäre teurer, als es aussieht:
+   gemessen 0,69 m ungenutzter Rand an einem gewöhnlichen Raum, also ein spürbar kleinerer
+   Maßstab auf JEDEM Blatt, damit die wenigen gedrängten Blätter Platz haben. So zahlt nur,
+   wer ihn braucht — und zwar mit Rechenzeit statt mit Maßstab. */
+const MASS_REIHE=1.25;                   // Reihenabstand ausgewichener Maßketten, in 9-pt-Höhen
 function planSvg(rooms, opts){
+  massAusgewichen=0;
+  const s=planBau(rooms, opts, 4.2);
+  return massAusgewichen>0
+    ? planBau(rooms, opts, 4.2 + massAusgewichen*MASS_REIHE + 0.35)
+    : s;
+}
+function planBau(rooms, opts, padReihen){
   opts=opts||{};
   planRefs=[];                                // gilt auch für den Abbruch gleich darunter
+  badgeReset(true);                           // Plaketten je Plan neu entzerren
   if(!rooms.length) return '<p style="color:#777">Keine Räume.</p>';
   // Der Kasten muss die Wandkörper einschließen — sonst werden dicke Wände abgeschnitten
   const bb=bboxOf(rooms.flatMap(r=>opts.mini?r.points:r.points.concat(aussenPolygon(r))));
@@ -14068,7 +15188,8 @@ function planSvg(rooms, opts){
   let pad=(opts.masse?0.8:(opts.grau?0.05:0.5))+maxDicke;
   if(opts.masse) for(let k=0;k<4;k++){
     const s0=Math.min(boxW/(iw+2*pad), boxH/(ih+2*pad));
-    const need=(PT9_MM/s0)*4.2+maxDicke;                    // zwei Maßreihen + Zahl bei 9 pt
+    // Zwei Maßreihen + Zahl bei 9 pt (4,2) — im zweiten Bau eine Reihe mehr (siehe planSvg)
+    const need=(PT9_MM/s0)*padReihen+maxDicke;
     if(Math.abs(need-pad)<0.02) break;
     pad=need;
   }
@@ -14100,6 +15221,14 @@ function planSvg(rooms, opts){
   if(!opts.mini) out+=wandLage(rooms, opts.grau
     ? {fuell:'#d9d9d9', linie:'#a9a9a9', sw:Math.max(0.02, w/700)}
     : {fuell:'#d0d0d0', linie:'#000', sw:Math.max(0.01, w/1100)});
+  /* **Erst die Maße, dann die Nummern.** Nicht wegen der Zeichenreihenfolge, sondern
+     wegen der Platzvergabe: eine Maßzahl darf nur auf ihrer eigenen Maßlinie verrutschen,
+     eine Plakette dagegen auch quer ausweichen. Wer zuerst einträgt, gewinnt seinen
+     Platz — also müssen die Unbeweglichen zuerst dran. Andersherum gemessen blieben von
+     22 Überlappungen noch 5 übrig, weil die Zahlen an kurzen Wänden nirgends mehr
+     hinkonnten. Nebenbei liegen die Nummern damit ÜBER den Maßlinien, was ohnehin die
+     richtige Rangfolge ist. */
+  if(opts.masse) rooms.forEach(r=>{ out+=raumMassKetten(r, lbl, {minFs, prefFs, refs}); });
   rooms.forEach(r=>{
     if(!opts.mini){
       imDruck=true;                          // feste Plakettengröße + dickere Linien
@@ -14116,26 +15245,6 @@ function planSvg(rooms, opts){
         an?'':` fill="#9a9a9a"`}>
         <tspan x="${c.x}" dy="-0.05">${esc(r.name)}</tspan>
         <tspan x="${c.x}" dy="${lbl*1.15}" font-size="${lbl*0.8}" fill="${an?'#555':'#a8a8a8'}">${fmt(st.area,2)} m²</tspan></text>`;
-    }
-    if(opts.masse){
-      out+=angleMarks(r, lbl).replace(/var\(--danger\)/g,'#d64545');
-      const c=centroid(r.points);
-      r.points.forEach((a,i)=>{
-        const b=r.points[(i+1)%r.points.length], L=dist(a,b);
-        if(L<0.3) return;
-        const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
-        let nx=-(b.y-a.y)/L, ny=(b.x-a.x)/L;
-        if((mx+nx*0.1-c.x)**2+(my+ny*0.1-c.y)**2 < (mx-nx*0.1-c.x)**2+(my-ny*0.1-c.y)**2){nx=-nx;ny=-ny;}
-        const po={color:'#555', tcol:'#222', off:Math.max(lbl*1.5, prefFs*1.3), fs:lbl*0.7,
-          wand:wandDicke(r,i), sw:0.014, halo:'#fff', minFs, fsPref:prefFs, refs};
-        // Option im Ausgabe-Dialog: ohne Tür-/Fenstermaße gibt es keine Maßkette,
-        // nur das Gesamtmaß der Wand
-        const segs = proj().druckOeffMasse===false ? [[a,b]] : wallChainCuts(r,i);
-        if(segs.length>1){
-          segs.forEach(([q1,q2])=>{ out+=dimSvg(q1, q2, nx, ny, lbl, po); });
-          out+=dimSvg(a, b, nx, ny, lbl, {...po, off:Math.max(lbl*2.7, prefFs*3.0)});
-        } else out+=dimSvg(a, b, nx, ny, lbl, po);
-      });
     }
   });
   // Der aktuelle Raum wird zuletzt darübergelegt — so bleibt er auch über Wänden
@@ -14241,7 +15350,10 @@ function druckMessen(html, fn){
    Vorher schnitt `overflow:hidden` sie am Fuß einfach ab (Wunsch vom 6.8.2026).
    Folgeblätter tragen Raum und Etage erneut, wiederholen die Kopfzeile der Tabelle und
    zählen „Teil n von m" — den Plan gibt es nur einmal, ganz vorn. */
-function raumLvSeiten(kopfHtml, r, f, lvs, p){
+/* `eigeneSeite`: der Raumplan bekommt das Blatt für sich, die Tabelle beginnt erst auf
+   dem nächsten. Dafür gibt es hier längst den Fall „unter dem Plan ist keine Zeile mehr
+   frei" (`teile.push(null)`) — der Schalter setzt ihn nur von vornherein. */
+function raumLvSeiten(kopfHtml, r, f, lvs, p, eigeneSeite){
   const ueb = t => `<div style="font-weight:700; font-size:12px; margin-bottom:1.5mm">`+
     `LV-Positionen in diesem Raum${t}</div>`;
   /* Die Klasse ist zum Messen da: Über der Tabelle kann der Anmerkungskasten stehen,
@@ -14249,8 +15361,9 @@ function raumLvSeiten(kopfHtml, r, f, lvs, p){
      erwischt die — und stolpert über ihre fehlende Kopfzeile. */
   const block = inner => `<div class="plvraum" style="margin-top:4mm">${inner}</div>`;
   const fortKopf = `<div class="ptitle">▼ ${esc(r.name)}<small>${esc(f.name)} · Fortsetzung</small></div>`;
-  // Ohne Zuordnungen bleibt alles beim Alten: eine Seite, darauf der Hinweistext
-  if(!lvs.length) return [kopfHtml + block(ueb('') + lvDruckTabelle(lvs, p))];
+  // Ohne Zuordnungen bleibt alles beim Alten: eine Seite, darauf der Hinweistext.
+  // Bei ganzer Seite entfällt auch der — dort steht der Plan allein.
+  if(!lvs.length) return [eigeneSeite ? kopfHtml : kopfHtml + block(ueb('') + lvDruckTabelle(lvs, p))];
 
   // Einmal messen: was steht über der Tabelle, wie hoch sind Kopfzeile und jede Zeile
   const tabelle=lvDruckTabelle(lvs, p);
@@ -14266,7 +15379,8 @@ function raumLvSeiten(kopfHtml, r, f, lvs, p){
   const zeilen=erste.zeilen;
 
   // Aufteilen: greedy von oben, jede Zeile mit ihrer gemessenen Höhe
-  const teile=[]; let i=0, aufErster=true;
+  const teile=[]; let i=0, aufErster=!eigeneSeite;
+  if(eigeneSeite) teile.push(null);            // Blatt allein für den Plan
   while(i<zeilen.length){
     const platz=PLV_BODY - (aufErster?erste.oben:folge.oben) - (aufErster?erste.kopfzeile:folge.kopfzeile);
     let h=0, n=0;
@@ -14503,7 +15617,9 @@ function deckSheet(inhalt){
     ['Gebäude:',              p.gebaeude||''],
     ['Stockwerk:',            stockwerkeText(p)],
     ['Bereich:',              p.bereich||''],
-    ['Art des Bauvorhabens:', p.artBauvorhaben||''],
+    /* Ohne LV-Positionen ist das Blatt kein Aufmaß mehr, sondern ein Plan — und genau
+       das soll dort dann stehen, statt der Art des Bauvorhabens. */
+    ['Art des Bauvorhabens:', druckOhneLv() ? 'Plan' : (p.artBauvorhaben||'')],
     ['Abschlag Nr.:',         abschlagText(druckFilter)],   // aus der Druckauswahl
     ['Zeitraum:',             zeitraumText(p)]
   ];
@@ -14633,25 +15749,46 @@ function buildPrintIntern(){
   p.floors.forEach(f=>{
     const rooms=p.rooms.filter(r=>r.floorId===f.id);
     if(!rooms.length) return;
-    // Etagen ohne einen einzigen Beitrag zu diesem Abschlag fallen ganz weg
+    /* Etagen ohne einen einzigen Beitrag zu diesem Abschlag fallen ganz weg — es sei
+       denn, „Alle Räume" ist gesetzt: dann sagt `raumAktiv` für jeden Raum ja, und
+       Etage wie Raumseiten bleiben stehen (siehe `alleZeichnen`). */
     const aktiv=rooms.filter(raumAktiv);
     if(!aktiv.length) return;
     etagenStart.push({name:f.name, idx:seiten.length});
     // 1) Übersicht der Etage — alle Räume, die nicht beitragenden nur blass
     seiten.push(`<div class="ptitle">▼ ${esc(f.name)}</div>
       <div style="display:flex; align-items:center; justify-content:center; margin-top:4mm">
-        ${planSvg(rooms, {namen:true, masse:false, boxW:186, boxH:240})}
+        ${planSvg(rooms, {namen:true, masse:false, objekte:!druckOhneObjekte(),
+          boxW:186, boxH:240})}
       </div>`);
-    // 2) je Raum eine Seite — nur für Räume mit Zuordnungen in diesem Abschlag
+    // 2) je Raum eine Seite — mit Zuordnungen in diesem Abschlag, oder alle bei „Alle Räume"
     aktiv.forEach(r=>{
       const st=roomStats(r);
-      const lvs=(p.attrs||[]).filter(a=>a.roomId===r.id && imAbschlag(a))
+      /* „Nicht in PDF" (`lvOhneListe` aus „LV editieren") heißt **nicht in den Blättern**
+         — auch nicht unter dem Raum. Bisher schloss das Häkchen nur die Auflistung der
+         Einzelpositionen aus, die Raumtabelle zeigte sie weiter; damit stand eine als
+         „nicht drucken" markierte Position doch im Bericht, nur an anderer Stelle.
+         Sichtbar bleibt sie allein in der Übersicht auf Seite 2 (`alleGruppen`) —
+         die führt bewusst ALLE Positionen samt Ergebnis. */
+      const ohnePdf=p.lvOhneListe||{};
+      const lvs=(p.attrs||[]).filter(a=>a.roomId===r.id && imAbschlag(a) && !ohnePdf[a.lv])
         .sort((a,b)=>lvCmp(a.lv,b.lv));
       const grp={};
       lvs.forEach(a=>{ (grp[a.lv]=grp[a.lv]||[]).push(a); });
       // Zuerst der große Plan: er füllt planRefs, und die Liste gehört nach links
       // unter die Mini-Etage — der Mini-Aufruf setzt planRefs sonst wieder zurück.
-      const planGross=planSvg([r], {masse:true, objekte:true, boxW:150, boxH:132});
+      /* Der Anmerkungskasten wird VOR dem Plan gebaut, weil seine Höhe mitentscheidet,
+         wie groß der Plan werden darf. `planRefs` rührt er nicht an, die Reihenfolge
+         Plan-vor-Mini bleibt also unberührt. Leer ist er, wenn weder der Raum noch eine
+         seiner Positionen etwas notiert hat — dann kostet er auch nichts. */
+      const anm = druckAnmerkungen() ? anmerkungKasten(r, lvs) : '';
+      /* „Raum auf ganze Seite": der Plan bekommt die volle Blatthöhe statt der 132 mm,
+         die sonst für die Tabelle darunter frei bleiben. Nicht ganz `PLV_BODY` (260) —
+         Titel und Kennzahlenzeile stehen darüber, und wo ein Anmerkungskasten steht,
+         bleiben zusätzlich 20 mm für ihn. */
+      const ganzeSeite=druckRaumSeite();
+      const planGross=planSvg([r], {masse:true, objekte:!druckOhneObjekte(),
+        boxW:150, boxH: ganzeSeite ? (anm?205:225) : 132});
       const verweise=massListe(planRefs);
       /* Die Mini-Etage ist eine ÜBERSICHT — genau der Fall, für den es `plakettenAus`
          schon gibt: ein ganzes Geschoss auf 28 mm, da ist keine Nummer mehr lesbar und
@@ -14678,13 +15815,17 @@ function buildPrintIntern(){
           </div>
           <div style="flex:1">${planGross}</div>
         </div>
-        ${anmerkungKasten(r, lvs)}`;
+        ${anm}`;
+      /* Raumlisten abgeschaltet — oder die LV-Positionen ganz ausgeschlossen: nur das
+         Planblatt. Der Anmerkungskasten bleibt (eigener Schalter); er gehört zum Raum
+         und nicht zur Positionsliste. */
+      if(!druckRaumListen() || druckOhneLv()) seiten.push(raumKopf);
       // Passt die Positionstabelle nicht mehr unters Blatt, läuft sie auf Folgeseiten weiter
-      raumLvSeiten(raumKopf, r, f, lvs, p).forEach(s=>seiten.push(s));
+      else raumLvSeiten(raumKopf, r, f, lvs, p, ganzeSeite).forEach(s=>seiten.push(s));
       /* 3) Fotoaufmaß: je Foto EINE ganze Seite. Bewusst nicht vier auf einer Seite wie
          bei den übrigen Bildern — hier stehen Maße im Bild, und die müssen lesbar sein.
          Unter dem Bild die Summen je Slot, damit die Seite für sich allein steht. */
-      fmObjekteVon(r).forEach(g=>{
+      (druckOhneFotos() ? [] : fmObjekteVon(r)).forEach(g=>{
         const sl=fmSlots(g);
         (g.fotos||[]).forEach((ff,k)=>{
           if(!ff.src) return;
@@ -14722,7 +15863,7 @@ function buildPrintIntern(){
         });
       });
       // 4) Fotoseiten — je 4 Bilder
-      const fotos=fotosVonRaum(r);
+      const fotos=druckOhneFotos() ? [] : fotosVonRaum(r);
       for(let i=0;i<fotos.length;i+=4){
         const vier=fotos.slice(i,i+4);
         seiten.push(`<div class="ptitle">▼ Bilder<small>${esc(f.name)} · ${esc(r.name)}</small></div>
@@ -14746,7 +15887,10 @@ function buildPrintIntern(){
   const lvSeiten=[];
   // Etage nur als eigene Spalte, wenn es überhaupt mehrere bespielte gibt
   const mitEtage=p.floors.filter(f=>p.rooms.some(r=>r.floorId===f.id)).length>1;
-  const alleGruppen=lvGroups();
+  /* Sind die LV-Positionen ausgeschlossen, bleibt die Gruppenliste leer — und damit
+     fallen BEIDE Teile weg, die Übersicht auf Seite 2 und die Auflistung der
+     Einzelpositionen. Eine Stelle statt zwei Abfragen weiter unten. */
+  const alleGruppen = druckOhneLv() ? [] : lvGroups();
   const gruppen=alleGruppen.filter(g=>!(p.lvOhneListe||{})[g.lv]);
 
   /* ---- Seite 2: LV-Positionen mit Ergebnissen (alle Positionen) ----
@@ -15060,11 +16204,15 @@ const OBJARTEN=[
   ['1-K-Schleuse','1k'], ['2-K-Schleuse','2k'], ['4-K-Schleuse','4k'], ['RFA','rfa'],
   ['📷 360°-Aufnahme','p360'], ['📐 Fotoaufmaß','fotom']
 ];
-function raumMitte(r){
-  const p=r.points||[];
-  if(!p.length) return {x:0, y:0};
-  return {x:p.reduce((a,q)=>a+q.x,0)/p.length, y:p.reduce((a,q)=>a+q.y,0)/p.length};
-}
+/* Hier stand bis zum 7.8.2026 eine ZWEITE `raumMitte` — der schlichte Mittelwert der
+   Ecken, angelegt fürs Einfügen von Objekten. Sie hat die richtige Fassung von weiter
+   oben stillschweigend überschrieben (die spätere Deklaration gewinnt), und seitdem saßen
+   **alle** Raumnamen auf dem Eckenmittel statt auf dem Punkt mit dem größten Wandabstand
+   — bei L-Formen also im Knick oder ganz außerhalb des Raums. Genau davor warnt der
+   Kommentar bei der echten `raumMitte`.
+
+   Ersatzlos weg: `objSofort` fährt mit der richtigen Fassung sogar besser, denn die
+   liefert einen Punkt, der garantiert IM Raum liegt. */
 function objSofort(art){
   const r=focusRoomId?roomById(focusRoomId):null;
   if(!r){ melde('Erst einen Raum öffnen.', true); return; }
