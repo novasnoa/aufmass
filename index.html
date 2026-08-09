@@ -63,7 +63,7 @@
   #layout{display:flex; height:calc(100% - 52px);}
   #blatt{display:flex; flex-direction:column; width:308px; min-width:308px;
     background:var(--panel); border-right:1px solid var(--line);}
-  #blattgriff, #kurzmenu{display:none;}
+  #blattgriff{display:none;}
   #tbmehr{display:flex; align-items:center; gap:8px;}
   #tbmehrbtn{display:none;}
   #sidebar{flex:1; min-height:0; overflow-y:auto; padding:10px;}
@@ -109,27 +109,33 @@
   /* Die Leiste spiegelt die Knöpfe der Werkzeugspalte — im LV-Tab gibt es die nicht,
      dort stand sie leer bzw. mit den Knöpfen der letzten Planansicht herum. */
   #layout.lvoffen #leiste{display:none;}
-  #leiste button{flex:0 0 auto; width:57px; height:57px; padding:5px; border:1px solid var(--line);
+  /* Die Kachel-Optik teilen sich die Kurzspalte (#leiste, Tablet/Rechner) und die
+     Kurzzeile am Handy (#blattkurz, seit 2026-08-09) — EIN Stil, zwei Richtungen. */
+  #leiste button, #blattkurz button{flex:0 0 auto; width:57px; height:57px; padding:5px;
+    border:1px solid var(--line);
     background:#fff; border-radius:12px; color:var(--accent); font-size:15px; line-height:1;
     overflow:hidden;}
-  #leiste button.an{border-color:var(--accent); background:#eaf1ff;}
-  #leiste button.rot{color:var(--danger); border-color:#f0c4c4;}
-  #leiste button.gruen{color:#fff; background:var(--accent2); border-color:var(--accent2);}
-  #leiste svg{width:30px; height:30px; display:block; margin:0 auto; stroke-width:1.7;}
+  #leiste button.an, #blattkurz button.an{border-color:var(--accent); background:#eaf1ff;}
+  #leiste button.rot, #blattkurz button.rot{color:var(--danger); border-color:#f0c4c4;}
+  #leiste button.gruen, #blattkurz button.gruen{color:#fff; background:var(--accent2); border-color:var(--accent2);}
+  #leiste svg, #blattkurz svg{width:30px; height:30px; display:block; margin:0 auto; stroke-width:1.7;}
   #leiste .trenner{flex:0 0 auto; width:34px; height:1px; background:var(--line); margin:2px 0;}
+  #blattkurz .trenner{flex:0 0 auto; width:1px; height:34px; background:var(--line); margin:0 2px; align-self:center;}
   /* Aufklappmenü-Kacheln tragen eine kleine Ecke unten rechts — sonst sähe ein Knopf,
      der ein Menü öffnet, genauso aus wie einer, der sofort schaltet (Nutzerwunsch
      9.8.2026). Ein ::after statt Markup: die Knöpfe werden aus `LEISTE` generiert,
      und die Ecke gehört zur Darstellung, nicht zum Inhalt. */
-  #leiste button.klapp{position:relative;}
-  #leiste button.klapp::after{content:''; position:absolute; right:4px; bottom:4px;
+  #leiste button.klapp, #blattkurz button.klapp{position:relative;}
+  #leiste button.klapp::after, #blattkurz button.klapp::after{content:''; position:absolute; right:4px; bottom:4px;
     border-style:solid; border-width:0 0 7px 7px;
     border-color:transparent transparent currentColor transparent; opacity:.55;}
   /* Eingabefelder in der Leiste: kleines Symbol, darunter der Wert */
-  #leiste button.feld{display:flex; flex-direction:column; align-items:center;
+  #leiste button.feld, #blattkurz button.feld{display:flex; flex-direction:column; align-items:center;
     justify-content:center; gap:1px;}
-  #leiste button.feld svg{width:19px; height:19px;}
-  #leiste button.feld .wert{font-size:11px; font-weight:600; color:var(--ink);}
+  #leiste button.feld svg, #blattkurz button.feld svg{width:19px; height:19px;}
+  #leiste button.feld .wert, #blattkurz button.feld .wert{font-size:11px; font-weight:600; color:var(--ink);}
+  /* Außerhalb des Handys gibt es weder Kurzzeile noch Schließen-Knopf */
+  #blattkurz, #blattschliess{display:none;}
   /* Aufklappmenüs der Leiste. Hängen am `body`, weil die Leiste scrollt und sie sonst
      an ihrem Rand abgeschnitten würden. */
   #leisteklapp{position:fixed; z-index:60; display:grid; gap:6px; padding:10px;
@@ -470,7 +476,9 @@
     #blattzu, #leiste{display:none !important;}
     #blatt.zu #sidebar{display:none;}
     #blatt.zieht #sidebar{display:block;}
-    #blatt.auf{height:auto; max-height:calc(100vh - 46px); max-height:calc(100dvh - 46px);}
+    /* Aufgefahren ist das Blatt VOLLBILD unter der Kopfleiste — dasselbe Panel wie auf
+       dem Tablet, nur eben ganzseitig (Nutzerwunsch 9.8.2026). */
+    #blatt.auf{height:calc(100vh - 44px); height:calc(100dvh - 44px);}
     #blatt.zieht{transition:none;}
     #blattgriff{display:block; padding:4px 0 6px; touch-action:none; user-select:none; flex:0 0 auto;}
     #blattgriff .zieh{display:flex; align-items:center; gap:8px; padding:2px 12px 4px; cursor:grab;}
@@ -478,30 +486,25 @@
     #blatttitel{font-size:12px; color:var(--muted); overflow:hidden; text-overflow:ellipsis;
       white-space:nowrap; flex:1;}
     #blattgriff .pfeil{color:var(--muted); font-size:14px; transition:transform .18s;}
-    /* Kurzbefehle: eine Zeile, notfalls seitlich schiebbar */
-    #blattkurz{display:flex; gap:6px; padding:0 10px; overflow-x:auto; scrollbar-width:none;}
+    /* Der Schließen-Knopf oben rechts — nur solange das Blatt offen ist; zugeklappt
+       gibt es nichts zu schließen, dort führt der Griff nach oben. */
+    #blatt.auf #blattschliess{display:block;}
+    #blattschliess{flex:none; width:30px; height:30px; padding:0; border:1px solid var(--line);
+      background:#fff; border-radius:8px; color:var(--muted); font-size:15px; line-height:1;}
+    #blatt.auf .pfeil{display:none;}
+    /* Die Kurzzeile: dieselben Kacheln wie die Kurzspalte, nur waagerecht.
+       Höchstens fünf Einträge je Ansicht — notfalls seitlich schiebbar. */
+    #blattkurz{display:flex; gap:6px; padding:0 10px 2px; overflow-x:auto; scrollbar-width:none;}
     #blattkurz::-webkit-scrollbar{display:none;}
-    #blattkurz button{flex:0 0 auto; display:flex; flex-direction:column; align-items:center;
-      gap:1px; min-width:60px; padding:5px 8px; border:1px solid var(--line); border-radius:9px;
-      background:#fff; font-size:10px; color:var(--text); line-height:1.15;}
-    #blattkurz button b{font-size:16px; font-weight:400; line-height:1;}
-    #blattkurz button.gefahr{color:var(--danger); border-color:#f0c9c9;}
-    #blattkurz button.an{background:#e8f0fe; border-color:#2f6fed;}
+    /* Offen braucht es die Zeile nicht — das ganze Panel liegt ja vor einem */
+    #blatt.auf #blattkurz{display:none;}
     /* Die Eingabeseite: nichts als das eine Feld, damit die Tastatur nichts verdeckt */
   #dlgFeld{background:#fff;}
   #feldBody{padding:16px 14px;}
   #feldName{font-size:13px; color:var(--muted); margin-bottom:8px;}
   #feldEin, #feldMehr{width:100%; font-size:20px; padding:12px 14px; border:1px solid var(--line);
     border-radius:10px; font-family:inherit;}
-  #kurzmenu{display:none; position:fixed; z-index:40; background:#fff; border:1px solid var(--line);
-      border-radius:10px; padding:6px; box-shadow:0 6px 22px rgba(0,0,0,.22); min-width:180px;
-      max-height:62vh; overflow-y:auto;}   /* die Objektliste ist laenger als der Platz */
-    #kurzmenu.auf{display:block;}
-    #kurzmenu button{display:block; width:100%; text-align:left; padding:9px 10px; border:none;
-      background:none; font-size:14px; border-radius:7px;}
-    #kurzmenu button:active{background:#eef1f6;}
     #blatt.zu #blattgriff .pfeil{transform:rotate(0deg);}
-    #blatt.voll #blattgriff .pfeil{transform:rotate(180deg);}
     #sidebar{padding:8px 10px 14px;}
     /* Am Handy raus: die grauen Erklaerzeilen in den Panels machen aus jedem Panel eine
        Rolltour, und der Langtext-Kasten der Vorschlagsliste ging beim Tippen ungefragt
@@ -989,10 +992,10 @@
   <nav id="leiste"></nav>
   <div id="blatt" class="zu">
     <div id="blattgriff">
-      <div class="zieh"><span class="strich"></span><span id="blatttitel">Werkzeuge</span><span class="pfeil">⌃</span></div>
+      <div class="zieh"><span class="strich"></span><span id="blatttitel">Werkzeuge</span><span class="pfeil">⌃</span>
+        <button id="blattschliess" title="Blatt schließen">✕</button></div>
       <div id="blattkurz"></div>
     </div>
-    <div id="kurzmenu"></div>
     <aside id="sidebar"></aside>
   </div>
   <div id="main">
@@ -8724,7 +8727,8 @@ function renderSidebar(){
   }
 
   $('#sidebar').innerHTML=html;
-  if(typeof blattTitel==='function'){ handyOrdnung(); blattTitel(); blattKurz(); }
+  // Die Kurzzeile am Handy füllt `leisteBauen` gleich mit — dieselbe Maschine wie die Spalte
+  if(typeof blattTitel==='function') blattTitel();
   if(typeof leisteBauen==='function') leisteBauen();
   // In der Etagen-Anwahl gelten dieselben Raum-Handler wie in der Raumansicht
   wireSidebar(fr || wahlRaeume()[0] || null);
@@ -17507,6 +17511,7 @@ const blattJetzt = () => BLATT.findIndex(k=>$('#blatt').classList.contains(k));
   let zug=null;
   gr.addEventListener('pointerdown', e=>{
     if(e.target.closest('#blattkurz')) return;      // Kurzbefehl, kein Ziehen
+    if(e.target.closest('#blattschliess')) return;  // Schließen ist Schließen, kein Zug
     zug={y:e.clientY, h:b.getBoundingClientRect().height, weit:false};
     b.classList.add('zieht'); try{ gr.setPointerCapture(e.pointerId); }catch(_){}
   });
@@ -17526,36 +17531,16 @@ const blattJetzt = () => BLATT.findIndex(k=>$('#blatt').classList.contains(k));
     blattStufe(h > innerHeight*0.25 ? 1 : 0); zug=null;
   };
   gr.addEventListener('pointerup', los); gr.addEventListener('pointercancel', los);
+  // ✕ oben rechts schließt das aufgefahrene Blatt (Nutzervorgabe 9.8.2026)
+  $('#blattschliess').onclick=e=>{ e.stopPropagation(); blattStufe(0); };
 }
-/* ---------- Kurzbefehle ----------
-   Die Leiste bleibt immer sichtbar, auch wenn das Blatt zu ist: die Maße kommen beim
-   Aufmessen meist vom Laser, gebraucht werden vor allem „was anlegen" und „was weg".
-   Jeder Kurzbefehl drueckt den vorhandenen Knopf in der Seitenleiste — dadurch gibt es
-   keine zweite Stelle, an der dieselbe Sache anders passiert, und was es im Panel nicht
-   gibt, erscheint auch nicht in der Leiste. */
-const KURZ={
-  /* „⌐ Ecke" steht nur da, wo es den Knopf wirklich gibt: bei der Linie und an der Wand.
-     Bei Fläche, Symbol und Fotoaufmaß fällt der Eintrag von selbst weg, weil das Panel
-     dort keinen `#ptadd` kennt — dafür sorgt die Prüfung in `blattKurz`. */
-  objekt:  [['🏷','LV','#objlv'], ['📷','Foto','#objfoto'], ['⌐','Ecke','#ptadd'],
-            ['⧉','Kopie','#objdup'], ['🗑','Löschen','#objdel','gefahr']],
-  oeffnung:[['🏷','LV','#objlv'], ['📷','Foto','#opfoto'], ['⧉','Kopie','#opdup'], ['🗑','Entfernen','.opdel','gefahr']],
-  // Kein „Schließen": daneben tippen wählt die Wand ohnehin ab
-  wand:    [['🏷','LV','#walllv'], ['📷','Foto','#wfoto'], ['⌐','Ecke','#wallsplit'],
-            ['◫','Teilen','#raumteilen'], ['🚪','Tür','#wopdoor'], ['🪟','Fenster','#wopwin']],
-  // Das Schloss traegt seine Beschriftung selbst (siehe `sperrZeile`) — hier steht nur der Rueckfall
-  raum:    [['＋','Einfügen','menu'], ['🔓','Sperren','#rsperr'], ['⧉','Kopie','#rdup'], ['🗑','Löschen','#rdel','gefahr']],
-  /* Auf der Etage geht es ausser dem Einfuegen um die Etage selbst — welche gemeint ist,
-     steht direkt darueber in der Brotkrume. Der Foto-Knopf faellt hier weg: ohne
-     angewaehlten Raum gibt es nichts, woran ein Foto haengen koennte. */
-  etage:   [['＋','Einfügen','menu'], ['🏢','Neu','#flooradd'], ['⧉','Kopie','#floordup'],
-            ['✎','Name','#floorren'], ['🗑','Löschen','#floordel','gefahr']]
-};
-// Was hinter „＋ Einfügen" steckt, haengt am Ort
-const KURZMENU={
-  etage: [['Raum zeichnen','#modedraw'], ['Raum aus Vorlage','#modetpl'], ['LV-Zuordnung','#rlv'], ['Foto','#rfoto']],
-  raum:  [['Objekt','objekte'], ['Tür','#opdoorbtn'], ['Fenster','#opwinbtn'], ['LV-Zuordnung','#rlv'], ['Foto','#rfoto']]
-};
+/* ---------- Die Handy-Ansicht (komplett neu am 2026-08-09, Ticket „Handyversion") ----------
+   Unten steht eine KURZZEILE im Stil der Kurzspalte: dieselben Kacheln, dieselben
+   Aufklappmenüs, höchstens FÜNF Einträge je Ansicht (Nutzervorgabe). Nach oben gezogen
+   fährt das Blatt VOLLBILD auf und zeigt das UNGEFILTERTE Panel der Tablet-Ansicht —
+   das frühere Ausdünnen (`handyOrdnung`) ist ersatzlos raus, genau daran scheiterte
+   „Festgefahren bei Raumfarbe". Oben rechts schließt ✕ das Blatt.
+   Auch die Kurzzeile spiegelt nur: jeder Eintrag drückt den echten Knopf im Panel. */
 function kurzOrt(){
   const r=focusRoomId?roomById(focusRoomId):null;
   if(r){
@@ -17566,146 +17551,36 @@ function kurzOrt(){
   }
   return 'etage';
 }
-function blattKurz(){
-  const kasten=$('#blattkurz'); if(!kasten) return;
-  const ort=kurzOrt();
-  kasten.innerHTML=(KURZ[ort]||[]).map(([sym,txt,ziel,art])=>{
-    const el = ziel==='menu' ? null : $(ziel);
-    if(ziel!=='menu' && (!el || el.disabled)) return '';   // gibt es hier nicht
-    /* Umschalter sagen selbst, wie sie gerade heißen (`data-kurzsym`/`data-kurztxt`) —
-       sonst stünde am Schloss ewig „🔒 Sperren", auch wenn es öffnen würde. Der Zustand
-       bleibt damit an EINER Stelle, nämlich am Knopf im Panel. */
-    const s=(el && el.dataset.kurzsym) || sym;
-    const t=(el && el.dataset.kurztxt) || txt;
-    return `<button data-kurz="${esc(ziel)}" class="${art||''}"><b>${esc(s)}</b>${esc(t)}</button>`;
-  }).join('');
-  kasten.querySelectorAll('[data-kurz]').forEach(b=>b.onclick=e=>{
-    e.stopPropagation();
-    const z=b.dataset.kurz;
-    if(z==='menu'){ kurzMenuAuf(b, KURZMENU[ort]||[]); return; }
-    const el=$(z); if(el) el.click();
-  });
+/* Der feine Ort der Kurzzeile: die Objektarten haben eigene Reihen (Nutzervorgabe) —
+   eine Treppe hat keine LV-Position, eine 360°-Aufnahme kein Maß. */
+function handyOrt(){
+  const ort=(!focusRoomId && wahlAn()) ? 'wahl' : kurzOrt();
+  if(ort!=='objekt') return ort;
+  const r=roomById(focusRoomId);
+  const g=r && (r.objects||[]).find(x=>x.id===sel.objId);
+  if(!g) return 'objekt';
+  if(g.type==='rect') return 'flaeche';
+  if(g.type==='line') return 'linie';
+  if(g.type==='sym' && ['schacht','treppe','p360','fotom'].includes(g.sub)) return g.sub;
+  return 'objekt';
 }
-/* „Einfuegen → Objekt" zeigt die Objektarten als eigene Liste — ein Tipp setzt das
-   Objekt sofort in die Raummitte und waehlt es an. Vorher fuehrte der Weg ins Panel,
-   wo man die Art erst suchen und dann noch im Plan zielen musste: am Handy zwei
-   Schritte zu viel. Verschieben und Groesse aendern geht danach am Objekt selbst. */
-const OBJARTEN=[
-  ['▭ Fläche', 'rect'], ['╱ Linie', 'line'],
-  ['1-K-Schleuse','1k'], ['2-K-Schleuse','2k'], ['4-K-Schleuse','4k'], ['RFA','rfa'],
-  ['📷 360°-Aufnahme','p360'], ['📐 Fotoaufmaß','fotom']
-];
-/* Hier stand bis zum 7.8.2026 eine ZWEITE `raumMitte` — der schlichte Mittelwert der
-   Ecken, angelegt fürs Einfügen von Objekten. Sie hat die richtige Fassung von weiter
-   oben stillschweigend überschrieben (die spätere Deklaration gewinnt), und seitdem saßen
-   **alle** Raumnamen auf dem Eckenmittel statt auf dem Punkt mit dem größten Wandabstand
-   — bei L-Formen also im Knick oder ganz außerhalb des Raums. Genau davor warnt der
-   Kommentar bei der echten `raumMitte`.
-
-   Ersatzlos weg: `objSofort` fährt mit der richtigen Fassung sogar besser, denn die
-   liefert einen Punkt, der garantiert IM Raum liegt. */
-function objSofort(art){
-  const r=focusRoomId?roomById(focusRoomId):null;
-  if(!r){ melde('Erst einen Raum öffnen.', true); return; }
-  /* Bewusst ohne Rücksicht auf das Schloss: das sperrt Maße und Form der Räume,
-     nicht das Anhängen von Objekten, Fotos und LV-Positionen — genau dafür bleibt ein
-     fertig aufgemessener Raum ja offen. Türen und Fenster sind etwas anderes, sie
-     verändern die Wand; die stehen im gesperrten Raum nicht im Einfügen-Menü. */
-  const c=raumMitte(r);
-  r.objects=r.objects||[];
-  let g;
-  if(art==='rect'){
-    g={id:uid(), type:'rect', name:'Fläche '+(r.objects.filter(o=>o.type==='rect').length+1),
-       x:mm(c.x-0.5), y:mm(c.y-0.5), w:1, h:1};
-  } else if(art==='line'){
-    g={id:uid(), type:'line', name:'Linie '+(r.objects.filter(o=>o.type==='line').length+1),
-       points:[{x:mm(c.x-0.5), y:mm(c.y)}, {x:mm(c.x+0.5), y:mm(c.y)}]};
-  } else {
-    const def=SYMDEFS[art]; if(!def) return;
-    g={id:uid(), type:'sym', sub:art, name:def.label,
-       x:mm(c.x-def.w/2), y:mm(c.y-def.h/2), w:def.w, h:def.h, rot:0};
-  }
-  r.objects.push(g);
-  sel={roomId:r.id, wall:null, vertex:null, objId:g.id};
-  save(); renderAll();
-  melde(`${objLabel(g)||'Objekt'} in der Raummitte gesetzt — ziehen verschiebt es.`);
-}
-function kurzMenuAuf(knopf, punkte){
-  const m=$('#kurzmenu');
-  /* Objekte, LV-Positionen und Fotos gehen auch im gesperrten Raum — dafür ist er ja
-     offen geblieben. Nur Tür und Fenster fallen weg, die verändern die Wand. */
-  const zu = focusRoomId ? !raumOffen(roomById(focusRoomId)) : false;
-  const wand = z => z==='#opdoorbtn' || z==='#opwinbtn';
-  const da=punkte.filter(([t,z])=>
-    (zu && wand(z)) ? false : (z==='objekte' || z.startsWith('obj:') || $(z)));
-  if(!da.length) return;
-  m.innerHTML=da.map(([t,z])=>`<button data-km="${esc(z)}">${esc(t)}</button>`).join('');
-  m.classList.add('auf');
-  const r=knopf.getBoundingClientRect(), mr=m.getBoundingClientRect();
-  m.style.left=Math.max(8, Math.min(r.left, innerWidth-mr.width-8))+'px';
-  m.style.top=Math.max(8, r.top-mr.height-8)+'px';
-  m.querySelectorAll('[data-km]').forEach(b=>b.onclick=()=>{
-    m.classList.remove('auf');
-    const z=b.dataset.km;
-    if(z==='objekte'){ kurzMenuAuf(knopf, OBJARTEN.map(([t,a])=>[t, 'obj:'+a])); return; }
-    if(z.startsWith('obj:')){ objSofort(z.slice(4)); return; }
-    const el=$(z); if(el) el.click();
-  });
-}
-document.addEventListener('pointerdown', e=>{
-  const m=$('#kurzmenu');
-  if(m.classList.contains('auf') && !m.contains(e.target) && !e.target.closest('#blattkurz'))
-    m.classList.remove('auf');
-}, true);
-/* ---------- Aufgeraeumtes Panel am Handy ----------
-   Was ueber die Kurzbefehlsleiste erreichbar ist, muss im Blatt nicht noch einmal
-   stehen. Je Ort bleiben deshalb nur die Panels und Zeilen der Liste unten uebrig;
-   alles andere wird **versteckt, nicht entfernt** — die Leiste drueckt ja genau diese
-   Knoepfe, sie muessen im Dokument bleiben. Am Rechner passiert hier nichts. */
-const HANDY={
-  // „Etage" ist seit dem 5.8.2026 dabei: dort sitzt das Schloss des Stockwerks
-  etage:   {panels:[/^Etage$/, /^Plan als Hintergrund/, /^R.ume/]},
-  raum:    {panels:[/^Raum/, /^Fotos/],
-            /* Die Zeile des Sanierungsbereichs MUSS mit durch: sonst ist „Fertig"
-               versteckt und man kommt aus dem Farbmodus nicht mehr heraus (gemeldet
-               als „Festgefahren bei Raumfarbe editieren"). */
-            behalte:['#rname','#rheight','#rhkoppel','#ranm','.farbrow','#rzadd','#rzdel','#rzreset',
-                     '#rzfertig','#rfoto','.fotos']},
-  wand:    {panels:[/^Wand/, /^Fotos/],
-            // Die Wandlaenge gehoert dazu — sie ist das Mass, das man am haeufigsten
-            // eintraegt; sie steht gleich hinter dem Staerke-Regler.
-            behalte:['#wlen','#wlock','#wdicke','#wdickeall','#wdickereg','#magnettoggle','#wfoto','.fotos'],
-            zuerst:['#wdickereg','#wlen']},
-  objekt:  {panels:[/ausgew.hlt/, /^Fotos/],
-            behalte:['#objname','.objdim','#objrot','#ptadd','#ptdel','#objfoto','.fotos']},
-  oeffnung:{panels:[/ausgew.hlt/, /^Fotos/],
-            behalte:['#opwidth','#opfoto','.fotos']}
+/* Je Ansicht höchstens fünf Kacheln — die Reihen sind die Vorgabe des Nutzers vom
+   9.8.2026, Wort für Wort. Nur die WAND stand nicht in seiner Liste; ihre Reihe ist
+   aus der Kurzspalte eingedampft und wartet auf seine Ansage. */
+const HANDYZEILE={
+  etage:    ['etagemenu','#fheight','#modedraw','#modetpl'],
+  wahl:     ['#rlv','raumdaten','wahlmodus','#rdup','wahlmehr'],
+  raum:     ['#rlv','objekte','raumdaten','raumakt','#rfoto'],
+  wand:     ['#walllv','wandmass','wandbau','nachbarn','#wfoto'],
+  oeffnung: ['#objlv','tuertyp','fenstertyp','messen','opakt','#opfoto'],  // Typ: nur einer greift
+  flaeche:  ['#objlv','messen','#objname','objakt','#objfoto'],
+  linie:    ['#objlv','liniewerk','#objname','objakt','#objfoto'],
+  schacht:  ['#objlv','messen','#objname','objakt','#objfoto'],
+  treppe:   ['#objrot','messen','#objname','objakt','#objfoto'],
+  p360:     ['#p360dreh','#p360laden','#objname','objakt','#objfoto'],
+  fotom:    ['#objname','#objdup','#objdel'],
+  objekt:   ['#objlv','messen','#objname','objaktdreh','#objfoto']
 };
-function handyOrdnung(){
-  if(innerWidth>640) return;
-  const regel=HANDY[kurzOrt()]; if(!regel) return;
-  const sb=$('#sidebar'); if(!sb) return;
-  /* Der Merker sagt: „hier weggeraeumt, nicht grundsaetzlich weg". Die Maßseite
-     nimmt so verstecktes Maß trotzdem mit auf — sie hat ja Platz dafuer, das
-     enge Panel hatte ihn nicht. */
-  const weg=el=>{ el.style.display='none'; el.dataset.handyweg='1'; };
-  sb.querySelectorAll('.panel').forEach(p=>{
-    const t=(p.querySelector('h3')||{}).textContent||'';
-    if(!regel.panels.some(re=>re.test(t))){ weg(p); return; }
-    if(!regel.behalte) return;
-    [...p.children].forEach(el=>{
-      if(el.tagName==='H3') return;
-      const bleibt=regel.behalte.some(sel2=>el.matches(sel2) || el.querySelector(sel2));
-      if(!bleibt) weg(el);
-    });
-  });
-  // Gewuenschte Reihenfolge: an der Wand soll der Staerke-Regler oben stehen
-  (regel.zuerst||[]).slice().reverse().forEach(sel2=>{
-    const el=sb.querySelector(sel2); if(!el) return;
-    const z=el.closest('.row')||el, p=z.parentElement;
-    p.insertBefore(z, p.querySelector('h3') ? p.querySelector('h3').nextSibling : p.firstChild);
-  });
-}
 /* ---------- Eingaben am Handy ----------
    Im Blatt ist jedes Feld schmal, und die Tastatur schiebt sich davor. Ein Tipp auf ein
    Feld oeffnet deshalb eine leere weisse Seite: Beschriftung, EIN grosses Feld, Anwenden.
@@ -17795,15 +17670,22 @@ const LEISTE = {
      nichts davon heran. */
   raum:  ['#rlv','#rsperr','-','#rheight','nameanm','-','#rdup','#rdel','-',
           'farbe','objekte','-','#rfoto'],
-  wand:  ['#wlock','#magnettoggle','#wandverbinden','#wdickevon0','#wdickevon1','-',
-          '#wopdoor','#wopwin','#wallsplit','#raumteilen','-','#walllv','#walldesel','#wfoto'],
+  /* Wandansicht (9.8.2026): Länge+Stärke und Nachbar+Übernehmen je ein Aufklappmenü,
+     die Halbwand steht unter dem Fenster — sie war vorher gar nicht in der Leiste. */
+  wand:  ['#wlock','#magnettoggle','wandmass','nachbarn','-',
+          '#wopdoor','#wopwin','#wallhw','#wallsplit','#raumteilen','-',
+          '#walllv','#walldesel','#wfoto'],
   /* Sieben Türtypen untereinander wären sieben Kacheln — sie stecken jetzt in einem
      Menü, dessen Knopf den gewählten Typ zeigt. Von den beiden Einträgen greift immer
      nur einer: an einer Tür gibt es keine Fenstertypen und umgekehrt. */
-  oeffnung: ['tuertyp','fenstertyp','-',
+  /* Ebenfalls 9.8.2026: Öffnungen und Objekte bekommen das Messen-Menü, Objekte dazu
+     den Namen als Feld-Kachel — vorher kam man aus der eingeklappten Spalte an keines
+     der Maße heran. Der Name gilt für alle Objektarten (auch Halbwand und Symbole);
+     was ein Panel nicht hat, fällt wie immer von selbst weg. */
+  oeffnung: ['tuertyp','fenstertyp','messen','-',
              '#objlv','#opdup','.opdel','#opfoto'],
   objekt: ['#objrot','#p360dreh','#p360laden','#ptadd','#ptdel','-',
-           '#objlv','#objdup','#objdel','#objfoto']
+           'messen','#objname','-','#objlv','#objdup','#objdel','#objfoto']
 };
 /* Aufklappmenüs der Leiste. Manche Gruppen sind zu groß für je einen Knopf: fünfzehn
    Farbfelder oder zehn Objektwerkzeuge wären fünfzehn bzw. zehn Kacheln untereinander,
@@ -17824,14 +17706,49 @@ const KLAPP = {
      Werkzeug — zusammen belegen sie eine Kachel statt zwei. Die Einträge sind FELDER,
      keine Knöpfe; `leisteKlapp` tippt sie an statt sie zu klicken. */
   nameanm:    {q:'#sidebar #rname, #sidebar #ranm',           titel:'Name & Anmerkung', ico:'stift'},
-  spiegeln:   {q:'#sidebar #rspiegelh, #sidebar #rspiegelv',  titel:'Spiegeln',         ico:'spiegelLR'}
+  spiegeln:   {q:'#sidebar #rspiegelh, #sidebar #rspiegelv',  titel:'Spiegeln',         ico:'spiegelLR'},
+  /* Wandansicht (Nutzerwunsch 9.8.2026): Länge und Stärke auf einem Knopf — beides
+     Zahlenfelder, und die Maßseite führt sie ohnehin als EINE Kette zum Durchtippen.
+     Die Lasermessung an der angewählten Wand bleibt unberührt: sie schreibt wie bisher
+     direkt ins Längenfeld, das Menü ist nur ein zweiter Weg dorthin. */
+  wandmass:   {q:'#sidebar #wlen, #sidebar #wdicke',          titel:'Länge & Stärke',   ico:'massstab'},
+  /* „Nachbar" und „Stärke von links/rechts bzw. oben/unten" zusammen: alles drei holt
+     sich etwas vom Nachbarraum. Ohne Fortsetzung sind die Übernehmen-Knöpfe disabled
+     und fallen im Menü weg — übrig bleibt dann nur der Nachbar-Knopf. */
+  nachbarn:   {q:'#sidebar #wandverbinden, #sidebar #wdickevon0, #sidebar #wdickevon1',
+               titel:'Nachbar & Stärke übernehmen', ico:'nachbar'},
+  /* Öffnungen und Objekte (Nutzerwunsch 9.8.2026): EIN Messen-Menü für beide. Die
+     Panels sind einheitlich — Öffnungsmaße heißen `opfld`, Objektmaße `objdim` —, und
+     im Blatt steht immer nur EIN solches Panel: das Menü zeigt also genau die Maße
+     der angewählten Sache (Tür: Breite/Höhe/Abstand, Fenster: +Brüstung, Fläche:
+     Länge/Breite, Linie: Gesamtlänge, Schacht: Breite/Tiefe). */
+  messen:     {q:'#sidebar input.opfld, #sidebar input.objdim', titel:'Messen', ico:'massstab'},
+  /* ---- Menüs der Handy-Kurzzeile (9.8.2026). `mehr` verweist auf ein weiteres Menü:
+     die Farbe hat fünfzehn Felder, die sprengen jede Liste — ein Eintrag klappt um. */
+  etagemenu: {q:'#sidebar #flooradd, #sidebar #floorren, #sidebar #floordup, #sidebar #floordel',
+              titel:'Etage', ico:'plus'},
+  raumdaten: {q:'#sidebar #rsperr, #sidebar #rheight, #sidebar #rname, #sidebar #ranm',
+              titel:'Festsetzen · Raumhöhe · Name · Anmerkung · Farbe', ico:'stift',
+              mehr:[['Farbe','farbe']]},
+  wahlmehr:  {q:'#sidebar #rspiegelh, #sidebar #rspiegelv, #sidebar #rdel, #sidebar #rfoto',
+              titel:'Spiegeln · Löschen · Foto', ico:'spiegelLR'},
+  raumakt:   {q:'#sidebar #rdup, #sidebar #rdel', titel:'Duplizieren & Löschen', ico:'kopie'},
+  wandbau:   {q:'#sidebar #wopdoor, #sidebar #wopwin, #sidebar #wallhw, #sidebar #wallsplit, #sidebar #raumteilen',
+              titel:'Einbauen & Teilen', ico:'tuer'},
+  opakt:     {q:'#sidebar #opdup, #sidebar .opdel',  titel:'Duplizieren & Löschen', ico:'kopie'},
+  objakt:    {q:'#sidebar #objdup, #sidebar #objdel', titel:'Duplizieren & Löschen', ico:'kopie'},
+  objaktdreh:{q:'#sidebar #objdup, #sidebar #objdel, #sidebar #objrot',
+              titel:'Duplizieren · Löschen · Drehen', ico:'kopie'},
+  liniewerk: {q:'#sidebar input.objdim, #sidebar #ptadd, #sidebar #ptdel',
+              titel:'Messen & Ecken', ico:'massstab'}
 };
 function leisteKlapp(knopf, art){
   const alt=$('#leisteklapp');
   if(alt){ const war=alt.dataset.von; alt.remove(); if(war===art) return; }
   // Abgeschaltete Einträge fallen weg — wie in der Leiste selbst
   const felder=[...document.querySelectorAll(KLAPP[art].q)].filter(f=>!f.disabled);
-  if(!felder.length) return;
+  const weiter=(KLAPP[art].mehr||[]).filter(([,ziel])=>document.querySelectorAll(KLAPP[ziel].q).length);
+  if(!felder.length && !weiter.length) return;
   const einFeld = f => f.tagName==='INPUT' || f.tagName==='TEXTAREA';
   const box=document.createElement('div');
   box.id='leisteklapp'; box.dataset.von=art;
@@ -17846,11 +17763,23 @@ function leisteKlapp(knopf, art){
     const bild=f.querySelector('svg'), txt=f.textContent.trim();
     return `<button data-nr="${i}" title="${esc(f.title||txt)}" class="${an.trim()}">${
       bild ? bild.outerHTML : esc(txt)}</button>`;
-  }).join('');
+  }).join('')
+  /* Verweise auf ein weiteres Menü (`mehr`) — z. B. die Farbe mit ihren fünfzehn
+     Feldern, die diese Liste sprengen würden. Der Eintrag klappt um statt zu drücken. */
+  + weiter.map(([txt,ziel])=>`<button data-mehr="${esc(ziel)}" title="${esc(txt)}">${
+      ico(KLAPP[ziel].ico,true)}${esc(txt)}</button>`).join('');
   document.body.appendChild(box);
   const r=knopf.getBoundingClientRect();
-  box.style.left=(r.right+8)+'px';
-  box.style.top=Math.max(8, Math.min(r.top, innerHeight-box.offsetHeight-8))+'px';
+  /* Aus der Kurzzeile am unteren Rand klappt das Menü nach OBEN auf — rechts daneben
+     wäre außerhalb des Schirms. Aus der Spalte wie bisher nach rechts. */
+  if(knopf.closest('#blattkurz')){
+    box.style.left=Math.max(8, Math.min(r.left, innerWidth-box.offsetWidth-8))+'px';
+    box.style.top=Math.max(8, r.top-box.offsetHeight-8)+'px';
+  } else {
+    box.style.left=(r.right+8)+'px';
+    box.style.top=Math.max(8, Math.min(r.top, innerHeight-box.offsetHeight-8))+'px';
+  }
+  box.querySelectorAll('[data-mehr]').forEach(b=>b.onclick=()=>leisteKlapp(knopf, b.dataset.mehr));
   box.querySelectorAll('[data-nr]').forEach(b=>b.onclick=()=>{
     const f=felder[+b.dataset.nr];
     /* Zahlenfelder gehen über die Maßseite — ihr Fänger hängt am `document` und gilt
@@ -17872,18 +17801,27 @@ document.addEventListener('pointerdown', e=>{
   if(box && !box.contains(e.target) && !e.target.closest('#leiste')) box.remove();
 }, true);
 
-function leisteBauen(){
-  const kasten=$('#leiste'); if(!kasten) return;
-  const offen=$('#leisteklapp'); if(offen) offen.remove();
-  /* Eigener Ort für die Anwahl — `kurzOrt()` bleibt unangetastet, weil die
-     Kurzbefehlsleiste am Telefon und `handyOrdnung()` an seinen Werten hängen. */
-  const ort = (!focusRoomId && wahlAn()) ? 'wahl' : kurzOrt();
-  /* Erst sammeln, dann zeichnen: Trennstriche, die nichts mehr trennen, fallen sonst
-     als leerer Strich am Ende auf — genau dort, wo bei Mehrfachauswahl Duplizieren
-     und Fotos wegfallen. */
+/* Füllt EINEN Kasten (die Spalte oder die Handy-Kurzzeile) aus einer Eintragsliste.
+   Erst sammeln, dann zeichnen: Trennstriche, die nichts mehr trennen, fallen sonst
+   als leerer Strich am Ende auf — genau dort, wo bei Mehrfachauswahl Duplizieren
+   und Fotos wegfallen. */
+function leisteFuellen(kasten, eintraege){
+  if(!kasten) return;
   const teile=[];
-  (LEISTE[ort]||[]).forEach(wahl=>{
+  (eintraege||[]).forEach(wahl=>{
     if(wahl==='-'){ teile.push(null); return; }
+    /* Der Einzel/Mehrfach-SCHALTER der Kurzzeile (Nutzervorgabe: „als Switch, kein
+       Menü"): die Kachel zeigt den geltenden Modus, der Tipp drückt den jeweils
+       anderen der beiden Panel-Knöpfe. */
+    if(wahl==='wahlmodus'){
+      const mehr=document.querySelector('#sidebar #wahlMehr');
+      if(!mehr || !document.querySelector('#sidebar #wahlEinzel')) return;
+      const istMehr=mehr.classList.contains('an');
+      teile.push(`<button data-ziel="wahlmodus" class="an" title="${istMehr
+        ? 'Mehrfach anwählen — Tipp schaltet auf einzeln'
+        : 'Einzeln anwählen — Tipp schaltet auf mehrfach'}">${ico(istMehr?'mehrwahl':'einzelwahl',true)}</button>`);
+      return;
+    }
     if(KLAPP[wahl]){
       const k=KLAPP[wahl], felder=[...document.querySelectorAll(k.q)].filter(f=>!f.disabled);
       if(!felder.length) return;
@@ -17902,19 +17840,32 @@ function leisteBauen(){
       /* Eingabefelder haben kein Symbol — dort steht der Wert selbst auf dem Knopf,
          das ist ohnehin die Auskunft, um die es geht. */
       const feld=el.tagName==='INPUT';
-      const inhalt = feld ? `${ico('hoehe',true)}<span class="wert">${esc(el.value||'—')}</span>`
+      /* Zahlenfelder tragen den Maßpfeil, Textfelder (der Objektname) den Stift —
+         dasselbe Zeichen, das auch ihre Menü-Einträge benutzen. */
+      const inhalt = feld ? `${ico(el.matches(ZAHLFELD)?'hoehe':'stift',true)}<span class="wert">${esc(el.value||'—')}</span>`
         : (bild ? bild.outerHTML : esc(txt.slice(0,4)));
+      /* Der Magnet zeigt seinen Zustand in Farbe (Nutzerwunsch 9.8.2026): an = grün,
+         aus = rot. Das Rot kommt schon über seine `zu`-Klasse; das Grün gibt es nur
+         hier in der Leiste — der Knopf im Panel bleibt neutral. */
+      const gruen = el.classList.contains('green')
+        || (el.id==='magnettoggle' && el.classList.contains('auf'));
       teile.push(`<button data-ziel="${wahl}" data-nr="${i}"
         title="${esc(el.title || (feld ? feldName(el) : txt))}"
         class="${feld?'feld ':''}${el.classList.contains('an')||el.classList.contains('active')?'an ':''}${
           el.classList.contains('danger')||el.classList.contains('zu')?'rot ':''}${
-          el.classList.contains('green')?'gruen':''}"
+          gruen?'gruen':''}"
         >${inhalt}</button>`);
     });
   });
   const sauber=teile.filter((t,i)=> t!==null || (teile.slice(0,i).some(Boolean) && teile.slice(i+1).some(Boolean)));
   kasten.innerHTML=sauber.map(t=> t===null ? '<span class="trenner"></span>' : t).join('');
   kasten.querySelectorAll('[data-ziel]').forEach(b=>b.onclick=()=>{
+    if(b.dataset.ziel==='wahlmodus'){
+      const mehr=document.querySelector('#sidebar #wahlMehr');
+      const el=document.querySelector('#sidebar '+(mehr && mehr.classList.contains('an') ? '#wahlEinzel' : '#wahlMehr'));
+      if(el) el.click();
+      return;
+    }
     if(KLAPP[b.dataset.ziel]){ leisteKlapp(b, b.dataset.ziel); return; }
     const ziel=document.querySelectorAll('#sidebar '+b.dataset.ziel)[+b.dataset.nr];
     if(!ziel) return;
@@ -17931,6 +17882,14 @@ function leisteBauen(){
     }
     ziel.click();
   });
+}
+function leisteBauen(){
+  const offen=$('#leisteklapp'); if(offen) offen.remove();
+  // Eigener Ort für die Anwahl — `kurzOrt()` bleibt unangetastet
+  const ort = (!focusRoomId && wahlAn()) ? 'wahl' : kurzOrt();
+  leisteFuellen($('#leiste'), LEISTE[ort]||[]);
+  // Die Handy-Kurzzeile: dieselbe Maschine, feinerer Ort, höchstens fünf Kacheln
+  leisteFuellen($('#blattkurz'), HANDYZEILE[handyOrt()]||[]);
 }
 const BLATT_KEY='grundriss-blatt-zu';
 function blattSpalte(zu){
