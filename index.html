@@ -117,6 +117,14 @@
   #leiste button.gruen{color:#fff; background:var(--accent2); border-color:var(--accent2);}
   #leiste svg{width:30px; height:30px; display:block; margin:0 auto; stroke-width:1.7;}
   #leiste .trenner{flex:0 0 auto; width:34px; height:1px; background:var(--line); margin:2px 0;}
+  /* Aufklappmenü-Kacheln tragen eine kleine Ecke unten rechts — sonst sähe ein Knopf,
+     der ein Menü öffnet, genauso aus wie einer, der sofort schaltet (Nutzerwunsch
+     9.8.2026). Ein ::after statt Markup: die Knöpfe werden aus `LEISTE` generiert,
+     und die Ecke gehört zur Darstellung, nicht zum Inhalt. */
+  #leiste button.klapp{position:relative;}
+  #leiste button.klapp::after{content:''; position:absolute; right:4px; bottom:4px;
+    border-style:solid; border-width:0 0 7px 7px;
+    border-color:transparent transparent currentColor transparent; opacity:.55;}
   /* Eingabefelder in der Leiste: kleines Symbol, darunter der Wert */
   #leiste button.feld{display:flex; flex-direction:column; align-items:center;
     justify-content:center; gap:1px;}
@@ -1149,6 +1157,14 @@
       </div>
       <div class="schalter" style="margin-top:6px">
         <label id="lvAutoObjZeile" title="Länge und Breite kommen aus den Maßen der Fläche bzw. Linie — und damit aus der Zeichnung, solange die dort gekoppelt sind"><input type="checkbox" id="lvAutoObj"><span>Folge Objekt (Länge und Breite)</span></label>
+      </div>
+      <!-- Erscheint nur bei festgehaltenen Raummaßen (Räume verbunden). Ohne diese Zeile
+           wäre der Zustand unsichtbar: die Position sähe aus wie jede andere, rechnete
+           aber mit den Maßen von vorher. -->
+      <div class="row" id="lvFestZeile" style="display:none; margin-top:6px">
+        <span class="hint" id="lvFestTxt" style="flex:1"></span>
+        <button type="button" class="btn small" id="lvFestLoesen"
+          title="Die Position rechnet wieder mit den Maßen des heutigen Raums">freigeben</button>
       </div>
     </fieldset>
     <fieldset><legend>Anmerkung</legend>
@@ -2716,6 +2732,12 @@ function lvMasseNachziehen(){
 /* Was eine LV-Position bezeichnet: Objekt, nummerierte Wand oder der Raum selbst */
 function lvZielText(a, leerBeiRaum){
   const r=roomById(a.roomId);
+  /* `a.weg` trägt den Grund als fertigen Text („Wand #3 gelöscht", „Tür gelöscht").
+     Er entsteht beim Verbinden von Räumen: die Zuordnung bleibt im Aufmaß — abgerechnet
+     wurde ja —, aber ihr Bauteil gibt es nicht mehr. Bewusst als **Text** und nicht als
+     Verweis: es gibt nichts mehr, worauf man zeigen könnte, und die Nummer der alten Wand
+     ist genau das, womit man die Zeile im Ausdruck von gestern wiederfindet. */
+  if(a.weg) return a.weg;
   if(a.objId){
     const og=r?(((r.objects||[]).find(g=>g.id===a.objId))||((r.openings||[]).find(o=>o.id===a.objId))):null;
     // Fotoaufmaß steht überall unter diesem Namen — so ist in jeder Liste klar,
@@ -2853,7 +2875,7 @@ let messungLaeuft=false;
    Die Stärke wächst nach außen und dient Darstellung, Volumen und Laibungen. */
 /* Datum des letzten Umbaus — geht bei jedem Ticket mit, damit beim Nachstellen klar ist,
    welcher Stand auf dem Gerät lag. Bei größeren Änderungen mit hochziehen. */
-const APP_STAND='2026-08-07';
+const APP_STAND='2026-08-09';
 const WAND_STD=0.24;
 // Spanne des Schiebereglers im Wand-Panel. Von Hand darf man auch daneben liegen —
 // der Regler wird dann rot, damit der Ausreißer nicht unbemerkt bleibt.
@@ -2881,15 +2903,29 @@ function linienSchnitt(a1,a2,b1,b2){
 }
 // Außenkante des Raums: jede Wand um ihre eigene Stärke nach außen, Ecken auf Gehrung
 function aussenPolygon(r){
-  const n=r.points.length, linien=[];
+  const n=r.points.length, linien=[], dicken=[], normalen=[];
   for(let i=0;i<n;i++){
     const A=r.points[i], B=r.points[(i+1)%n];
     const d=wandDicke(r,i), nn=aussenNormale(r,i);
+    dicken.push(d); normalen.push(nn);
     linien.push([{x:A.x+nn.x*d, y:A.y+nn.y*d}, {x:B.x+nn.x*d, y:B.y+nn.y*d}]);
   }
   const aus=[];
   for(let i=0;i<n;i++){
-    const vor=linien[(i-1+n)%n], jetzt=linien[i];
+    const h=(i-1+n)%n, vor=linien[h], jetzt=linien[i];
+    /* 180-Grad-Stoß mit verschiedener Stärke (Ticket 9.8.2026): die versetzten Kanten
+       sind parallel, eine Gehrung gibt es nicht. Der alte Rückfall auf EINEN Punkt
+       machte aus der dickeren Wand eine Rampe. Jetzt ein scharfer Absatz: die alte
+       Stärke läuft bis zur Ecke, dort geht es senkrecht auf die neue. Die Schwelle
+       fängt auch fast-parallele Stöße — deren Gehrungspunkt läge als Dorn weit draußen. */
+    const quer=Math.abs(normalen[h].x*normalen[i].y-normalen[h].y*normalen[i].x);
+    const gleich=normalen[h].x*normalen[i].x+normalen[h].y*normalen[i].y>0;
+    if(quer<0.02 && gleich && Math.abs(dicken[h]-dicken[i])>0.001){
+      const E=r.points[i];
+      aus.push({x:E.x+normalen[h].x*dicken[h], y:E.y+normalen[h].y*dicken[h]});
+      aus.push({x:E.x+normalen[i].x*dicken[i], y:E.y+normalen[i].y*dicken[i]});
+      continue;
+    }
     aus.push(linienSchnitt(vor[0], vor[1], jetzt[0], jetzt[1]) || {...jetzt[0]});
   }
   return aus;
@@ -2975,6 +3011,56 @@ function etageSperreUmschalten(fid, raumId){
 const floorRooms = () => proj().rooms.filter(r=>r.floorId===activeFloorId);
 const roomById = id => proj().rooms.find(r=>r.id===id);
 function floorName(fid){ const f=proj().floors.find(f=>f.id===fid); return f?f.name:''; }
+
+/* ---------- Raumhöhe auf Stockwerkebene (seit 2026-08-08) ----------
+   In einem Geschoss sind fast alle Räume gleich hoch — bisher musste die Zahl trotzdem
+   in jeden Raum einzeln eingetragen werden. Die Etage trägt deshalb jetzt selbst eine
+   Höhe (`f.height`), und wer sie ändert, ändert sie in allen Räumen der Etage.
+
+   **Ausgenommen bleiben die von Hand geänderten.** Ein Raum, dessen Höhe einzeln
+   gesetzt wurde (Feld im Raum-Panel, Anwahl oder Lasermessung), bekommt den Merker
+   `hEigen` und hört ab da nicht mehr auf die Etage: der Flur mit der abgehängten Decke
+   soll nicht bei jeder Korrektur am Rest wieder auf 2,50 m springen. Der Kettenknopf
+   neben dem Feld nimmt den Merker wieder weg (und holt dabei die Etagenhöhe) oder setzt
+   ihn ohne Zahlenänderung — dieselben zwei Zustände wie bei den Objektmaßen.
+
+   `f.height` **fehlt** bei allen Aufmaßen, die es vor heute schon gab. Dann sagen die
+   Räume, was gilt: sind sie sich einig, ist das die Etagenhöhe; sonst gibt es keine
+   (das Feld bleibt leer und zeigt „verschieden"). So muss nichts umgestellt werden. */
+function etagenHoehe(fid){
+  const f=(proj().floors||[]).find(x=>x.id===fid);
+  if(f && isFinite(f.height) && f.height>0) return f.height;
+  const rs=(proj().rooms||[]).filter(r=>r.floorId===fid);
+  if(rs.length && rs.every(r=>r.height===rs[0].height) && rs[0].height>0) return rs[0].height;
+  return null;
+}
+/* Setzt die Höhe der Etage und trägt sie in die Räume. `auchEigene` überschreibt auch
+   die von Hand gesetzten und löst deren Merker — das ist der Knopf „alle". Zurück kommt,
+   was passiert ist; die Meldung entsteht beim Aufrufer. */
+function etagenHoeheSetzen(fid, v, auchEigene){
+  const f=(proj().floors||[]).find(x=>x.id===fid);
+  if(f) f.height=v;
+  let n=0, uebergangen=0;
+  (proj().rooms||[]).filter(r=>r.floorId===fid).forEach(r=>{
+    if(r.hEigen && !auchEigene){ uebergangen++; return; }
+    if(auchEigene) delete r.hEigen;
+    if(r.height!==v){ r.height=v; n++; }
+  });
+  return {n, uebergangen};
+}
+/* Bevor ein einzelner Raum ausschert: die bis dahin geltende Höhe in der Etage
+   festhalten. Ohne `f.height` ergibt sie sich nur aus der Einigkeit der Räume — und die
+   ist im nächsten Augenblick dahin. Danach stünde in der Etagenansicht „verschieden",
+   obwohl der Nutzer nur EINEN Raum angefasst hat. */
+function etagenHoeheMerken(fid){
+  const f=(proj().floors||[]).find(x=>x.id===fid);
+  if(f && !(isFinite(f.height) && f.height>0)){
+    const eh=etagenHoehe(fid);
+    if(eh) f.height=eh;
+  }
+}
+// Höhe, mit der ein NEUER Raum auf dieser Etage anfängt
+const neueRaumHoehe = fid => etagenHoehe(fid) || lastHeight;
 
 /* ================= SVG-Canvas ================= */
 const svg=$('#canvas');
@@ -3919,7 +4005,14 @@ function angleMarks(r, lbl, zeigen){
   }
   return out ? `<g style="pointer-events:none">${out}</g>` : '';
 }
+/* Die Etagen-Sicht überlebt den Ausflug in den Raum (Ticket 9.8.2026): wer aus dem Raum
+   zurückkommt, will die Etage so sehen wie beim Hineingehen — herangefahren an die Stelle,
+   an der er arbeitet —, nicht auf das ganze Blatt eingepasst. Gemerkt wird beim WECHSEL
+   in die Raumansicht (ein Raumwechsel innerhalb der Raumansicht überschreibt nichts),
+   und zurückgestellt nur auf derselben Etage. */
+let etagenSicht=null;                        // {fid, vb}
 function focusRoom(id){
+  if(focusRoomId==null) etagenSicht={fid:activeFloorId, vb:{...vb}};
   focusRoomId=id; etagenWahl=[];             // Anwahl gilt nur der Etagenansicht
   sel={roomId:id, wall:null, vertex:null};
   if(zoneEdit!==id) zoneEdit=null;          // Farbzonen-Bearbeitung gilt nur dem eigenen Raum
@@ -3929,7 +4022,38 @@ function focusRoom(id){
 function exitRoom(){
   focusRoomId=null; zoneEdit=null;
   sel={roomId:null, wall:null, vertex:null};
-  renderAll(); zoomFit();
+  renderAll();
+  if(etagenSicht && etagenSicht.fid===activeFloorId){ vb={...etagenSicht.vb}; renderCanvas(); }
+  else zoomFit();
+}
+/* Grundmaß aller Beschriftungen und Griffe, in Metern und am Ausschnitt hängend — so
+   bleiben sie beim Zoomen gleich groß. Steht als eigene Funktion da, weil auch
+   `pointerdown` sie braucht (Drehgriff des Raums). */
+const beschriftungsMass = () => Math.max(0.14, Math.min(0.6, vb.w/55));
+/* ---------- Drehgriff des angewählten Raums (seit 2026-08-08) ----------
+   Ein Knopf an einem Stiel über dem Raum, wie man ihn aus der Bildbearbeitung kennt —
+   dieselbe Gestalt wie der Drehgriff eines Objekts, nur größer und um die Raummitte.
+
+   **Mitte und Radius werden beim Anfassen eingefroren** (`drag.c`, `drag.R`). Der
+   naheliegende Weg — beides bei jedem Bild aus dem Umriss zu rechnen — sieht beim Ziehen
+   falsch aus: die Bounding Box eines gedrehten Vielecks wächst und schrumpft, der Griff
+   würde unter dem Finger davonlaufen. Eingefroren bleibt er da, wo man ihn hält. */
+function raumDrehGriff(r, lbl){
+  const zieht = drag && drag.kind==='raumdreh' && drag.room===r;
+  const bb=bboxOf(r.points);
+  const c = zieht ? drag.c : raumSchwerpunkt(r);
+  const R = zieht ? drag.R : (bb.maxy-bb.miny)/2 + lbl*2.6;
+  const w = ((zieht?drag.a:0)-90)*Math.PI/180;
+  const k={x:c.x+Math.cos(w)*R, y:c.y+Math.sin(w)*R};
+  const f={x:c.x+Math.cos(w)*(R-lbl*1.6), y:c.y+Math.sin(w)*(R-lbl*1.6)};
+  return `<line x1="${f.x}" y1="${f.y}" x2="${k.x}" y2="${k.y}" stroke="#2f6fed"
+      stroke-width="${lbl*0.09}" style="pointer-events:none"/>
+    <circle cx="${k.x}" cy="${k.y}" r="${lbl*0.5}" fill="#fff" stroke="#2f6fed"
+      stroke-width="${lbl*0.12}" data-raumdreh="${r.id}" style="cursor:grab"/>
+    <circle cx="${k.x}" cy="${k.y}" r="${lbl*2.4}" fill="transparent"
+      data-raumdreh="${r.id}" style="cursor:grab"/>`
+    + (zieht ? `<text x="${c.x}" y="${c.y}" text-anchor="middle" font-size="${lbl*1.1}"
+        fill="#2f6fed" font-weight="700" style="pointer-events:none">${fmt(drag.a,0)}°</text>` : '');
 }
 function renderCanvas(){
   let fr=focusRoomId?roomById(focusRoomId):null;
@@ -3938,7 +4062,7 @@ function renderCanvas(){
   const rooms=fr?[...floorRooms().filter(x=>x.id!==fr.id), fr]:floorRooms();
   plakettenAus=!fr;                    // Etagenansicht: ohne Nummern (am Ende zurückgesetzt)
   badgeReset(true);                    // Plaketten je Bild neu entzerren
-  const lbl=Math.max(0.14, Math.min(0.6, vb.w/55));
+  const lbl=beschriftungsMass();
   /* `<defs>`, Raster und Planbild stehen in `#planlage` und werden **nicht** bei jedem
      Bild neu gebaut (siehe `planLageZeichnen`). Muster und Verlauf sind unveränderlich;
      sie jedes Mal zu verwerfen und neu anzulegen kostet nur. Hier kommt ab jetzt allein
@@ -3965,6 +4089,11 @@ function renderCanvas(){
       out+=`<path d="${polyD(wr.points)}" fill="none" stroke="#2f6fed"`+
         ` stroke-width="${Math.max(0.03, vb.w/260)}" stroke-linejoin="miter" style="pointer-events:none"/>`;
     });
+    // Drehgriff — nur bei GENAU einem angewählten Raum, und nur wenn die Etage offen ist
+    if(etagenWahl.length===1){
+      const dr=roomById(etagenWahl[0]);
+      if(dr && dr.floorId===activeFloorId && raumOffen(dr)) out+=raumDrehGriff(dr, lbl);
+    }
   }
 
   rooms.forEach(r=>{
@@ -3986,10 +4115,19 @@ function renderCanvas(){
        Hand ist — der Rest der Zeit tragen die Eckpunkte die Aussage über ihre Farbe. */
     if(!dim && fr && drag && drag.kind==='vertex' && drag.room===r)
       out+=angleMarks(r, lbl, eckenUmher(r, drag.idx));
-    const c=raumMitte(r), st=roomStats(r);
-    out+=`<text x="${c.x}" y="${c.y}" text-anchor="middle" font-size="${lbl}" fill="#2b3345" style="pointer-events:none">
-      <tspan x="${c.x}" dy="-0.1">${esc(r.name)}</tspan>
-      <tspan x="${c.x}" dy="${lbl*1.25}" fill="#6b7484" font-size="${lbl*0.85}">${fmt(st.area,2)} m²</tspan></text>`;
+    /* ---------- Keine Beschriftung im eigenen Raum (seit 2026-08-08) ----------
+       In der Raumansicht bleibt die Raummitte FREI — weder Name noch Grundfläche.
+       Beides lag genau über dem, woran man dort arbeitet: Objekte, Farbzonen,
+       Fotoaufmaß. Der Name steht im Kopf der Seitenleiste und auf dem Griff der
+       Blattleiste, die Fläche in der Statistik desselben Panels.
+       Nachbarräume behalten ihre Beschriftung. Sie sind blass hinterlegt, und ohne
+       Namen wüsste man nicht, an welchen Raum man gerade heranfährt. */
+    if(!(fr && r.id===fr.id)){
+      const c=raumMitte(r), st=roomStats(r);
+      out+=`<text x="${c.x}" y="${c.y}" text-anchor="middle" font-size="${lbl}" fill="#2b3345" style="pointer-events:none">
+        <tspan x="${c.x}" dy="-0.1">${esc(r.name)}</tspan>
+        <tspan x="${c.x}" dy="${lbl*1.25}" fill="#6b7484" font-size="${lbl*0.85}">${fmt(st.area,2)} m²</tspan></text>`;
+    }
     if(dim){ out+='</g>'; return; }
     /* Nur in der RAUMANSICHT (`fr`) gibt es Wand- und Eckgriffe samt Maßketten. In der
        Etagenansicht ist ein Raum zwar anwählbar, aber als Ganzes: dort verschiebt man
@@ -4230,7 +4368,10 @@ function segSnapCandidates(a1, b1, others, thresh){
       const t1=(a1.x-a2.x)*d2.x+(a1.y-a2.y)*d2.y;                // Überlappung entlang der Wand
       const t2=(b1.x-a2.x)*d2.x+(b1.y-a2.y)*d2.y;
       if(Math.min(Math.max(t1,t2),L2)-Math.max(Math.min(t1,t2),0) < 0.05) continue;
-      out.push({dx:-nx*korr, dy:-ny*korr, mag:Math.abs(korr), seg:[a2,b2]});
+      // `quelle` trägt die fremde Wand mit — daraus holt sich die herangeführte Wand
+      // beim Loslassen ihre Stärke (s. staerkeVomMagnet). `par` = parallel, hat Vorrang.
+      out.push({dx:-nx*korr, dy:-ny*korr, mag:Math.abs(korr), seg:[a2,b2],
+        quelle:{o, j, dicke:wandDicke(o,j), par:true}});
     }
   });
   return out;
@@ -4256,11 +4397,86 @@ function perpSnapCandidates(a1, b1, others, thresh){
         if(Math.abs(dd)>thresh || Math.abs(dd)<0.0005) return;
         const t=(p.x-a2.x)*d2.x+(p.y-a2.y)*d2.y;                 // Auftreffpunkt entlang der fremden Wand
         if(t<-0.05 || t>L2+0.05) return;                         // trifft das Wandsegment nicht
-        out.push({dx:-nx*dd, dy:-ny*dd, mag:Math.abs(dd), seg:[a2,b2]});
+        out.push({dx:-nx*dd, dy:-ny*dd, mag:Math.abs(dd), seg:[a2,b2],
+          quelle:{o, j, dicke:wandDicke(o,j), par:false}});       // seitlicher Stoß
       });
     }
   });
   return out;
+}
+/* ---------- Wandstärke vom Nachbarn übernehmen ----------
+   Nach dem Ziehen bekommt die HERANGEFÜHRTE Wand die Stärke der Wand, an der sie nun
+   liegt. Parallel hat Vorrang (dort ist die Stärke geometrisch belegt: der Abstand IST
+   die Wand), sonst gilt bei seitlichem Stoß die STÄRKSTE der anliegenden — zu dünn
+   hinterlässt eine Lücke im Wandkörper und lässt `pushDoorToPartner` die gemeinsame
+   Wand nicht mehr finden (Toleranz = Wandstärke + 6 cm), zu dick fällt nicht auf, weil
+   die Wandkörper einer Etage als EINE Fläche gezeichnet werden.
+
+   Eigene Erkennung statt der Kandidatenfunktionen: die verwerfen bewusst alles, was
+   schon erfüllt ist (`< 0.0005`) — nach dem Einrasten läge also gar nichts mehr vor.
+   Winkeltoleranzen bleiben dieselben, damit beides nicht auseinanderläuft. */
+const ANLIEG_PAR=0.06, ANLIEG_TOL=0.02, FLUCHT_MAX=1.0;
+function anliegendeWaende(r, i, others){
+  const [a1,b1]=wallPoints(r,i);
+  const L1=dist(a1,b1); const par=[], flucht=[];
+  if(L1<0.05) return {par, flucht};
+  const d1={x:(b1.x-a1.x)/L1, y:(b1.y-a1.y)/L1};
+  others.forEach(o=>{
+    const n=o.points.length;
+    for(let j=0;j<n;j++){
+      const a2=o.points[j], b2=o.points[(j+1)%n];
+      const L2=dist(a2,b2); if(L2<0.05) continue;
+      const d2={x:(b2.x-a2.x)/L2, y:(b2.y-a2.y)/L2};
+      const nx=-d2.y, ny=d2.x, dck=wandDicke(o,j);
+      if(Math.abs(d1.x*d2.y-d1.y*d2.x)<=ANLIEG_PAR){          // gleiche Richtung: parallel oder in Flucht
+        const dd=(a1.x-a2.x)*nx+(a1.y-a2.y)*ny;               // Abstand der beiden Wandlinien
+        const t1=(a1.x-a2.x)*d2.x+(a1.y-a2.y)*d2.y;           // eigene Enden längs der fremden Wand
+        const t2=(b1.x-a2.x)*d2.x+(b1.y-a2.y)*d2.y;
+        const lo=Math.min(t1,t2), hi=Math.max(t1,t2);
+        if(Math.abs(Math.abs(dd)-dck)<=ANLIEG_TOL){           // Wand gegen Wand, eine Stärke Abstand
+          if(Math.min(hi,L2)-Math.max(lo,0) >= 0.05) par.push({o, j, dicke:dck, seg:[a2,b2]});
+        } else if(Math.abs(dd)<=ANLIEG_TOL){
+          /* IN FLUCHT: beide Wandlinien fallen zusammen und die Wände setzen einander fort
+             (Ende an Ende, nicht übereinander). Dazwischen steht meist die querlaufende
+             Wand — der Spalt ist also ungefähr deren Stärke, darum bis FLUCHT_MAX. */
+          const spalt=Math.max(lo-L2, 0-hi);                  // <0 hieße Überdeckung
+          if(spalt>=-ANLIEG_TOL && spalt<=FLUCHT_MAX) flucht.push({o, j, dicke:dck, seg:[a2,b2]});
+        }
+      }
+      /* KEIN T-Stoß. Eine Wand, die im rechten Winkel gegen eine fremde läuft, sagt nichts
+         über die eigene Stärke — sie berührt sie nur. Ein erster Versuch übernahm auch dort
+         (2026-08-08) und schrieb prompt Wänden eine fremde Stärke zu, die damit nichts zu
+         tun hatten; im Fall des Nutzers verdrängte sie sogar die richtige Quelle in Flucht. */
+    }
+  });
+  return {par, flucht};
+}
+/* Schreibt die übernommenen Stärken. `walls` = Indizes der herangeführten Wände.
+   Gibt zurück, was sich tatsächlich geändert hat (für die Meldung). */
+function staerkeVomMagnet(r, walls, others){
+  if(!magnetAn()) return [];
+  const geaendert=[];
+  walls.forEach(i=>{
+    if(i==null || i<0 || i>=r.points.length) return;
+    const {par, flucht}=anliegendeWaende(r, i, others);
+    // Parallel schlägt Flucht; innerhalb einer Stufe gewinnt die stärkste
+    const dickste=l=>l.reduce((m,c)=>c.dicke>m.dicke?c:m);
+    const quelle = par.length ? dickste(par) : (flucht.length ? dickste(flucht) : null);
+    if(!quelle) return;
+    const alt=wandDicke(r,i);
+    if(Math.abs(alt-quelle.dicke)<0.0005) return;              // liegt schon richtig
+    r.wallDicke=r.wallDicke||{};
+    r.wallDicke[i]=quelle.dicke;                               // NUR die Stärke — kein Punkt bewegt sich
+    geaendert.push({wand:i, alt, neu:quelle.dicke});
+  });
+  return geaendert;
+}
+function staerkeMelden(g){
+  if(!g.length) return;
+  const s=g[0];
+  melde(g.length===1
+    ? `Wand ${s.wand+1}: Stärke ${fmt(s.neu,2)} m vom Nachbarn übernommen (vorher ${fmt(s.alt,2)} m).`
+    : `${g.length} Wände: Stärke vom Nachbarn übernommen.`);
 }
 // Beste Korrektur für ein ganzes Polygon: kleinste Verschiebung, plus eine
 // zweite (nahezu orthogonale) für sauberes Eck-Andocken.
@@ -5084,7 +5300,11 @@ svg.addEventListener('pointerdown', e=>{
        fast auf der Stelle des ersten Tipps — ohne diesen Vorrang sprang das Durchtippen
        dazwischen und die Öffnung war die Auswahl los. Weg kommt man trotzdem: der Griff
        ist winzig, daneben tippen führt wie gehabt weiter. */
-    const griff = unter.find(el=>el.dataset && el.dataset.openend!==undefined)
+    /* Der Drehgriff des Raums geht IMMER vor. Er liegt außerhalb des Raums, unter ihm
+       ist also meist nichts — aber bei dicht stehenden Räumen kann der Nachbar darunter
+       liegen, und der würde die Ansicht wegschieben statt zu drehen. */
+    const griff = unter.find(el=>el.dataset && el.dataset.raumdreh!==undefined)
+      || unter.find(el=>el.dataset && el.dataset.openend!==undefined)
       || (selbeStelle ? null : unter.find(el=>el.dataset && el.dataset.objh!==undefined));
     if(griff){ t=griff; zyklus=null; }
     else {
@@ -5223,6 +5443,20 @@ svg.addEventListener('pointerdown', e=>{
       }
     }
     renderAll(); return;
+  }
+  /* Drehgriff des angewählten Raums. Wie beim Objekt gleich anfassen — ein Vorwählen
+     wäre ein Klick zu viel; der Griff steht ja nur da, weil der Raum schon gewählt ist. */
+  if(t.dataset && t.dataset.raumdreh!==undefined && !focusRoomId){
+    const r=roomById(t.dataset.raumdreh);
+    if(r && raumOffen(r)){
+      const bb=bboxOf(r.points), lb=beschriftungsMass();
+      drag={kind:'raumdreh', room:r, c:raumSchwerpunkt(r), R:(bb.maxy-bb.miny)/2+lb*2.6,
+        a:0, moved:false,
+        orig:{points:r.points.map(q=>({...q})),
+              objects:JSON.parse(JSON.stringify(r.objects||[])),
+              farbZone:r.farbZone?JSON.parse(JSON.stringify(r.farbZone)):null}};
+      renderAll(); return;
+    }
   }
   if(t.dataset && t.dataset.roomid && !focusRoomId){
     const r=roomById(t.dataset.roomid);
@@ -5450,6 +5684,22 @@ svg.addEventListener('pointermove', e=>{
     else { g.x=o.x+dx; g.y=o.y+dy; }
     bauteilRasten(g, drag.room);          // Wand, Schacht, Treppe an die Raumwand
     if(dx||dy) drag.moved=true;
+    renderCanvas();
+  } else if(drag.kind==='raumdreh'){
+    /* Dieselbe Rasterung wie beim Objekt: 5°-Schritte, und rechte Winkel ziehen an —
+       die trifft man auf dem Tablett sonst nie genau. Gedreht wird immer vom Stand beim
+       Anfassen aus, nie Schritt auf Schritt (siehe `raumAusStand`). */
+    const c=drag.c;
+    let a=Math.atan2(p.y-c.y, p.x-c.x)*180/Math.PI + 90;
+    a=Math.round(a/5)*5;
+    const nah=Math.round(a/90)*90;
+    if(Math.abs(a-nah)<=5) a=nah;
+    a=((a%360)+360)%360;
+    if(a!==drag.a){
+      drag.a=a;
+      raumAusStand(drag.room, drag.orig, a, c);
+      if(a) drag.moved=true;
+    }
     renderCanvas();
   } else if(drag.kind==='objdreh'){
     /* Der Griff steht ueber der Oberkante, also zeigt er bei 0° nach oben — daher die
@@ -5694,7 +5944,11 @@ svg.addEventListener('pointerup', e=>{
           && dist(r.points[(j+1)%r.points.length], drag.origB)<0.003);
         sel={roomId:r.id, wall:k>=0?k:null, vertex:null};
       } else if(sel.wall!=null && sel.wall>=r.points.length) sel.wall=null;
-      if(drag.moved){ syncSharedDoors(); save(); }
+      if(drag.moved){
+        // Die herangeführte Wand übernimmt die Stärke der Wand, an der sie nun liegt
+        const g=staerkeVomMagnet(r, [drag.idx], floorRooms().filter(x=>x.id!==r.id));
+        syncSharedDoors(); save(); staerkeMelden(g);
+      }
       else if(aufgeraeumt) save();
       drag=null; renderAll(); return;
     }
@@ -5705,8 +5959,29 @@ svg.addEventListener('pointerup', e=>{
     if(drag && drag.moved && drag.kind==='vertex' && lockPruefen(drag.room, drag.lockSnap)){
       drag=null; renderAll(); return;      // zurückgesetzt: nichts speichern, Plan neu zeichnen
     }
-    if(drag && drag.moved && (drag.kind==='room'||drag.kind==='vertex'||drag.kind==='wall'||drag.kind==='open'||drag.kind==='openend'||drag.kind==='objmove'||drag.kind==='objh'||drag.kind==='objdreh')){
+    /* Der Drehgriff meldet zusätzlich den Winkel — beim Kreisen sieht man die Zahl in der
+       Raummitte, nach dem Loslassen ist sie weg, und was am Ende stand, will man wissen. */
+    if(drag && drag.moved && drag.kind==='raumdreh'){
+      const gedreht=drag.a, rr=drag.room;
+      const staerken=staerkeVomMagnet(rr, rr.points.map((_,i)=>i),
+        floorRooms().filter(x=>x.id!==rr.id));
       syncSharedDoors(); save();
+      drag=null; renderAll();
+      // Erst der Winkel, dann die Stärken: hat der Magnet zugeschlagen, ist DAS die
+      // Nachricht, die stehen bleiben soll — sie überschreibt die andere absichtlich.
+      melde(`„${rr.name}" um ${fmt(gedreht,0)}° gedreht.`);
+      staerkeMelden(staerken);
+      return;
+    }
+    if(drag && drag.moved && (drag.kind==='room'||drag.kind==='vertex'||drag.kind==='wall'||drag.kind==='open'||drag.kind==='openend'||drag.kind==='objmove'||drag.kind==='objh'||drag.kind==='objdreh')){
+      // Raum oder Ecke gezogen: alle Wände prüfen, die dabei an einen Nachbarn geraten sind
+      let staerken=[];
+      if(drag.kind==='room'||drag.kind==='vertex'){
+        const rr=drag.room;
+        if(rr) staerken=staerkeVomMagnet(rr, rr.points.map((_,i)=>i),
+          floorRooms().filter(x=>x.id!==rr.id));
+      }
+      syncSharedDoors(); save(); staerkeMelden(staerken);
       drag=null; renderAll();    // erst loslassen, dann zeichnen — sonst bliebe der
       if(refocused) zoomFit();   // Winkelbogen der gezogenen Ecke stehen
       return;                    // neuen Raum wie beim Raumwechsel zentriert einpassen
@@ -5776,8 +6051,8 @@ function addSegment(L){
 }
 function closeDraft(){
   if(draft.points.length<3){ cancelModes(); return; }
-  const r={id:uid(), floorId:activeFloorId, name:'Raum '+(proj().rooms.length+1), height:lastHeight,
-    points:draft.points, openings:[]};
+  const r={id:uid(), floorId:activeFloorId, name:'Raum '+(proj().rooms.length+1),
+    height:neueRaumHoehe(activeFloorId), points:draft.points, openings:[]};
   proj().rooms.push(r); save();
   /* Neu gezeichnete Räume beginnen in der Anwahl statt in der Raumansicht: direkt
      danach setzt man Höhe, Farbe und LV-Position — und kann gleich weitere Räume
@@ -5879,6 +6154,10 @@ function commitPlace(p){
   const pts=placing.points.map(q=>({x:mm(q.x-c.x+p.x), y:mm(q.y-c.y+p.y)}));
   const r={id:uid(), floorId:activeFloorId, name:placing.name||('Raum '+(proj().rooms.length+1)),
     height:placing.height||2.5, points:pts, openings:[]};
+  /* Im Vorlagen-Dialog steht die Etagenhöhe vorbelegt. Wer sie dort ÄNDERT, meint diesen
+     einen Raum — dann gilt er als von Hand gesetzt und folgt der Etage nicht mehr. */
+  const eh=etagenHoehe(activeFloorId);
+  if(eh && r.height!==eh) r.hEigen=true;
   proj().rooms.push(r); save();
   lastHeight=r.height;
   // Aus der Vorlage genau wie beim Freihandzeichnen: der Raum steht da und ist
@@ -6381,6 +6660,854 @@ function wandRefsUmschreiben(r, mapFn, eckFn){
     r[k]=neu;
   });
 }
+/* ================= Raum drehen und spiegeln (seit 2026-08-08, Ticket) =================
+   Beides gibt es nur in der **Anwahl** und nur für **einen** Raum: gedreht wird um seine
+   eigene Mitte, und was „die Mitte" ist, wäre bei fünf angewählten Räumen nicht mehr
+   eindeutig. Der Raum bewegt sich als Ganzes — Türen, Fenster, Objekte, Farbzone und die
+   LV-Verweise kommen mit.
+
+   **Der Unterschied zwischen den beiden ist der Umlaufsinn.** Drehen ist eine
+   Starrkörperbewegung: die Wandnummern bleiben, wo sie sind, und außer den Koordinaten
+   ändert sich nichts. Spiegeln dreht den Umlaufsinn des Polygons um — und daran hängt in
+   dieser App einiges, denn die Wandstärke wächst nach AUSSEN (`aussenNormale`). Damit die
+   Wände weiter nach außen wachsen und nicht in den Raum hinein, werden die gespiegelten
+   Punkte **umgedreht**. Das kostet die Wandnummern:
+
+       neue Wand k  =  alte Wand (n-2-k) mod n          (die Abbildung ist ihre eigene Umkehrung)
+       neue Ecke k  =  alte Ecke (n-1-k) mod n
+
+   Und weil jede Wand danach in die **andere Richtung** läuft, zählen alle Abstände von
+   der anderen Seite: `offset` einer Öffnung wird `L - offset - width`, der Anschlag einer
+   Tür kippt (`hinge`), die Aufschlagseite (`swing`) NICHT — sie sitzt an der Wandnormalen,
+   und die spiegelt mit, innen bleibt innen. Halbwände und gebundene Schächte rechnen
+   genauso: `t` von der anderen Seite, ihre Knicke (`a`, längs der Wand) mit umgekehrtem
+   Vorzeichen.
+
+   Das Umschreiben der Wandindizes selbst macht `wandRefsUmschreiben` — dieselbe Stelle,
+   die auch beim Einfügen und Löschen einer Ecke die LV-Zuordnungen, die wandgebundenen
+   Bauteile und `wallDicke/wallLock/wallFotos/wallNr` nachzieht. Die Öffnungen stehen
+   nicht darin, weil sich bei ihnen zusätzlich der Abstand ändert.
+
+   **Grenze:** Die Grafik der Symbole (1-K, RFA, Treppe, 360°) wird nicht gespiegelt —
+   sie kommt aus einer festen Zeichnung. Lage und Drehung stimmen, das Zeichen selbst
+   bleibt seitenrichtig. Bei einer Treppe sieht man das; sie steht dann eben so da. */
+const raumSchwerpunkt = r => {
+  const bb=bboxOf(r.points);
+  return {x:(bb.minx+bb.maxx)/2, y:(bb.miny+bb.maxy)/2};
+};
+/* Freie Objekte mit einer Punktabbildung mitnehmen. **Wandgebundene bleiben außen vor**:
+   Halbwand und eingerasteter Schacht rechnen sich aus Wandindex und Abstand, ihre
+   Koordinaten zieht `save()` ohnehin nach — sie hier mitzuschieben hieße doppelt. */
+function objsAbbilden(r, F, winkel){
+  (r.objects||[]).forEach(g=>{
+    if(wandGebunden(g)) return;
+    if(g.points){ g.points=g.points.map(F); return; }
+    if(g.x==null) return;
+    const c=F({x:g.x+(g.w||0)/2, y:g.y+(g.h||0)/2});
+    g.x=mm(c.x-(g.w||0)/2); g.y=mm(c.y-(g.h||0)/2);
+    if(winkel && g.rot!=null) g.rot=((winkel(g.rot)%360)+360)%360;
+  });
+}
+function raumDrehen(r, grad, c){
+  const a=grad*Math.PI/180, s=Math.sin(a), k=Math.cos(a);
+  const F=q=>{ const dx=q.x-c.x, dy=q.y-c.y;
+    return {x:mm(c.x+dx*k-dy*s), y:mm(c.y+dx*s+dy*k)}; };
+  r.points=r.points.map(F);
+  if(r.farbZone) r.farbZone=r.farbZone.map(F);
+  objsAbbilden(r, F, w=>w+grad);
+}
+// Beim Ziehen am Drehgriff: immer vom Stand beim Anfassen aus, nie Schritt auf Schritt —
+// sonst summieren sich die Rundungen auf Millimeter und der Raum „wandert" beim Kreisen.
+function raumAusStand(r, orig, grad, c){
+  r.points=orig.points.map(q=>({...q}));
+  r.objects=JSON.parse(JSON.stringify(orig.objects||[]));
+  if(orig.farbZone) r.farbZone=JSON.parse(JSON.stringify(orig.farbZone));
+  raumDrehen(r, grad, c);
+}
+// `richtung`: 'lr' tauscht links und rechts (Achse senkrecht), 'ob' oben und unten
+function raumSpiegeln(r, richtung){
+  const n=(r.points||[]).length; if(n<3) return;
+  const c=raumSchwerpunkt(r);
+  const F = richtung==='lr' ? (q=>({x:mm(2*c.x-q.x), y:mm(q.y)}))
+                            : (q=>({x:mm(q.x), y:mm(2*c.y-q.y)}));
+  // Wandlängen VOR dem Umbau merken — die Abstände zählen gleich von der anderen Seite
+  const L=[]; for(let i=0;i<n;i++){ const [a,b]=wallPoints(r,i); L.push(dist(a,b)); }
+  const wandNeu = j => ((n-2-j)%n+n)%n;
+  const eckeNeu = j => ((n-1-j)%n+n)%n;
+  (r.openings||[]).forEach(o=>{
+    const len=L[o.wall];
+    if(len!=null){
+      const t0=Math.max(0, Math.min(o.offset||0, len-(o.width||0)));
+      o.offset=mm(Math.max(0, len-t0-(o.width||0)));
+    }
+    o.wall=wandNeu(o.wall);
+    if(o.type==='door') o.hinge = o.hinge ? 0 : 1;
+  });
+  wandBauteile(r).forEach(g=>{
+    const len=L[g.wall];
+    if(len!=null && Number.isFinite(g.t)) g.t=mm(len-g.t);
+    if(istHalbwand(g)) hwPunkteSetzen(g).forEach(q=>{ q.a=mm(-q.a); });
+  });
+  wandRefsUmschreiben(r, wandNeu, eckeNeu);
+  r.points=r.points.map(F).reverse();
+  if(r.farbZone) r.farbZone=r.farbZone.map(F);
+  // Spiegelachse senkrecht: Richtung θ → 180-θ. Waagerecht: θ → -θ.
+  objsAbbilden(r, F, richtung==='lr' ? (w=>180-w) : (w=>-w));
+}
+
+/* ================= Räume verbinden (seit 2026-08-08, Ticket) =================
+   Mehrere angewählte Räume verschmelzen zu einem. Der zuerst angewählte gibt Name, Höhe
+   und Farbe vor; Fotos und Anmerkungen aller Beteiligten kommen zusammen.
+
+   **Die Trennwand ist eine Fläche, kein Strich.** Das Raumpolygon ist die INNENkante, die
+   Stärke wächst nach außen — zwischen zwei Nachbarräumen klafft im Polygon also ein Spalt
+   in Breite der Trennwand. Der neue Raum ist deshalb nicht einfach die Vereinigung der
+   beiden Flächen, sondern die Vereinigung aus **Flächen UND den Streifen der wegfallenden
+   Wände**. Genau so füllt sich der Spalt, und die übrig bleibende Kontur besteht Kante für
+   Kante aus den nach außen zeigenden Wänden der Ausgangsräume — mit ihren Stärken, ihren
+   Öffnungen und ihren LV-Zuordnungen.
+
+   `polyVereinigung` arbeitet nach dem üblichen Weg für Boolesche Operationen auf einfachen
+   Polygonen, in der Reihenfolge:
+
+   1. alle Kanten aller Teile einsammeln (jede mit ihrer **Herkunft**: Raum + Wandindex,
+      oder `null` für einen Wandstreifen),
+   2. jede Kante an jedem Punkt teilen, an dem eine andere sie trifft oder kreuzt,
+   3. Stücke wegwerfen, deren Mitte **echt im Inneren** eines anderen Teils liegt
+      (auf dem Rand zählt nicht als innen — sonst verschwände die gemeinsame Grenze
+      zweier sich nur berührender Teile schon hier),
+   4. **deckungsgleiche Paare** wegwerfen: genau das ist die gemeinsame Grenze. Wand und
+      Streifen liegen aufeinander, beide fallen weg — deshalb verschwindet die Trennwand,
+      ohne dass irgendwo „lösche Wand j" stehen muss,
+   5. den Rest über gleiche Endpunkte zum Ring verketten.
+
+   Bleiben Stücke übrig oder schließt sich der Ring nicht, geben wir auf: dann hängen die
+   Räume nicht zusammen, oder es entstünde ein Loch (Ringbebauung). Beides kann dieses
+   Datenmodell nicht — ein Raum ist EIN Umriss ohne Löcher. Lieber sauber ablehnen.
+
+   Verglichen und verkettet wird über ein **0,5-mm-Raster** (`vKey`): auf Millimeter
+   gemessene Aufmaße treffen sich sonst nie exakt genug für einen Schlüsselvergleich. */
+const VFANG=0.0005;
+const vKey = p => Math.round(p.x/VFANG)+'|'+Math.round(p.y/VFANG);
+// Schnittpunkt zweier STRECKEN (nicht Geraden) — null, wenn sie sich nicht kreuzen
+function streckenSchnitt(a1,a2,b1,b2){
+  const d1x=a2.x-a1.x, d1y=a2.y-a1.y, d2x=b2.x-b1.x, d2y=b2.y-b1.y;
+  const nen=d1x*d2y-d1y*d2x;
+  if(Math.abs(nen)<1e-12) return null;                       // parallel
+  const t=((b1.x-a1.x)*d2y-(b1.y-a1.y)*d2x)/nen;
+  const s=((b1.x-a1.x)*d1y-(b1.y-a1.y)*d1x)/nen;
+  if(t<-1e-9||t>1+1e-9||s<-1e-9||s>1+1e-9) return null;
+  return {x:a1.x+d1x*t, y:a1.y+d1y*t};
+}
+/* `teile`: [{pts, marken}] — `marken[i]` gehört zur Kante von `pts[i]` nach `pts[i+1]`.
+   Zurück kommt {pts, marken} des Rings oder `null`. */
+function polyVereinigung(teile){
+  const T=teile.map(t=>{
+    const pts=t.pts.map(q=>({x:q.x, y:q.y}));
+    let marken=t.marken.slice();
+    if(polyUmlauf(pts)<0){
+      // Umdrehen: aus Kante i wird Kante n-2-i (dieselbe Rechnung wie beim Spiegeln)
+      const n=pts.length, neu=new Array(n);
+      marken.forEach((m,i)=>{ neu[((n-2-i)%n+n)%n]=m; });
+      pts.reverse(); marken=neu;
+    }
+    return {pts, marken};
+  });
+  const roh=[];
+  T.forEach((t,ti)=>{ const n=t.pts.length;
+    for(let i=0;i<n;i++) roh.push({a:t.pts[i], b:t.pts[(i+1)%n], marke:t.marken[i], ti}); });
+  // 2. teilen
+  const stueck=[];
+  roh.forEach((k,ki)=>{
+    const L=Math.hypot(k.b.x-k.a.x, k.b.y-k.a.y);
+    if(L<VFANG) return;
+    const ux=(k.b.x-k.a.x)/L, uy=(k.b.y-k.a.y)/L;
+    const ts=[0, L];
+    roh.forEach((m,mi)=>{
+      if(mi===ki) return;
+      [m.a, m.b].forEach(q=>{                                  // Endpunkt auf der Kante
+        const t=(q.x-k.a.x)*ux+(q.y-k.a.y)*uy;
+        if(t<=VFANG || t>=L-VFANG) return;
+        if(Math.abs((q.x-k.a.x)*(-uy)+(q.y-k.a.y)*ux)<=VFANG) ts.push(t);
+      });
+      const s=streckenSchnitt(k.a,k.b,m.a,m.b);                // echte Kreuzung
+      if(s){ const t=(s.x-k.a.x)*ux+(s.y-k.a.y)*uy; if(t>VFANG && t<L-VFANG) ts.push(t); }
+    });
+    ts.sort((x,y)=>x-y);
+    for(let i=0;i<ts.length-1;i++){
+      if(ts[i+1]-ts[i] < VFANG) continue;
+      stueck.push({a:{x:k.a.x+ux*ts[i],   y:k.a.y+uy*ts[i]},
+                   b:{x:k.a.x+ux*ts[i+1], y:k.a.y+uy*ts[i+1]}, marke:k.marke, ti:k.ti});
+    }
+  });
+  // 3. innen liegende Stücke weg
+  const echtDrin=(q, t)=>{
+    const n=t.pts.length;
+    for(let i=0;i<n;i++) if(punktSegAbstand(q, t.pts[i], t.pts[(i+1)%n])<=VFANG*2) return false;
+    return pointInPoly(q, t.pts);
+  };
+  const aussen=stueck.filter(s=>{
+    const m={x:(s.a.x+s.b.x)/2, y:(s.a.y+s.b.y)/2};
+    return !T.some((t,ti)=>ti!==s.ti && echtDrin(m, t));
+  });
+  // 4. deckungsgleiche Paare weg — die gemeinsame Grenze
+  const paarKey=s=>[vKey(s.a), vKey(s.b)].sort().join('#');
+  const zahl={};
+  aussen.forEach(s=>{ const k=paarKey(s); zahl[k]=(zahl[k]||0)+1; });
+  const rand=aussen.filter(s=>zahl[paarKey(s)]===1);
+  if(!rand.length) return null;
+  // 5. verketten
+  const von={};
+  rand.forEach(s=>{ (von[vKey(s.a)]=von[vKey(s.a)]||[]).push(s); });
+  const start=rand[0], ring=[start], benutzt=new Set([start]);
+  let cur=start;
+  for(;;){
+    if(vKey(cur.b)===vKey(start.a)) break;
+    const kand=(von[vKey(cur.b)]||[]).filter(s=>!benutzt.has(s));
+    if(!kand.length) return null;                    // Ring bricht ab
+    cur=kand[0]; benutzt.add(cur); ring.push(cur);
+  }
+  if(benutzt.size!==rand.length) return null;        // Stücke übrig: nicht zusammenhängend oder Loch
+  return {pts:ring.map(s=>({x:mm(s.a.x), y:mm(s.a.y)})), marken:ring.map(s=>s.marke)};
+}
+/* Wo grenzt Wand i von r an einen ANDEREN der beteiligten Räume? Zurück kommt je Nachbar
+   ein Streifen: Tiefe (der Spalt) und der überlappende Abschnitt der Wand. Nur dieser
+   Abschnitt wird gefüllt — ist die Nachbarwand kürzer, bleibt der Rest Außenwand. */
+function trennStreifen(r, i, rs){
+  const [a1,b1]=wallPoints(r,i);
+  const L1=dist(a1,b1); if(L1<0.05) return [];
+  const d1={x:(b1.x-a1.x)/L1, y:(b1.y-a1.y)/L1}, nn=aussenNormale(r,i);
+  const out=[];
+  rs.forEach(o=>{
+    if(o.id===r.id) return;
+    const n=o.points.length;
+    for(let j=0;j<n;j++){
+      const a2=o.points[j], b2=o.points[(j+1)%n];
+      const L2=dist(a2,b2); if(L2<0.05) continue;
+      const d2={x:(b2.x-a2.x)/L2, y:(b2.y-a2.y)/L2};
+      if(Math.abs(d1.x*d2.y-d1.y*d2.x)>0.06) continue;                  // nicht parallel
+      const tief=(a2.x-a1.x)*nn.x+(a2.y-a1.y)*nn.y;                     // Spalt nach außen
+      if(!(tief>0.002 && tief<=1.0)) continue;
+      const t1=(a2.x-a1.x)*d1.x+(a2.y-a1.y)*d1.y;
+      const t2=(b2.x-a1.x)*d1.x+(b2.y-a1.y)*d1.y;
+      const lo=Math.max(0, Math.min(t1,t2)), hi=Math.min(L1, Math.max(t1,t2));
+      if(hi-lo < 0.05) continue;
+      out.push({tief, lo, hi, A:a1, u:d1, nn});
+    }
+  });
+  return out;
+}
+/* Prüft und rechnet, ändert aber NICHTS — so kann die Rückfrage sagen, was passieren wird,
+   und ein unmöglicher Fall scheitert, bevor irgendetwas kaputtgeht. */
+function verbindenPruefen(rs){
+  const teile=[], streifen=[];
+  rs.forEach(r=>teile.push({pts:r.points, marken:r.points.map((_,i)=>({rid:r.id, w:i}))}));
+  /* **Beide Nachbarn beschreiben denselben Streifen** — von A aus nach rechts und von B
+     aus nach links ist dasselbe Rechteck. Zweimal eingeworfen löschen sich seine Kanten
+     im Paar-Schritt gegenseitig weg, und die Trennwand bliebe als Loch stehen. Deshalb
+     zählt jedes Rechteck nur einmal; erkannt wird es an seinen vier Eckpunkten. */
+  const gesehen=new Set();
+  rs.forEach(r=>{
+    const n=r.points.length;
+    for(let i=0;i<n;i++) trennStreifen(r, i, rs).forEach(s=>{
+      const p0={x:s.A.x+s.u.x*s.lo, y:s.A.y+s.u.y*s.lo};
+      const p1={x:s.A.x+s.u.x*s.hi, y:s.A.y+s.u.y*s.hi};
+      const vier=[p0, p1,
+        {x:p1.x+s.nn.x*s.tief, y:p1.y+s.nn.y*s.tief},
+        {x:p0.x+s.nn.x*s.tief, y:p0.y+s.nn.y*s.tief}];
+      streifen.push({rid:r.id, w:i});
+      const k=vier.map(vKey).sort().join('#');
+      if(gesehen.has(k)) return;
+      gesehen.add(k);
+      teile.push({pts:vier, marken:[null,null,null,null]});
+    });
+  });
+  if(!streifen.length) return {fehler:'Die Räume stoßen nicht aneinander — es gibt keine gemeinsame Wand.'};
+  const ring=polyVereinigung(teile);
+  if(!ring) return {fehler:'Aus diesen Räumen lässt sich keine zusammenhängende Fläche ohne Loch bilden.'};
+  if(ring.pts.length<3) return {fehler:'Die verbundene Fläche ergibt keinen gültigen Umriss.'};
+  /* Aufeinanderfolgende Kanten DERSELBEN Wand wieder zusammenlegen — beim Teilen sind sie
+     nur zerschnitten worden. Kanten verschiedener Herkunft bleiben getrennt, auch wenn sie
+     in einer Flucht liegen: sie können verschiedene Stärken haben. */
+  const pts=[], marken=[];
+  const N=ring.pts.length;
+  for(let i=0;i<N;i++){
+    const vor=marken.length?marken[marken.length-1]:null;
+    const m=ring.marken[i];
+    const gleich = vor && m && vor.rid===m.rid && vor.w===m.w;
+    if(gleich && pts.length){
+      const a=pts[pts.length-1], b=ring.pts[i], c=ring.pts[(i+1)%N];
+      // nur zusammenlegen, wenn der Punkt wirklich auf der Geraden liegt
+      const kreuz=(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
+      if(Math.abs(kreuz)<1e-6) continue;
+    }
+    pts.push(ring.pts[i]); marken.push(m);
+  }
+  return {pts, marken, streifen};
+}
+
+/* Führt die Verschmelzung aus. `rs[0]` ist der zuerst angewählte Raum — er BLEIBT als
+   Objekt bestehen (gleiche `id`), damit alles, was auf ihn zeigt, gültig bleibt; die
+   anderen ziehen in ihn ein und werden gelöscht.
+
+   Alles, was an einer Wandnummer hängt, wird über die **Herkunft der Ringkanten**
+   umgeschrieben: `marken[k] = {rid, w}` sagt, aus welcher alten Wand die neue Wand `k`
+   hervorgegangen ist. Wandstärke, -sperre, -nummer und -fotos wandern darüber mit, ebenso
+   Öffnungen, Halbwände, Schächte und LV-Zuordnungen. Was keine neue Wand bekommt, ist
+   weggefallen — und trägt danach `a.weg` (siehe `lvZielText`).
+
+   Zurück kommt ein Bericht für die Meldung. */
+function raeumeVerbinden(rs, vorab){
+  const p=proj(), pruef=vorab||verbindenPruefen(rs);
+  if(pruef.fehler) return pruef;
+  const neu=rs[0];
+  const marken=pruef.marken;
+  const neueWandPunkte=k=>[pruef.pts[k], pruef.pts[(k+1)%pruef.pts.length]];
+  /* Alte Wand → neue Wand. **Eine Wand kann in mehrere Stücke zerfallen**: Stößt der
+     Nachbarraum nur an ihre Mitte, bleibt oben und unten je ein Rest stehen.
+     - `neueWand` (die längste Scherbe) gilt für alles, was die WAND ALS GANZES meint —
+       also für die LV-Zuordnungen: solange irgendein Stück steht, steht die Wand.
+     - Alles mit einem ORT — Türen, Fenster, Halbwände, Schächte — wird über
+       `neueWandAn` zugeordnet: es zählt das Stück, in dem das Bauteil wirklich liegt.
+       Liegt es in keinem, war es in dem weggefallenen Abschnitt und fällt mit weg.
+     Ohne diese Unterscheidung landete eine Tür aus dem herausgebrochenen Mittelstück
+     kommentarlos auf einem der Reste. */
+  const wandTeile={};
+  marken.forEach((m,k)=>{ if(m) (wandTeile[m.rid+'|'+m.w]=wandTeile[m.rid+'|'+m.w]||[]).push(k); });
+  const neueWand=(rid,w)=>{
+    let best=null;
+    (wandTeile[rid+'|'+w]||[]).forEach(k=>{
+      const [a,b]=neueWandPunkte(k), L=dist(a,b);
+      if(!best || L>best.L) best={k, L};
+    });
+    return best?best.k:null;
+  };
+  const neueWandAn=(rid, w, punkt, breite)=>{
+    let best=null;
+    (wandTeile[rid+'|'+w]||[]).forEach(k=>{
+      const [A,B]=neueWandPunkte(k), L=dist(A,B); if(L<0.005) return;
+      const u={x:(B.x-A.x)/L, y:(B.y-A.y)/L};
+      const t=(punkt.x-A.x)*u.x+(punkt.y-A.y)*u.y;
+      if(Math.abs((punkt.x-A.x)*(-u.y)+(punkt.y-A.y)*u.x)>0.05) return;   // andere Flucht
+      if(t<-0.01 || t>L+0.01) return;                                     // nicht in diesem Stück
+      const passt = breite==null || L+0.01>=breite;                       // Öffnung passt hinein
+      if(!best || (passt && !best.passt) || (passt===best.passt && L>best.L)) best={k, L, passt};
+    });
+    return best && best.passt ? best.k : null;
+  };
+  // Absolute Lage aller Öffnungen und wandgebundenen Bauteile VOR dem Umbau festhalten
+  const opAbs=[], bauAbs=[];
+  rs.forEach(r=>{
+    (r.openings||[]).forEach(o=>{ const s=doorAbsSeg(r,o); if(s) opAbs.push({r, o, s}); else opAbs.push({r, o, s:null}); });
+    wandBauteile(r).forEach(g=>{
+      const pw=(g.wall!=null && g.wall>=0 && g.wall<r.points.length) ? wallPoints(r,g.wall) : null;
+      let fuss=null;
+      if(pw){ const L=dist(pw[0],pw[1]);
+        const t=Number.isFinite(g.t)?g.t:L/2;
+        fuss={x:pw[0].x+(pw[1].x-pw[0].x)/L*t, y:pw[0].y+(pw[1].y-pw[0].y)/L*t}; }
+      bauAbs.push({r, g, fuss, ecke:(g.ecke!=null && r.points[g.ecke]) ? {...r.points[g.ecke]} : null});
+    });
+  });
+  /* Raummaße JEDES beteiligten Raums sichern — **hier oben und nicht erst unten bei den
+     LV-Zuordnungen**: `rs[0]` bleibt als Objekt bestehen und bekommt gleich den neuen
+     Umriss. Danach gemessen, fröre seine eigene Position auf die NEUE Fläche ein, statt
+     auf die, mit der sie aufgemessen wurde — genau der Fehler, der verhindert werden
+     soll. Die übrigen Räume stehen bis zum Schluss unverändert da. */
+  const raumMass={};
+  rs.forEach(r=>{ const s=roomStats(r);
+    raumMass[r.id]={area:s.area, per:s.per, hoehe:r.height||0, vol:s.vol}; });
+  // Alte Wandeigenschaften merken, bevor die Punkte wechseln
+  const altDicke={}, altLock={}, altNr={}, altFotos={};
+  rs.forEach(r=>r.points.forEach((_,i)=>{
+    const s=r.id+'|'+i;
+    altDicke[s]=wandDicke(r,i);
+    if((r.wallLock||{})[i]) altLock[s]=true;
+    if((r.wallNr||{})[i]!=null) altNr[s]=r.wallNr[i];
+    if((r.wallFotos||{})[i]) altFotos[s]=r.wallFotos[i];
+  }));
+  const bericht={raeume:rs.length, weggefallen:0, openWeg:0, hwWeg:0, lvWeg:0,
+    nrGeaendert:[], zonenWeg:0, festeMengen:0, festeHoehen:0};
+  rs.forEach(r=>r.points.forEach((_,i)=>{ if(neueWand(r.id,i)==null) bericht.weggefallen++; }));
+
+  // ---- Umriss setzen
+  neu.points=pruef.pts.map(q=>({x:q.x, y:q.y}));
+  const N=neu.points.length;
+  neu.wallDicke={}; neu.wallLock={}; neu.wallNr={}; neu.wallFotos={};
+  const nrVergeben=new Set();
+  marken.forEach((m,k)=>{
+    if(!m){
+      /* Kante ohne Herkunft = Stirnseite einer weggefallenen Wand. Sie erbt die Stärke
+         der vorhergehenden echten Wand, damit im Mauerwerk keine Kerbe entsteht. */
+      for(let z=1; z<=N; z++){
+        const v=marken[(k-z+N)%N];
+        if(v){ neu.wallDicke[k]=altDicke[v.rid+'|'+v.w]; break; }
+      }
+      return;
+    }
+    const s=m.rid+'|'+m.w;
+    neu.wallDicke[k]=altDicke[s];
+    if(altLock[s]) neu.wallLock[k]=true;
+    if(altFotos[s]) neu.wallFotos[k]=(neu.wallFotos[k]||[]).concat(altFotos[s]);
+  });
+  // Wandnummern: der erste Raum behält seine, Doppelte bekommen die nächste freie
+  marken.forEach((m,k)=>{
+    if(!m || altNr[m.rid+'|'+m.w]==null) return;
+    const wunsch=altNr[m.rid+'|'+m.w];
+    let nr=wunsch;
+    if(nrVergeben.has(nr)){
+      nr=1; while(nrVergeben.has(nr)) nr++;
+      bericht.nrGeaendert.push(`${wunsch} → ${nr}`);
+    }
+    nrVergeben.add(nr); neu.wallNr[k]=nr;
+  });
+  // ---- Öffnungen
+  const openNeu=[], openWeg=[];
+  opAbs.forEach(({r, o, s})=>{
+    const mitte = s ? {x:(s.p0.x+s.p1.x)/2, y:(s.p0.y+s.p1.y)/2} : null;
+    const k = s ? neueWandAn(r.id, o.wall, mitte, o.width||0) : null;
+    if(k==null || !s){ openWeg.push(o); return; }
+    const [A,B]=neueWandPunkte(k), L=dist(A,B);
+    const u={x:(B.x-A.x)/L, y:(B.y-A.y)/L};
+    const t0=(s.p0.x-A.x)*u.x+(s.p0.y-A.y)*u.y;
+    const t1=(s.p1.x-A.x)*u.x+(s.p1.y-A.y)*u.y;
+    o.wall=k;
+    o.offset=mm(Math.max(0, Math.min(Math.min(t0,t1), L-(o.width||0))));
+    // Anschlag: liegt der Angelpunkt jetzt am anderen Ende, kippt er mit
+    if(o.type==='door' && t1<t0) o.hinge = o.hinge ? 0 : 1;
+    openNeu.push(o);
+  });
+  bericht.openWeg=openWeg.length;
+
+  // ---- Objekte
+  const objNeu=[], objWeg=[];
+  bauAbs.forEach(({r, g, fuss, ecke})=>{
+    const k=(g.wall!=null && fuss) ? neueWandAn(r.id, g.wall, fuss, null) : null;
+    if(k==null){
+      if(istHalbwand(g)) objWeg.push(g);            // eine Halbwand ohne Wand gibt es nicht
+      else { schachtLoesen(g); objNeu.push(g); }    // der Schacht steht wieder frei im Raum
+      return;
+    }
+    const [A,B]=neueWandPunkte(k), L=dist(A,B);
+    const u={x:(B.x-A.x)/L, y:(B.y-A.y)/L};
+    g.wall=k;
+    if(fuss) g.t=mm(Math.max(0, Math.min(L, (fuss.x-A.x)*u.x+(fuss.y-A.y)*u.y)));
+    if(ecke!=null){
+      const i=neu.points.findIndex(q=>vKey(q)===vKey(ecke));
+      if(i>=0) g.ecke=i; else { delete g.ecke; }
+    }
+    objNeu.push(g);
+  });
+  bericht.hwWeg=objWeg.length;
+  rs.forEach(r=>(r.objects||[]).forEach(g=>{ if(!wandGebunden(g)) objNeu.push(g); }));
+
+  // ---- LV-Zuordnungen: Raum umhängen, Wand nachziehen, Verlorenes kennzeichnen
+  const wegIds=new Set(openWeg.map(o=>o.id).concat(objWeg.map(g=>g.id)));
+  const wegTyp={};
+  openWeg.forEach(o=>wegTyp[o.id]=(o.type==='window'?'Fenster':'Tür'));
+  objWeg.forEach(g=>wegTyp[g.id]='Halbwand');
+  const rIds=new Set(rs.map(r=>r.id));
+  const geschluckt=new Set(rs.slice(1).map(r=>r.id));
+  (p.attrs||[]).forEach(a=>{
+    if(!rIds.has(a.roomId)) return;
+    /* ---- Raumbezogene Mengen einfrieren ----
+       Nur vier Formeln lesen den Raum: Grundfläche, Ansichtsfläche, Raumvolumen und der
+       Umfang als Länge. Genau sie hätten sich still verdoppelt — aus zwei Räumen zu 50 m²
+       wird einer zu 101,2 m², und BEIDE Positionen rechneten danach mit 101,2. Sie
+       behalten deshalb die Maße ihres eigenen Raums; neue Zuordnungen am verbundenen Raum
+       rechnen wieder mit. Alles andere steht ohnehin fest oder hängt an einer Wand. */
+    /* **Nie ein bestehendes `raumFest` überschreiben.** Wird ein schon verbundener Raum
+       ein zweites Mal verbunden, sind seine festgehaltenen Maße die des URSPRÜNGLICHEN
+       Raums — die heutigen wären genau die Zahl, vor der eingefroren wurde. (Beim ersten
+       Anlauf sprang eine Position dadurch von 50,00 auf 97,40 m².) */
+    if(!a.raumFest && (a.nutzGrund || a.nutzAnsicht || a.nutzVolumen || a.nutzUmfang)){
+      a.raumFest=raumMass[a.roomId];
+      bericht.festeMengen++;
+    }
+    /* Dieselbe Falle bei „Höhe folgt dem Raum": der verbundene Raum bekommt die Höhe des
+       ERSTEN. Kam die Zuordnung aus einem anders hohen Raum, spränge ihre Höhe mit —
+       darum dort die Kopplung lösen. Der zuletzt gültige Wert steht schon in `a.hoehe`. */
+    if(a.autoH && geschluckt.has(a.roomId)
+       && Math.abs((raumMass[a.roomId].hoehe||0)-(neu.height||0))>0.0005){
+      delete a.autoH; bericht.festeHoehen++;
+    }
+    /* Woher die Zahl kommt, muss dranstehen — und zwar **auch beim ersten Raum**. Er
+       bleibt zwar als Objekt bestehen, aber der Raum, der da aufgemessen wurde, ist
+       genauso weg wie die anderen: seine Fläche ist eine andere. Markiert wird darum
+       jede Zuordnung, deren Maße eingefroren sind, und beim verschluckten Raum
+       zusätzlich alles Raumbezogene (auch Stückzahlen — den Raum gibt es nicht mehr). */
+    if(!a.weg && (a.raumFest ||
+        (geschluckt.has(a.roomId) && !a.objId && a.wall==null && !a.projekt)))
+      a.weg=`Raum ${roomById(a.roomId).name} gelöscht`;
+    if(a.objId && wegIds.has(a.objId)){
+      a.weg=`${wegTyp[a.objId]||'Bauteil'} gelöscht`;
+      delete a.objId; delete a.autoL; delete a.autoH; delete a.autoObj;
+      bericht.lvWeg++;
+    } else if(a.wall!=null){
+      const k=neueWand(a.roomId, a.wall);
+      if(k==null){
+        /* Die Nummer kommt aus `altNr` und NICHT aus dem Raum: `neu` ist `rs[0]`, sein
+           `wallNr` ist oben schon neu geschrieben — die alte Nummer stünde dort nicht mehr.
+           Genau sie ist aber das, womit man die Zeile im Ausdruck von gestern wiederfindet. */
+        const nr=altNr[a.roomId+'|'+a.wall];
+        a.weg = nr!=null ? `Wand #${nr} gelöscht` : `Wand ${a.wall+1} gelöscht`;
+        delete a.wall; delete a.autoL; delete a.autoH;
+        bericht.lvWeg++;
+      } else a.wall=k;
+    }
+    a.roomId=neu.id;
+  });
+
+  // ---- Beschreibendes zusammenlegen: Name/Höhe/Farbe vom ersten, Fotos und Anmerkungen von allen
+  const fotos=[], anm=[];
+  rs.forEach(r=>{
+    (r.fotos||[]).forEach(f=>fotos.push(f));
+    if(r.anmerkung) anm.push(rs.length>1 && r.id!==neu.id ? `${r.name}: ${r.anmerkung}` : r.anmerkung);
+    if(r.id!==neu.id && r.farbZone) bericht.zonenWeg++;
+  });
+  /* Der neue Raum heißt wie der erste, mit „(verbunden)" dahinter. Das steht **erst
+     hier**: die `a.weg`-Texte oben brauchen den ALTEN Namen, sonst stünde in ihnen schon
+     der neue. Zweimaliges Verbinden hängt den Zusatz nicht doppelt an. */
+  if(!/\(verbunden\)\s*$/.test(neu.name||'')) neu.name=`${neu.name} (verbunden)`;
+  neu.openings=openNeu;
+  neu.objects=objNeu;
+  if(fotos.length) neu.fotos=fotos; else delete neu.fotos;
+  if(anm.length) neu.anmerkung=anm.join('\n'); else delete neu.anmerkung;
+  // Verschluckte Räume verschwinden
+  const weg=rs.slice(1).map(r=>r.id);
+  p.rooms=p.rooms.filter(r=>!weg.includes(r.id));
+  return bericht;
+}
+
+/* ================= Raum duplizieren: Name und Platz =================
+   Ticket vom 9.8.2026: die Kopie soll die nächste fortlaufende Nummer tragen statt
+   „… (Kopie)", und sie soll gleich angeschlossen stehen statt einen halben Meter daneben. */
+
+/* Nicht `rooms.length+1` wie beim Zeichnen: nach dem Löschen eines Raums gäbe das einen
+   Namen, den es schon gibt. Hier wird weitergezählt, bis die Nummer wirklich frei ist. */
+function naechsterRaumName(){
+  const belegt=new Set(proj().rooms.map(x=>x.name));
+  let n=proj().rooms.length+1;
+  while(belegt.has('Raum '+n)) n++;
+  return 'Raum '+n;
+}
+
+/* Überschneiden sich zwei Raumumrisse WIRKLICH? Berührung zählt nicht — Nachbarräume
+   liegen ja Kante an Wandspalt beieinander, und ein gemeinsamer Randpunkt ist keine
+   Überlagerung. Geprüft wird an den Polygonen (Innenkanten), nicht an den Wandkörpern:
+   die geteilte Wand belegt bei beiden Räumen denselben Streifen, das ist der Normalfall
+   und kein Fehler. */
+function polyUeberlappt(a, b){
+  for(let i=0;i<a.length;i++)
+    for(let j=0;j<b.length;j++)
+      if(streckenSchnitt(a[i], a[(i+1)%a.length], b[j], b[(j+1)%b.length])) return true;
+  const echtDrin=(q, pts)=>{
+    for(let i=0;i<pts.length;i++)
+      if(punktSegAbstand(q, pts[i], pts[(i+1)%pts.length])<=0.005) return false;   // auf dem Rand
+    return pointInPoly(q, pts);
+  };
+  return a.some(q=>echtDrin(q,b)) || b.some(q=>echtDrin(q,a));
+}
+
+/* Die Wand, die nach dem Anschließen die gemeinsame ist: die längste, deren Außennormale
+   in die Zielrichtung zeigt. Ihre Stärke ist der Abstand, den die beiden Innenkanten
+   danach haben — genau so liest `nachbarWandSuchen` eine Wandstärke aus zwei Nachbarn.
+   Zeigt keine Wand dorthin (gedrehter Raum), liefert `wandDicke` mit einem Index, den es
+   nicht gibt, die Vorgabe des Raums. */
+function randWandDicke(r, richtung){
+  const n=r.points.length;
+  let best=null;
+  for(let i=0;i<n;i++){
+    if(aussenNormale(r,i).x*richtung<0.5) continue;
+    const L=dist(r.points[i], r.points[(i+1)%n]);
+    if(!best || L>best.L) best={i, L};
+  }
+  return wandDicke(r, best ? best.i : -1);
+}
+
+/* Erst rechts anschließen, dann links. Geht beides nicht, nach rechts weiterrücken, bis
+   Platz ist — dort steht die Kopie dann frei. Verschoben wird nur in x: eine Kopie, die
+   auch nach oben oder unten ausweicht, findet man auf dem Blatt schlechter wieder. */
+function kopiePlatz(r){
+  const bb=bboxOf(r.points), breite=bb.maxx-bb.minx;
+  const andere=floorRooms().filter(o=>o.id!==r.id);
+  const frei=dx=>!andere.some(o=>polyUeberlappt(r.points.map(p=>({x:p.x+dx, y:p.y})), o.points));
+  for(const ri of [1,-1]){
+    const dx=ri*(breite + randWandDicke(r, ri));
+    if(frei(dx)) return {dx, angeschlossen:true};
+  }
+  const schritt=breite+0.5;                       // derselbe Abstand wie früher: 0,5 m Luft
+  for(let k=1;k<=40;k++) if(frei(k*schritt)) return {dx:k*schritt, angeschlossen:false};
+  return {dx:41*schritt, angeschlossen:false};    // Notausgang: lieber weit weg als gar nicht
+}
+
+/* ================= Raum teilen (Ticket 9.8.2026) =================
+   Vom Merkpunkt der angewählten Wand läuft der Schnitt im rechten Winkel durch den Raum
+   bis zur gegenüberliegenden Wand. Es entstehen ZWEI Räume mit einer neuen Trennwand
+   dazwischen — die Umkehrung von „Räume verbinden": das Polygon ist die Innenkante, die
+   neue Wand braucht ihren Streifen, die Gesamtfläche SCHRUMPFT um ihn. Stärke ist die
+   Vorgabe des Raums (`wandDicke(r,-1)` = `wandStd` bzw. 0,24), mittig auf den Schnitt.
+
+   Der linke bzw. obere Teil behält Raum, Name, Fotos und Anmerkung; der andere wird
+   „Raum N". Objekte gehen in den Teil, in dem mehr von ihnen liegt (Nutzerentscheid).
+   LV-Zuordnungen: was seinem Träger folgt (autoL an der Wand, nutz* am Raum), wird
+   AUFGETEILT — aus einer Position werden zwei, je Teil eine, jede rechnet mit ihrem
+   Träger. Fest eingetragene Werte bleiben ungeteilt auf der linken/oberen Seite.
+   Eine Tür oder ein Fenster im Schnitt ist ein FEHLER, keine stille Verschiebung. */
+function raumTeilen(r, i, tWunsch){
+  const p=proj();
+  if(!raumOffen(r)){ melde('Die Etage ist gesperrt — zum Teilen das Schloss öffnen.', true); return null; }
+  const n=r.points.length;
+  const [A,B]=wallPoints(r,i), L=dist(A,B);
+  const d=wandDicke(r,-1);                       // die Raum-Vorgabe, siehe oben
+  const RAND=0.05;
+  if(L<d+4*RAND){ melde('Diese Wand ist zu kurz zum Teilen.', true); return null; }
+  const u={x:(B.x-A.x)/L, y:(B.y-A.y)/L};
+  const an=aussenNormale(r,i), ri={x:-an.x, y:-an.y};          // in den Raum hinein
+  const tt=Number.isFinite(tWunsch) ? Math.max(d/2+RAND, Math.min(L-d/2-RAND, tWunsch)) : L/2;
+  const P={x:A.x+u.x*tt, y:A.y+u.y*tt};
+
+  /* Die gegenüberliegende Wand ist der ERSTE Austritt des Strahls — bei L-Formen nicht
+     die parallele Wand irgendwo, sondern die, die man von hier aus wirklich trifft. */
+  const strahl=(start)=>{
+    let best=null;
+    for(let j=0;j<n;j++){
+      if(j===i) continue;
+      const [C,D]=wallPoints(r,j), Lj=dist(C,D); if(Lj<0.01) continue;
+      const v={x:(D.x-C.x)/Lj, y:(D.y-C.y)/Lj};
+      const det=v.x*ri.y-v.y*ri.x;
+      if(Math.abs(det)<1e-9) continue;                          // parallel
+      const s=(v.x*(C.y-start.y)-v.y*(C.x-start.x))/det;
+      const q=(ri.x*(C.y-start.y)-ri.y*(C.x-start.x))/det;
+      if(s<0.02 || q<-0.001 || q>Lj+0.001) continue;
+      if(!best || s<best.s) best={j, s, q, Lj};
+    }
+    return best;
+  };
+  const Pl={x:P.x-u.x*d/2, y:P.y-u.y*d/2}, Pr={x:P.x+u.x*d/2, y:P.y+u.y*d/2};
+  const tref=strahl(P), tA=strahl(Pl), tB=strahl(Pr);
+  if(!tref || !tA || !tB || tA.j!==tref.j || tB.j!==tref.j){
+    melde('An dieser Stelle ist die Teilung nicht eindeutig — eine andere Stelle antippen.', true);
+    return null;
+  }
+  const j=tref.j, [C,D]=wallPoints(r,j), Lj=tref.Lj;
+  const v={x:(D.x-C.x)/Lj, y:(D.y-C.y)/Lj};
+  const qa=tA.q, qb=tB.q;
+  if(Math.min(qa,qb)<RAND || Math.max(qa,qb)>Lj-RAND){
+    melde('Der Schnitt träfe die gegenüberliegende Wand zu nah an ihrer Ecke.', true);
+    return null;
+  }
+  if(wandGesperrt(r,i) || wandGesperrt(r,j)){
+    melde(`Wand ${wandGesperrt(r,i)?i+1:j+1} ist gesperrt — Teilen würde ihre Länge ändern.`, true);
+    return null;
+  }
+  /* Öffnungen im Schnitt: die Tür gehört genau EINER Wand, ein Schnitt mittendrin würde
+     sie stillschweigend zerlegen. Fehlermeldung statt Überraschung (Nutzerentscheid). */
+  const band={[i]:[tt-d/2, tt+d/2], [j]:[Math.min(qa,qb), Math.max(qa,qb)]};
+  const imBand=(w, von, bis)=>band[w] && bis>band[w][0]+0.001 && von<band[w][1]-0.001;
+  const opDrin=(r.openings||[]).find(o=>imBand(o.wall, o.offset, o.offset+o.width));
+  if(opDrin){
+    alert(`${opDrin.type==='window'?'Ein Fenster':'Eine Tür'} auf Wand ${opDrin.wall+1} liegt genau im Schnitt.\n\nErst verschieben, dann teilen.`);
+    return null;
+  }
+  const bauDrin=wandBauteile(r).find(g=>g.wall!=null && band[g.wall]
+    && g.t>band[g.wall][0]-0.001 && g.t<band[g.wall][1]+0.001);
+  if(bauDrin){
+    alert(`${istHalbwand(bauDrin)?'Eine Halbwand':'Ein Schacht'} auf Wand ${bauDrin.wall+1} liegt genau im Schnitt.\n\nErst verschieben, dann teilen.`);
+    return null;
+  }
+  const QA={x:Pl.x+ri.x*tA.s, y:Pl.y+ri.y*tA.s};
+  const QB={x:Pr.x+ri.x*tB.s, y:Pr.y+ri.y*tB.s};
+  // Beide Schnittkanten müssen INNEN verlaufen — bei einspringenden Ecken ist das nicht selbstverständlich
+  for(const [S,Q] of [[Pl,QA],[Pr,QB]])
+    if(!pointInPoly({x:(S.x+Q.x)/2, y:(S.y+Q.y)/2}, r.points)){
+      melde('Der Schnitt verließe den Raum — eine andere Stelle antippen.', true);
+      return null;
+    }
+
+  /* Die zwei Ringe, jeweils mit Herkunft je Kante (`herk[e]` = alte Wandnummer, −1 = die
+     neue Trennwand). Beide laufen im Umlaufsinn des Originals — daran hängt, dass die
+     Wandstärke weiter nach AUSSEN wächst. */
+  const lauf=(von,bis)=>{ const aus=[]; for(let k=von;;k=(k+1)%n){ aus.push(k); if(k===bis) break; } return aus; };
+  const kettenA=lauf((j+1)%n, i), kettenB=lauf((i+1)%n, j);
+  const ptsA=[{...Pl},{...QA}].concat(kettenA.map(k=>({x:r.points[k].x, y:r.points[k].y})));
+  const herkA=[-1, j].concat(kettenA.slice(0,-1)).concat([i]);
+  const ptsB=[{...Pr}].concat(kettenB.map(k=>({x:r.points[k].x, y:r.points[k].y}))).concat([{...QB}]);
+  const herkB=[i].concat(kettenB.slice(0,-1)).concat([j, -1]);
+  /* 0,5 m² als Untergrenze: ein Tipp dicht neben der Ecke wird oben auf einen gültigen
+     Schnitt geklemmt — ohne diese Schwelle bliebe dann ein 5-cm-Schlauch als „Raum" übrig. */
+  if(polyArea(ptsA)<0.5 || polyArea(ptsB)<0.5){
+    melde('Einer der beiden Teile wäre kleiner als 0,5 m² — weiter weg von der Ecke teilen.', true);
+    return null;
+  }
+  // Wer ist links bzw. oben? Erst die Breite entscheidet, bei Gleichstand die Höhe.
+  const cA=centroid(ptsA), cB=centroid(ptsB);
+  const aLinks = Math.abs(cA.x-cB.x)>0.01 ? cA.x<cB.x : cA.y<cB.y;
+
+  /* Der neue (rechte/untere) Raum: tiefe Kopie, damit Höhe, Farbe und `wandStd`
+     mitkommen — alles Anhängende wird gleich neu verteilt. Fotos und Anmerkung bleiben
+     beim Original (dieselbe Regel wie bei jeder Kopieraktion). */
+  const neu=JSON.parse(JSON.stringify(r));
+  neu.id=uid(); neu.name=naechsterRaumName();
+  delete neu.fotos; delete neu.anmerkung; delete neu.farbZone;
+  ['openings','objects','wallDicke','wallLock','wallNr','wallFotos'].forEach(k=>delete neu[k]);
+  neu.openings=[]; neu.objects=[];
+
+  // Alte Wandwerte sichern, dann je Ring neu aufbauen
+  const altDicke={}, altLock=r.wallLock||{}, altNr=r.wallNr||{}, altFotos=r.wallFotos||{};
+  for(let k=0;k<n;k++) altDicke[k]=wandDicke(r,k);
+  const baue=(pts, herk, raum)=>{
+    raum.wallDicke={}; raum.wallLock={}; raum.wallNr={}; raum.wallFotos={};
+    herk.forEach((h,e)=>{
+      raum.wallDicke[e] = h<0 ? d : altDicke[h];
+      if(h>=0 && altLock[h]) raum.wallLock[e]=true;
+    });
+  };
+  baue(ptsA, herkA, aLinks?r:neu); baue(ptsB, herkB, aLinks?neu:r);
+  const ringVon = istA => istA ? (aLinks?r:neu) : (aLinks?neu:r);
+  /* Wandnummer und Wandfotos sind unteilbar — bei den zwei zerschnittenen Wänden bekommt
+     sie die LÄNGERE Scherbe (dieselbe Regel wie beim Verbinden). */
+  const scherben={
+    [i]:{A:{idx:ptsA.length-1, len:tt-d/2, ab:0},        B:{idx:0, len:L-(tt+d/2), ab:tt+d/2}},
+    [j]:{A:{idx:1, len:Lj-qa, ab:qa},                    B:{idx:ptsB.length-2, len:qb, ab:0}}
+  };
+  const wandZu={};                                   // ganze Wand k → {istA, idx}
+  herkA.forEach((h,e)=>{ if(h>=0 && h!==i && h!==j) wandZu[h]={istA:true,  idx:e}; });
+  herkB.forEach((h,e)=>{ if(h>=0 && h!==i && h!==j) wandZu[h]={istA:false, idx:e}; });
+  [i,j].forEach(w=>{
+    const s=scherben[w], lang = s.A.len>=s.B.len ? {istA:true, ...s.A} : {istA:false, ...s.B};
+    const raum=ringVon(lang.istA);
+    if(altNr[w]!=null) raum.wallNr[lang.idx]=altNr[w];
+    if(altFotos[w])    raum.wallFotos[lang.idx]=altFotos[w];
+  });
+  Object.keys(wandZu).forEach(w=>{
+    const z=wandZu[w], raum=ringVon(z.istA);
+    if(altNr[w]!=null) raum.wallNr[z.idx]=altNr[w];
+    if(altFotos[w])    raum.wallFotos[z.idx]=altFotos[w];
+  });
+  /* Wo landet ein Punkt `t` auf Wand `w`, und wo sein neuer Abstand? Für die zwei
+     zerschnittenen Wände entscheidet die Scherbe, sonst die Wandzuordnung. */
+  const wohin=(w, t)=>{
+    if(w===i || w===j){
+      const s=scherben[w];
+      const inA = w===i ? t<=tt-d/2+0.001 : t>=qa-0.001;
+      const z = inA ? s.A : s.B;
+      return {istA:inA, idx:z.idx, t:t-z.ab};
+    }
+    const z=wandZu[w];
+    return z ? {istA:z.istA, idx:z.idx, t} : null;
+  };
+
+  /* ---- Öffnungen und wandgebundene Bauteile umziehen. Die alten Listen ZUERST
+     beiseitelegen und `r` leeren — `ringVon(true)` kann `r` selbst sein, und wer erst
+     verteilt und dann leert, wirft die eigene Hälfte gleich wieder weg. */
+  const alteOeffnungen=r.openings||[], alteObjekte=r.objects||[];
+  r.openings=[]; r.objects=[];
+  alteOeffnungen.forEach(o=>{
+    const z=wohin(o.wall, o.offset);
+    o.wall=z.idx; o.offset=mm(Math.max(0, z.t));
+    ringVon(z.istA).openings.push(o);
+  });
+  const eckeZu={};                                   // alte Eckennummer → {istA, idx}
+  kettenA.forEach((k,pos)=>eckeZu[k]={istA:true,  idx:pos+2});
+  kettenB.forEach((k,pos)=>{ if(eckeZu[k]==null) eckeZu[k]={istA:false, idx:pos+1}; });
+  const ptsVon = istA => istA ? ptsA : ptsB;
+  const drin=(q, istA)=>pointInPoly(q, ptsVon(istA));
+  /* Freie Objekte: „in den Raum, in dem mehr von ihnen liegt" (Nutzerentscheid) —
+     Linien nach der Länge ihrer Stücke, Flächen und Symbole nach ihrer Mitte. */
+  const mehrA=g=>{
+    if(g.points){
+      let a=0,b=0;
+      for(let s=0;s<g.points.length-1;s++){
+        const m={x:(g.points[s].x+g.points[s+1].x)/2, y:(g.points[s].y+g.points[s+1].y)/2};
+        const len=dist(g.points[s], g.points[s+1]);
+        if(drin(m,true)) a+=len; else b+=len;
+      }
+      return a>=b;
+    }
+    return drin({x:(g.x||0)+(g.w||0)/2, y:(g.y||0)+(g.h||0)/2}, true);
+  };
+  alteObjekte.forEach(g=>{
+    if(wandGebunden(g)){
+      const pw=(g.wall!=null) ? wohin(g.wall, Number.isFinite(g.t)?g.t:0) : null;
+      const ez=(g.ecke!=null) ? eckeZu[g.ecke] : null;
+      if(!pw || (g.ecke!=null && (!ez || ez.istA!==pw.istA))){
+        // Bindung nicht sauber abbildbar — der Schacht steht wieder frei, wie beim Verbinden
+        if(istHalbwand(g)) return;                    // eine Halbwand ohne Wand gibt es nicht
+        schachtLoesen(g);
+        ringVon(mehrA(g)?true:false).objects.push(g); return;
+      }
+      g.wall=pw.idx; if(Number.isFinite(g.t)) g.t=mm(Math.max(0, pw.t));
+      if(ez) g.ecke=ez.idx;
+      ringVon(pw.istA).objects.push(g); return;
+    }
+    ringVon(mehrA(g)).objects.push(g);
+  });
+  // Farbzone wie ein Objekt: nach der Mehrheit — hier über ihren Schwerpunkt
+  if(r.farbZone && !drin(centroid(r.farbZone), aLinks)){
+    neu.farbZone=r.farbZone; delete r.farbZone;
+  }
+
+  // ---- Umrisse setzen, neuen Raum einreihen
+  r.points   = (aLinks?ptsA:ptsB);
+  neu.points = (aLinks?ptsB:ptsA);
+  p.rooms.splice(p.rooms.indexOf(r)+1, 0, neu);
+
+  /* ---- LV-Zuordnungen. Die Regel des Nutzers, wörtlich: „1× Wand Länge × Höhe wird
+     2× Wand Länge × Höhe" — was seinem Träger folgt, wird aufgeteilt und rechnet danach
+     je Teil mit dessen Maßen. Fest eingetragene Werte wandern UNGETEILT auf die linke
+     bzw. obere Seite. Dieselbe Regel trägt auch die raumbezogenen Mengen (Grundfläche,
+     Ansicht, Volumen, Umfang): dynamisch → je Raum eine, fest oder eingefroren → links.
+     Fotoaufmaß-Zuordnungen (`fmMark`) teilen sich nie — sie werden bei jedem Speichern
+     aus den Markierungen neu gebaut. Kopien ohne Fotos, wie überall. */
+  const linkeScherbe=w=>{
+    const s=scherben[w];
+    const mitte=z=> w===i ? {x:A.x+u.x*(z.ab+z.len/2), y:A.y+u.y*(z.ab+z.len/2)}
+                          : {x:C.x+v.x*(z.ab+z.len/2), y:C.y+v.y*(z.ab+z.len/2)};
+    const mA=mitte(s.A), mB=mitte(s.B);
+    return (Math.abs(mA.x-mB.x)>0.01 ? mA.x<mB.x : mA.y<mB.y) ? {istA:true, ...s.A} : {istA:false, ...s.B};
+  };
+  const abgeleitet=a=>{ const k={...a, id:uid()}; delete k.fotos; delete k.fmMark; delete k.weg; return k; };
+  const bericht={neu, geteilt:0};
+  const dazu=[];
+  (p.attrs||[]).forEach(a=>{
+    if(a.roomId!==r.id) return;
+    if(a.objId){                                     // folgt seinem Träger, wohin auch immer
+      if(neu.openings.some(o=>o.id===a.objId) || neu.objects.some(g=>g.id===a.objId))
+        a.roomId=neu.id;
+      return;
+    }
+    if(a.wall!=null){
+      const w=a.wall;
+      if(w===i || w===j){
+        if(a.autoL && !a.fmMark){                    // dynamisch: je Scherbe eine
+          const s=scherben[w];
+          a.wall=s.A.idx; a.roomId=ringVon(true).id;
+          const k=abgeleitet(a); k.wall=s.B.idx; k.roomId=ringVon(false).id;
+          dazu.push(k); bericht.geteilt++;
+        } else {                                     // fest: die linke/obere Scherbe
+          const z=linkeScherbe(w);
+          a.wall=z.idx; a.roomId=ringVon(z.istA).id;
+        }
+      } else {
+        const z=wandZu[w];
+        if(z){ a.wall=z.idx; a.roomId=ringVon(z.istA).id; }
+      }
+      return;
+    }
+    if(!a.raumFest && !a.fmMark && (a.nutzGrund||a.nutzAnsicht||a.nutzVolumen||a.nutzUmfang)){
+      const k=abgeleitet(a); k.roomId=neu.id;
+      dazu.push(k); bericht.geteilt++;               // das Original bleibt links (roomId = r)
+    }
+  });
+  p.attrs.push(...dazu);
+  // Jede Wand mit LV-Zuordnung trägt ihre Nummer — auch die frisch entstandenen Scherben
+  p.attrs.forEach(a=>{
+    if(a.wall!=null && (a.roomId===r.id || a.roomId===neu.id)) lvNummerVergeben(a);
+  });
+  lvMasseNachziehen();                               // autoL-Längen auf die neuen Wände
+  return bericht;
+}
+
 // Neue Ecke in der Mitte der Wand i — die Wand wird dadurch geteilt
 /* `tWunsch` = Abstand ab dem Wandanfang. Fehlt er, wird wie bisher mittig geteilt.
    Gesetzt wird er vom Merkpunkt, also von der Stelle, die zuletzt angetippt wurde. */
@@ -6672,6 +7799,8 @@ const ICONS = {
   tuer:      '<rect x="6" y="3" width="11" height="18" rx="1"/><circle cx="14" cy="12" r="1.1" fill="currentColor" stroke="none"/><path d="M17 21a18 18 0 0 0 4.5-4.5" stroke-dasharray="2.5 2"/>',
   fenster:   '<rect x="4" y="5" width="16" height="14" rx="1.5"/><path d="M12 5v14M4 12h16"/>',
   ecke:      '<path d="M5 19V9l9-4"/><circle cx="5" cy="19" r="2" fill="currentColor" stroke="none"/>',
+  // Ein Raum, den eine gestrichelte Linie in zwei Teile schneidet
+  teilen:    '<rect x="3" y="6" width="18" height="12" rx="1.5"/><path d="M12 4v16" stroke-dasharray="2.5 2"/>',
   magnet:    '<path d="M6 4v8a6 6 0 0 0 12 0V4"/><path d="M6 9h4M14 9h4"/>',
   nachbar:   '<rect x="3" y="7" width="8" height="11" rx="1"/><rect x="13" y="7" width="8" height="11" rx="1"/><path d="M11 12.5h2"/>',
   zurueck:   '<path d="M9 14 4 9l5-5"/><path d="M4 9h9a7 7 0 0 1 0 14h-3"/>',
@@ -6722,7 +7851,13 @@ const ICONS = {
   wandstueck: '<path d="M3.2 3.6v16.8h16.8"/><rect x="7.4" y="8" width="11.4" height="3.2" rx="0.4" fill="currentColor" stroke="none"/>',
   einzelwahl: '<rect x="6" y="6" width="12" height="12" rx="1.5"/>',
   mehrwahl:   '<rect x="3" y="9" width="12" height="12" rx="1.5"/><path d="M9 6.5V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-1.5"/>',
-  aufschlag: '<path d="M12 4v16"/><path d="M8 8l4-4 4 4"/><path d="M8 16l4 4 4-4"/>'
+  aufschlag: '<path d="M12 4v16"/><path d="M8 8l4-4 4 4"/><path d="M8 16l4 4 4-4"/>',
+  /* Spiegeln: die gestrichelte Linie ist die Achse, die beiden Dreiecke zeigen von ihr
+     weg — dieselbe Bildsprache wie in jedem Zeichenprogramm. */
+  spiegelLR: '<path d="M12 3v18" stroke-dasharray="2 2.5"/>'
+    + '<path d="M9.5 7.5 4 12l5.5 4.5z"/><path d="M14.5 7.5 20 12l-5.5 4.5z"/>',
+  spiegelOB: '<path d="M3 12h18" stroke-dasharray="2 2.5"/>'
+    + '<path d="M7.5 9.5 12 4l4.5 5.5z"/><path d="M7.5 14.5 12 20l4.5-5.5z"/>'
 };
 /* `allein` heißt: ohne Beschriftung daneben, dann fällt der rechte Abstand weg. */
 const ico = (n, allein) => `<svg class="ico${allein?' allein':''}" viewBox="0 0 24 24"
@@ -6754,6 +7889,7 @@ const sperrZeile = fid => etageOffen(fid)
 const anmerkungFeld = (r, ohneTitel) => `<div style="margin-top:6px">
   ${ohneTitel?'':`<label class="hint" style="display:block; margin-bottom:2px">Anmerkung — erscheint im Druck unter dem Plan</label>`}
   <textarea id="ranm" rows="2" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:6px"
+    data-feldname="Anmerkung"
     placeholder="z. B. Zugang nur über Treppenhaus B, Estrich lose">${esc(r.anmerkung||'')}</textarea></div>`;
 /* Liste verknüpfter LV-Positionen (LV-Nummer + Kurztext, Klick = bearbeiten) */
 /* Verknüpfte LV-Positionen am Raum / Objekt / an der Wand.
@@ -6879,6 +8015,8 @@ function panelEtage(p){
        gewählten Räumen — und weiter unten weggeschoben zu werden hilft niemandem.
        Zurück kommt alles mit einem Tipp neben die Räume oder mit Esc. */
     if(wahlAn()) return panelWahl(p, wahlRaeume());
+    const eh=etagenHoehe(activeFloorId);
+    const eigene=floorRooms().filter(x=>x.hEigen);
     html+=`<div class="panel"><h3>Etage</h3>
       ${sperrZeile(activeFloorId)}
       <div style="height:8px"></div>
@@ -6890,7 +8028,20 @@ function panelEtage(p){
         <button id="floorren" title="Etage umbenennen">${ico('stift',true)}</button>
         <button id="floordup" title="Etage duplizieren">${ico('kopie',true)}</button>
         <button id="floordel" class="loesch" title="Etage löschen">${ico('papierkorb',true)}</button>
-      </div></div>`;
+      </div>
+      <div class="row" style="margin-top:8px"><label>Raumhöhe (m)</label>
+        <input class="laser" id="fheight" value="${eh?fmt3(eh):''}" placeholder="verschieden"
+          title="Höhe aller Räume dieser Etage — und die, mit der neue Räume anfangen">
+        <button class="btn small" id="fheightall" ${eigene.length?'':'disabled'}
+          title="${eigene.length
+            ? `Auch ${eigene.length===1?'den von Hand geänderten Raum':'die '+eigene.length+' von Hand geänderten Räume'}`
+              +' auf diese Höhe setzen: '+esc(eigene.map(x=>x.name).join(', '))
+            : 'Kein Raum hat eine eigene Höhe — die Zahl oben gilt ohnehin für alle'}">alle</button></div>
+      <p class="hint">Gilt für alle Räume der Etage${eigene.length
+        ? ` — <b>außer ${eigene.length===1?'dem von Hand geänderten':'den '+eigene.length+' von Hand geänderten'}</b>
+            (${esc(eigene.map(x=>x.name).join(', '))}). „alle" nimmt ${eigene.length===1?'ihn':'sie'} mit.`
+        : '.'} Neue Räume fangen mit dieser Höhe an.</p>
+      </div>`;
 
     html+=`<div class="panel"><h3>Neuer Raum</h3>
       <div class="row">
@@ -7252,6 +8403,41 @@ function panelEcke(r){
 
    Der Werkzeugkasten „Neues Objekt" fehlt hier ganz — Objekte brauchen den großen
    Plan der Raumansicht. */
+/* Die Höhenzeile beider Raum-Panels — eine Stelle, weil sie in beiden gleich aussehen
+   und gleich heißen muss. Der Knopf dahinter ist derselbe Gedanke wie das Schloss an
+   den Objektmaßen: **Kette = folgt der Etage, geschlossenes Schloss = eigener Wert.**
+   Er zeigt den Zustand auch dann, wenn ihn niemand drückt — sonst wüsste man nie,
+   warum ein Raum bei einer Etagenänderung stehen bleibt.
+   `rs` ist die Mehrfachanwahl; sind die Räume verschieden hoch, bleibt das Feld leer. */
+function hoeheZeile(r, rs){
+  const eigen=!!r.hEigen, eh=etagenHoehe(r.floorId);
+  const einig=!rs || rs.every(x=>x.height===r.height);
+  return `<div class="row"><label>Raumhöhe (m)</label>
+    <input class="laser" id="rheight" value="${einig?fmt3(r.height):''}" placeholder="${einig?'':'verschieden'}">
+    <button class="btn small koppel${eigen?' frei zu':' auf'}" id="rhkoppel"
+      data-kurzsym="${eigen?'🔒':'🔗'}" data-kurztxt="${eigen?'Etagenhöhe':'Höhe fest'}"
+      title="${eigen
+        ? 'Eigene Höhe — Änderungen an der Etage lassen sie stehen.'
+          + (eh?` Klicken holt die Etagenhöhe (${fmt3(eh)} m) zurück.`:' Klicken koppelt wieder an die Etage.')
+        : `Folgt der Etage${eh?` (${fmt3(eh)} m)`:''}. Klicken hält die jetzige Höhe fest.`}"
+      >${ico(eigen?'schlossZu':'kette', true)}</button></div>`;
+}
+/* Spiegeln — nur bei EINEM angewählten Raum (siehe `raumSpiegeln`). Bei mehreren wäre
+   schon die Achse nicht mehr eindeutig: die eigene Mitte jedes Raums, oder die des
+   Ganzen? Beides ist vertretbar, keines offensichtlich — also gar nicht.
+   Bei gesperrter Etage ausgegraut: das hier verformt den Raum. */
+function spiegelZeile(r){
+  const zu = raumOffen(r) ? '' : ' disabled';
+  return `<div class="row" style="margin-top:6px">
+    <button class="btn small" id="rspiegelh" style="flex:1"${zu}
+      title="Spiegelt den Raum an einer senkrechten Achse durch seine Mitte — links und rechts tauschen. Türen, Fenster, Objekte und LV-Zuordnungen kommen mit."
+      >${ico('spiegelLR')}Horizontal</button>
+    <button class="btn small" id="rspiegelv" style="flex:1"${zu}
+      title="Spiegelt den Raum an einer waagerechten Achse durch seine Mitte — oben und unten tauschen. Türen, Fenster, Objekte und LV-Zuordnungen kommen mit."
+      >${ico('spiegelOB')}Vertikal</button></div>
+    <p class="hint" style="margin-top:4px">Gedreht wird am <b>Griff über dem Raum</b> im
+      Plan — 5°-Schritte, rechte Winkel rasten ein.</p>`;
+}
 function panelWahl(p, rs){
   if(!rs.length) return '';
   const eins = rs.length===1, r=rs[0];
@@ -7268,9 +8454,14 @@ function panelWahl(p, rs){
     ${sperrZeile(r.floorId)}
     <div style="height:8px"></div>
     ${eins?`<div class="row"><label>Name</label><input type="text" id="rname" value="${esc(r.name)}"></div>`:''}
-    <div class="row"><label>Raumhöhe (m)</label><input class="laser" id="rheight"
-      value="${eins||rs.every(x=>x.height===r.height) ? fmt3(r.height) : ''}"
-      placeholder="${eins?'':'verschieden'}"></div>
+    ${hoeheZeile(r, eins?null:rs)}
+    ${eins?spiegelZeile(r):`<div class="row" style="margin-top:6px">
+      <button class="btn small" id="rverbinden" style="flex:1"${raumOffen(r)?'':' disabled'}
+        title="Die ${rs.length} angewählten Räume zu einem verschmelzen — die Trennwände fallen weg und ihre Fläche kommt dazu"
+        >${ico('nachbar')}Räume verbinden (${rs.length})</button></div>
+      <p class="hint" style="margin-top:4px">Die Trennwände fallen weg, ihre Fläche gehört
+        danach zum Raum. <b>${esc(r.name)}</b> gibt Name, Höhe und Farbe vor; Fotos und
+        Anmerkungen kommen zusammen.</p>`}
     <div style="height:12px"></div>
     ${farbReihen(r, true)}
     <p class="hint" style="margin-top:8px">${eins
@@ -7382,6 +8573,11 @@ function panelWand(p, r){
         ? 'Setzt an der gemerkten Stelle einen Wandvorsprung im rechten Winkel in den Raum'
         : 'Setzt in der Wandmitte einen Wandvorsprung im rechten Winkel in den Raum — vorher auf die Wand tippen bestimmt die Stelle'}">${ico('wandstueck')}Halbwand</button>
     </div>
+    <div class="row">
+      <button class="btn small" id="raumteilen" style="flex:1"${zu} title="${merk!=null
+        ? 'Teilt den Raum an der gemerkten Stelle — im rechten Winkel bis zur gegenüberliegenden Wand, mit neuer Trennwand'
+        : 'Teilt den Raum ab der Wandmitte im rechten Winkel — vorher auf die Wand tippen bestimmt die Stelle'}">${ico('teilen')}Raum teilen</button>
+    </div>
     ${rueckkehrPunkt?`<div class="row"><button class="btn small danger" id="rueckkehr" style="flex:1"
       title="Stellt den Stand vor diesem Eingriff wieder her">${ico('zurueck')}Zurück vor „${esc(rueckkehrPunkt.was)}"</button></div>`:''}
     <div class="row"><button class="btn green small" id="walllv" style="flex:1">${ico('liste')}LV-Position</button></div>
@@ -7421,7 +8617,7 @@ function panelRaum(p, r, objs, ops){
     ${sperrZeile(r.floorId)}
     <div style="height:8px"></div>
     <div class="row"><label>Name</label><input type="text" id="rname" value="${esc(r.name)}"></div>
-    <div class="row"><label>Raumhöhe (m)</label><input class="laser" id="rheight" value="${fmt3(r.height)}"></div>
+    ${hoeheZeile(r, null)}
     <div style="height:12px"></div>
     ${farbReihen(r)}</div>
 
@@ -7567,6 +8763,28 @@ function wireEtage(on, r){
     const f=proj().floors.find(f=>f.id===activeFloorId);
     const name=prompt('Etage umbenennen:', f.name); if(name){f.name=name; save(); renderAll();}
   });
+  /* Raumhöhe der Etage. Das Feld verteilt sie an alle Räume ohne eigenen Wert, „alle"
+     nimmt zusätzlich die von Hand gesetzten — und fragt vorher, denn dabei gehen
+     eingetragene Höhen verloren. */
+  const hoeheVerteilen=(v, auchEigene)=>{
+    const {n, uebergangen}=etagenHoeheSetzen(activeFloorId, v, auchEigene);
+    lastHeight=v; save(); renderAll();
+    melde(`Raumhöhe ${fmt3(v)} m: ${n===1?'ein Raum':n+' Räume'} geändert`
+      + (uebergangen?` — ${uebergangen===1?'ein Raum behält seine eigene Höhe':uebergangen+' Räume behalten ihre eigene Höhe'}.`:'.'));
+  };
+  on('#fheight','onchange',e=>{
+    const v=parseNum(e.target.value);
+    if(isFinite(v)&&v>0) hoeheVerteilen(v, false);
+  });
+  on('#fheightall','onclick',()=>{
+    const v=parseNum(($('#fheight')||{}).value);
+    if(!(isFinite(v)&&v>0)){ melde('Erst eine Raumhöhe eintragen.', true); return; }
+    const eigene=floorRooms().filter(x=>x.hEigen);
+    if(eigene.length && !confirm(`${fmt3(v)} m auch in die ${eigene.length===1?'von Hand gesetzte Höhe':eigene.length+' von Hand gesetzten Höhen'} schreiben?\n\n`
+      + eigene.map(x=>`${x.name}: ${fmt3(x.height)} m`).join('\n')
+      + `\n\nDanach ${eigene.length===1?'folgt er':'folgen sie'} wieder der Etage.`)) return;
+    hoeheVerteilen(v, true);
+  });
   on('#floordup','onclick',()=>{
     /* Etage duplizieren: Räume samt Türen/Fenstern IMMER mit (neue IDs, Partner-Türen
        bleiben paarweise verknüpft — aber als NEUES Paar, sonst würde syncSharedDoors
@@ -7577,7 +8795,9 @@ function wireEtage(on, r){
     if(!name) return;
     const mitObj=confirm('Objekte (Flächen, Linien, Symbole) mitkopieren?\n\n'+
       'OK = mit Objekten, Abbrechen = ohne.\nTüren und Fenster werden immer mitkopiert.');
-    const nf={id:uid(), name};
+    // Die Raumhöhe der Etage gehört zur Etage, nicht zu ihren Räumen — sonst stünde in
+    // der Kopie „verschieden", sobald dort ein Raum ausschert
+    const nf={id:uid(), name}; if(isFinite(f.height) && f.height>0) nf.height=f.height;
     const linkMap={};
     p.rooms.filter(r=>r.floorId===f.id).forEach(r=>{
       const kopie=JSON.parse(JSON.stringify(r));
@@ -7713,8 +8933,86 @@ function wireRaum(on, r){
       if(t) r.anmerkung=t; else delete r.anmerkung;
       save();
     });
+    /* Wer die Höhe HIER einträgt, meint diesen einen Raum (bzw. die Anwahl) — er
+       bekommt damit `hEigen` und hört ab da nicht mehr auf die Etage. Der Laser geht
+       denselben Weg: eine gemessene Deckenhöhe ist erst recht eine eigene. */
     on('#rheight','onchange',e=>{ const v=parseNum(e.target.value);
-      if(isFinite(v)&&v>0){ zielRaeume(r).forEach(x=>x.height=v); lastHeight=v; save(); renderAll(); } });
+      if(isFinite(v)&&v>0){
+        // VOR dem Schreiben fragen: ohne gesetzte `f.height` liest `etagenHoehe`
+        // die Räume, und die haben sich gleich geändert
+        etagenHoeheMerken(r.floorId);
+        const eh=etagenHoehe(r.floorId);
+        zielRaeume(r).forEach(x=>{ x.height=v; if(v!==eh) x.hEigen=true; });
+        lastHeight=v; save(); renderAll();
+      } });
+    on('#rhkoppel','onclick',()=>{
+      const rs=zielRaeume(r), fest=!rs[0].hEigen;     // fest = ab jetzt eigener Wert
+      etagenHoeheMerken(rs[0].floorId);
+      const eh=etagenHoehe(rs[0].floorId);
+      if(!fest && !eh){ melde('Diese Etage hat noch keine Raumhöhe — sie steht in der Etagenansicht.', true); return; }
+      rs.forEach(x=>{ if(fest) x.hEigen=true; else { delete x.hEigen; x.height=eh; } });
+      save(); renderAll();
+      melde(fest
+        ? `Höhe festgehalten — ${rs.length===1?'der Raum bleibt':'die Räume bleiben'} bei ${fmt3(rs[0].height)} m, auch wenn die Etage sich ändert.`
+        : `Folgt wieder der Etage: ${fmt3(eh)} m.`);
+    });
+    /* Spiegeln. Ohne Rückfrage: es ist in einem Klick zurückzunehmen (derselbe Knopf
+       noch einmal) und steht außerdem im Rückgängig-Stapel. */
+    const spiegeln=(richtung, wort)=>{
+      if(!raumOffen(r)){ melde('Die Etage ist gesperrt.', true); return; }
+      raumSpiegeln(r, richtung);
+      sel={roomId:r.id, wall:null, vertex:null};   // Wandnummern haben sich verschoben
+      merkPunkt=null;
+      syncSharedDoors(); save(); renderAll();
+      melde(`„${r.name}" ${wort} gespiegelt.`);
+    };
+    on('#rspiegelh','onclick',()=>spiegeln('lr','horizontal'));
+    on('#rspiegelv','onclick',()=>spiegeln('ob','vertikal'));
+    /* Räume verbinden. Erst rechnen, dann fragen: geht es gar nicht, soll das VOR der
+       Rückfrage stehen — und die Frage kann sagen, was genau geschieht. */
+    on('#rverbinden','onclick',()=>{
+      const liste=zielRaeume(r);
+      if(liste.length<2){ melde('Dafür müssen mindestens zwei Räume angewählt sein.', true); return; }
+      if(!raumOffen(r)){ melde('Die Etage ist gesperrt.', true); return; }
+      const pruef=verbindenPruefen(liste);
+      if(pruef.fehler){ melde(pruef.fehler, true); return; }
+      const flaechen=liste.map(x=>roomStats(x).area).reduce((a,b)=>a+b, 0);
+      const nachLv=(proj().attrs||[]).filter(a=>liste.some(x=>x.id===a.roomId)).length;
+      const zeilen=[`${liste.length} Räume wirklich verbinden?`, '',
+        liste.map(x=>`· ${x.name} (${fmt(roomStats(x).area,2)} m²)`).join('\n'), '',
+        `Es entsteht EIN Raum „${liste[0].name} (verbunden)".`,
+        `Die Trennwände fallen weg — ihre Fläche kommt dazu, die Grundfläche wächst also`,
+        `über die ${fmt(flaechen,2)} m² der Einzelräume hinaus.`];
+      if(nachLv){
+        const raumBez=(proj().attrs||[]).filter(a=>liste.some(x=>x.id===a.roomId)
+          && (a.nutzGrund||a.nutzAnsicht||a.nutzVolumen||a.nutzUmfang)).length;
+        zeilen.push('', `${nachLv} LV-Zuordnungen bleiben erhalten.`);
+        if(raumBez) zeilen.push(
+          `Davon rechnen ${raumBez} mit Grundfläche, Ansichtsfläche oder Raumvolumen.`,
+          'Die behalten die Maße ihres bisherigen Raums — sonst zählte jede von ihnen',
+          'plötzlich die ganze neue Fläche, und die Menge verdoppelte sich still.',
+          'Neue Zuordnungen am verbundenen Raum rechnen wieder mit.');
+        zeilen.push('Positionen weggefallener Wände, Türen und Fenster bleiben im Aufmaß',
+          'und tragen dann „gelöscht" als Herkunft.');
+      }
+      if(!confirm(zeilen.join('\n'))) return;
+      const b=raeumeVerbinden(liste, pruef);
+      if(b.fehler){ melde(b.fehler, true); return; }
+      etagenWahl=[liste[0].id]; sel={roomId:liste[0].id, wall:null, vertex:null};
+      merkPunkt=null;
+      syncSharedDoors(); save(); renderAll();
+      const zahl=(n, ein, viele)=>n===1?ein:`${n} ${viele}`;
+      const teile=[`${b.raeume} Räume verbunden — ${fmt(roomStats(liste[0]).area,2)} m²`,
+        b.weggefallen?zahl(b.weggefallen,'eine Wand weg','Wände weg'):'',
+        b.openWeg?zahl(b.openWeg,'eine Tür/ein Fenster entfernt','Türen/Fenster entfernt'):'',
+        b.hwWeg?zahl(b.hwWeg,'eine Halbwand entfernt','Halbwände entfernt'):'',
+        b.lvWeg?zahl(b.lvWeg,'eine LV-Zuordnung ohne Bauteil','LV-Zuordnungen ohne Bauteil'):'',
+        b.festeMengen?zahl(b.festeMengen,'eine Menge behält ihre Raummaße','Mengen behalten ihre Raummaße'):'',
+        b.festeHoehen?zahl(b.festeHoehen,'eine Höhe von der Raumhöhe gelöst','Höhen von der Raumhöhe gelöst'):'',
+        b.nrGeaendert.length?`Wandnummern geändert: ${b.nrGeaendert.join(', ')}`:'',
+        b.zonenWeg?zahl(b.zonenWeg,'ein Sanierungsbereich verloren','Sanierungsbereiche verloren'):''].filter(Boolean);
+      melde(teile.join(' · ')+'.');
+    });
     /* Aus der Mehrfachanwahl heraus wird die Position nach dem Speichern in alle
        gewählten Räume kopiert — `lvFuerRaeume` merkt sich, welche das sind. */
     on('#rlv','onclick',()=>{
@@ -7781,21 +9079,28 @@ function wireRaum(on, r){
       z.splice(sel.zoneH,1); sel.zoneH=null; save(); renderAll();
     });
     on('#rdup','onclick',()=>{
-      const bb=bboxOf(r.points);
-      const nr={...JSON.parse(JSON.stringify(r)), id:uid(), name:r.name+' (Kopie)'};
-      const sx=(bb.maxx-bb.minx)+0.5;
+      const platz=kopiePlatz(r), sx=platz.dx;      // vor dem Verschieben: rechnet mit r.points
+      const nr={...JSON.parse(JSON.stringify(r)), id:uid(), name:naechsterRaumName()};
       nr.points=nr.points.map(p=>({x:p.x+sx, y:p.y}));
       if(nr.farbZone) nr.farbZone=nr.farbZone.map(p=>({x:p.x+sx, y:p.y}));   // Farbe wandert mit
       // Fotos bleiben beim Original — wie bei „Etage duplizieren" (siehe ohneFotos)
       delete nr.fotos; delete nr.wallFotos; delete nr.wallNr;
       // Kopie erbt keine Tür-Verknüpfungen und keine Objektnummern (LV-Bezug bleibt beim Original)
-      nr.openings.forEach(o=>{ o.id=uid(); delete o.link; delete o.nr; delete o.fotos; });
+      /* `||[]` wie an den 40 anderen Zugriffen: ein eingelesenes Projekt kann den
+         Schlüssel gar nicht haben — ohne Öffnung schrieb das Erzeugungsprogramm ihn nicht. */
+      (nr.openings||[]).forEach(o=>{ o.id=uid(); delete o.link; delete o.nr; delete o.fotos; });
       (nr.objects||[]).forEach(g=>{ g.id=uid(); delete g.nr; delete g.fotos;
         if(g.points){ g.points.forEach(pt=>pt.x+=sx); } else { g.x+=sx; } });
       proj().rooms.push(nr); save();
-      // Aus der Etagen-Anwahl heraus nicht hineinzoomen — die Kopie einfach anwählen
-      if(wahlAn()){ etagenWahl=[nr.id]; sel={roomId:nr.id, wall:null, vertex:null}; renderAll(); return; }
-      focusRoom(nr.id);
+      /* Wo man danach steht, entscheidet der PLATZ, nicht die Ansicht, aus der man kam:
+         angeschlossen ist die Kopie der nächste Arbeitsplatz — hinein. Steht sie frei
+         irgendwo im Blatt, ist die Anwahl der bessere Ort, denn dort schiebt man sie hin,
+         wo sie hingehört. Aus der Raumansicht wie aus der Anwahl gilt dasselbe. */
+      if(platz.angeschlossen){ focusRoom(nr.id); return; }
+      focusRoomId=null; zoneEdit=null; etagenWahl=[nr.id];
+      sel={roomId:nr.id, wall:null, vertex:null};
+      renderAll(); zoomFit();     // die Kopie kann weit weg liegen — sie muss zu sehen sein
+      melde(`Rechts und links war kein Platz — „${nr.name}" steht frei daneben.`);
     });
     on('#rstats','ontoggle',e=>{ statsOpen=e.target.open; });
     wireFotos('rfoto', r, 'fotos');                       // Fotos am Raum
@@ -7906,6 +9211,17 @@ function wireWand(on, r){
       r.objects=r.objects||[]; r.objects.push(g);
       sel={roomId:r.id, wall:null, vertex:null, objId:g.id};
       merkPunkt=null; save(); renderAll();
+    });
+    on('#raumteilen','onclick',()=>{                      // Raum teilen → zwei Räume
+      const b=raumTeilen(r, sel.wall, merkFuerWand(r, sel.wall));
+      if(b){
+        merkPunkt=null; zoneEdit=null;
+        sel={roomId:r.id, wall:null, vertex:null};        // der linke Teil bleibt der Arbeitsplatz
+        syncSharedDoors(); save(); renderAll(); zoomFit();
+        melde(`„${r.name}" geteilt: ${fmt(polyArea(innenPolygon(r)),2)} m² und „${b.neu.name}" `
+          +`${fmt(polyArea(innenPolygon(b.neu)),2)} m²`
+          +(b.geteilt?` — ${b.geteilt} LV-Zuordnung(en) auf beide Räume aufgeteilt.`:'.'));
+      }
     });
     on('#wallsplit','onclick',()=>{                       // Wand teilen → neue Ecke
       if(eckeEinfuegen(r, sel.wall, merkFuerWand(r, sel.wall))){
@@ -8315,8 +9631,9 @@ function wireObjekt(on, r){
         }
         save(); renderAll();
       });
-      // Schloss vor dem Feld: koppeln ⇄ entkoppeln
-      document.querySelectorAll('.koppel').forEach(btn=>{
+      // Schloss vor dem Feld: koppeln ⇄ entkoppeln. `[data-mf]` grenzt ab — dieselbe
+      // Optik trägt seit dem 8.8.2026 auch die Raumhöhe, die hier nichts zu suchen hat.
+      document.querySelectorAll('.koppel[data-mf]').forEach(btn=>{
         btn.onclick=()=>{
           const w=btn.dataset.mf;
           if(w==='B'){ if(selObj.festB){ delete selObj.festB; } else selObj.festB=true; }
@@ -8546,7 +9863,7 @@ function openTemplateDialog(){
   cancelModes();
   if(focusRoomId){ focusRoomId=null; sel={roomId:null,wall:null,vertex:null}; renderAll(); zoomFit(); }
   $('#tplName').value='Raum '+(proj().rooms.length+1);
-  $('#tplHeight').value=fmt3(lastHeight);
+  $('#tplHeight').value=fmt3(neueRaumHoehe(activeFloorId));
   tplFieldHtml();
   dlgTpl.showModal();
 }
@@ -8642,6 +9959,12 @@ function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
   $('#lvNutzGrund').checked=a?!!a.nutzGrund:false;
   $('#lvNutzAnsicht').checked=a?!!a.nutzAnsicht:false;
   $('#lvNutzVolumen').checked=a?!!a.nutzVolumen:false;
+  /* Festgehaltene Raummaße sichtbar machen (Räume verbunden). Ohne die Zeile sähe die
+     Position aus wie jede andere, rechnete aber mit den Maßen von vorher. */
+  const fest=a&&a.raumFest;
+  $('#lvFestZeile').style.display = fest?'':'none';
+  if(fest) $('#lvFestTxt').innerHTML=`<b>Raummaße festgehalten</b> — ${fmt3(fest.area)} m² · `
+    + `${fmt3(fest.per)} m · ${fmt3(fest.hoehe)} m${a.weg?` (${esc(a.weg)})`:''}`;
   /* Kopplung an die Wand — nur sichtbar, wenn die Zuordnung überhaupt an einer Wand hängt.
      Neu angelegt ist sie an; bei bestehenden Zuordnungen zählt, was gespeichert steht
      (Altbestand hat den Merker nicht und bleibt darum bei festen Zahlen). */
@@ -8835,6 +10158,17 @@ function lvGrundAuto(){
 $('#lvEinheit').addEventListener('change', lvGrundAuto);
 /* Die drei schließen sich aus: jedes ersetzt die Maßfelder durch EIN Maß des Raums,
    zwei davon zugleich ergeben keine Rechnung. */
+/* Freigeben wirkt SOFORT und nicht erst beim Speichern: der Ergebnisblock über dem Knopf
+   soll gleich die neue Zahl zeigen — genau deswegen drückt man ihn ja. */
+$('#lvFestLoesen').onclick=()=>{
+  const a=lvEditId?(proj().attrs||[]).find(x=>x.id===lvEditId):null;
+  if(!a || !a.raumFest) return;
+  delete a.raumFest;
+  save();
+  $('#lvFestZeile').style.display='none';
+  lvErgebnisZeigen();
+  melde('Die Position rechnet wieder mit den Maßen des heutigen Raums.');
+};
 const LV_RAUMHAKEN=['#lvNutzGrund','#lvNutzAnsicht','#lvNutzVolumen'];
 LV_RAUMHAKEN.forEach(sel=>$(sel).onchange=e=>{
   if(e.target.checked) LV_RAUMHAKEN.forEach(a=>{ if(a!==sel) $(a).checked=false; });
@@ -11147,9 +12481,34 @@ const zeigtMasse = a => a.einheit!=='Stuck';
 function lvGroupAlleNein(list){
   return !list.some(hatAnsicht);
 }
+/* ---------- Festgehaltene Raummaße (`a.raumFest`, seit 2026-08-08) ----------
+   Vier Formeln lesen den Raum statt eingetragener Zahlen: Grundfläche, Ansichtsfläche,
+   Raumvolumen und der Umfang als Länge. Nur SIE ändern sich, wenn der Raum sich ändert —
+   alles andere steht entweder fest oder hängt an einer Wand, einer Öffnung, einem Objekt.
+
+   Beim **Verbinden von Räumen** ist genau das ein Problem: aus zwei Räumen zu 50 m² wird
+   einer zu 101,2 m², und beide Positionen rechneten danach mit 101,2 — die Menge hätte
+   sich still verdoppelt. Deshalb bekommen sie dort ihre drei Raummaße **eingefroren**.
+
+   Eingefroren wird nicht die Zahl, sondern die **Eingabe**: `{area, per, hoehe}`. Damit
+   bleiben alle vier Formeln unverändert, der Ausdruck zeigt weiter „1,000 × 50,000
+   (Bodenfläche)", und ein Freigeben (`raumFest` löschen) macht die Position wieder
+   lebendig. Neu angelegte Zuordnungen haben den Merker nicht und rechnen wie immer mit. */
+const lvRaumMasse = a => {
+  if(a && a.raumFest) return a.raumFest;
+  const r=roomById(a.roomId);
+  if(!r) return null;
+  const st=roomStats(r);
+  return {area:st.area, per:st.per, hoehe:r.height||0, vol:st.vol};
+};
 function lvCalc(a, alleNein){
   const num=v=>Number.isFinite(v)?v:0;
-  const r=roomById(a.roomId), st=r?roomStats(r):null;
+  /* `st` und `r` sind ab hier die MASSE, mit denen gerechnet wird — bei einer
+     festgehaltenen Position die gesicherten, sonst die des lebenden Raums. Beides sind
+     bewusst nur Zahlenbündel: keine Formel unten braucht mehr vom Raum als diese vier. */
+  const rm=lvRaumMasse(a);
+  const st=rm?{area:rm.area, per:rm.per, vol:(rm.vol!=null?rm.vol:rm.area*rm.hoehe)}:null;
+  const r=rm?{height:rm.hoehe}:null;
   const menge=num(a.menge);
   let L=num(a.laenge); const B=num(a.breite), H=num(a.hoehe);
   if(a.nutzUmfang && st) L=st.per;                       // Deckenumfang als Länge
@@ -11172,8 +12531,10 @@ function lvCalc(a, alleNein){
     }
   } else {
     if(a.nutzAnsicht && st && r){
-      // Ansichtsfläche = alle Wände + Decke + Boden, aus den Raummaßen gerechnet
-      const ans=ansichtsFlaeche(r);
+      // Ansichtsfläche = alle Wände + Decke + Boden, aus den Raummaßen gerechnet.
+      // Hier bewusst NICHT `ansichtsFlaeche(r)`: die Funktion holt sich den Raum selbst,
+      // und bei einer festgehaltenen Position wären das die neuen statt der gesicherten.
+      const ans=2*st.area + st.per*(r.height||0);
       wert=menge*ans;
       formel=`${fmt3(menge)} × (2 × ${fmt3(st.area)} + ${fmt3(st.per)} × ${fmt3(r.height)}) = ${fmt3(ans)} (Ansichtsfläche)`;
     } else if(a.nutzGrund && st){
@@ -14256,6 +15617,9 @@ function leisteSetzen(){
    die Anmerkungen im LV-Dialog in einem `<fieldset><legend>`, die am Raum in einem
    schlichten `<div>` mit einem Hinweis-`<label>` darüber. */
 function feldName(el){
+  /* Felder ohne Beschriftungszeile (die Anmerkung — ihre Überschrift ist das Panel)
+     bringen ihren Namen selbst mit, sonst hieße es überall nur „Eingabe". */
+  if(el.dataset && el.dataset.feldname) return el.dataset.feldname;
   const zeile=el.closest('.row'), satz=el.closest('fieldset');
   const lab=(zeile && zeile.querySelector('label'))
     || (satz && satz.querySelector('legend'))
@@ -14399,7 +15763,13 @@ function massOeffnung(el){
 function massStandard(el){
   if(massIstMenge(el)) return 1;
   const id=el.id||'';
-  if(id==='rheight' || id==='tplHeight') return lastHeight;
+  /* „↺" führt bei den Höhenfeldern auf die Etage zurück — das ist der Wert, den der
+     Raum ohne eigenes Zutun hätte. Nur wo die Etage keine hat, bleibt die zuletzt
+     benutzte Höhe der Rückfall. `fheight` ist die Etage selbst: dort gibt es nichts
+     Übergeordnetes mehr, also die zuletzt benutzte. */
+  if(id==='rheight' || id==='tplHeight') return neueRaumHoehe(
+    (roomById(focusRoomId||sel.roomId)||{}).floorId || activeFloorId);
+  if(id==='fheight') return lastHeight;
   if(id==='wdicke'){
     const r=roomById(sel.roomId);
     return (r && Number.isFinite(r.wandStd) && r.wandStd>0) ? r.wandStd : WAND_STD;
@@ -15300,10 +16670,12 @@ const nummerDruck = a => lvZielText(a).replace(/#/g,'');
    drei Raummaßen — die bekommen deshalb eigene Spalten und lassen L/B/H leer. */
 const LV_MASSE=[['Länge','laenge'],['Breite','breite'],['Höhe','hoehe']];
 const istAnsicht = a => !!a.nutzAnsicht && a.einheit==='Flache';
+/* Über `lvRaumMasse` und nicht über den Raum: bei einer festgehaltenen Position (Räume
+   verbunden) stehen im Druck dieselben drei Zahlen, mit denen auch gerechnet wurde. */
 const LV_RAUMMASS=[
-  ['Grundfläche', a=>{const r=roomById(a.roomId); return r?roomStats(r).area:NaN;}],
-  ['Umfang',      a=>{const r=roomById(a.roomId); return r?roomStats(r).per:NaN;}],
-  ['Raumhöhe',    a=>{const r=roomById(a.roomId); return r?r.height:NaN;}]
+  ['Grundfläche', a=>{const m=lvRaumMasse(a); return m?m.area:NaN;}],
+  ['Umfang',      a=>{const m=lvRaumMasse(a); return m?m.per:NaN;}],
+  ['Raumhöhe',    a=>{const m=lvRaumMasse(a); return m?m.hoehe:NaN;}]
 ];
 /* Die Positionstabelle des Drucks — dieselbe unter dem Raum wie hinter einem Foto.
    Herausgeloest, damit beide Stellen wirklich gleich aussehen und nicht auseinanderlaufen. */
@@ -16170,7 +17542,7 @@ const KURZ={
   oeffnung:[['🏷','LV','#objlv'], ['📷','Foto','#opfoto'], ['⧉','Kopie','#opdup'], ['🗑','Entfernen','.opdel','gefahr']],
   // Kein „Schließen": daneben tippen wählt die Wand ohnehin ab
   wand:    [['🏷','LV','#walllv'], ['📷','Foto','#wfoto'], ['⌐','Ecke','#wallsplit'],
-            ['🚪','Tür','#wopdoor'], ['🪟','Fenster','#wopwin']],
+            ['◫','Teilen','#raumteilen'], ['🚪','Tür','#wopdoor'], ['🪟','Fenster','#wopwin']],
   // Das Schloss traegt seine Beschriftung selbst (siehe `sperrZeile`) — hier steht nur der Rueckfall
   raum:    [['＋','Einfügen','menu'], ['🔓','Sperren','#rsperr'], ['⧉','Kopie','#rdup'], ['🗑','Löschen','#rdel','gefahr']],
   /* Auf der Etage geht es ausser dem Einfuegen um die Etage selbst — welche gemeint ist,
@@ -16297,7 +17669,7 @@ const HANDY={
             /* Die Zeile des Sanierungsbereichs MUSS mit durch: sonst ist „Fertig"
                versteckt und man kommt aus dem Farbmodus nicht mehr heraus (gemeldet
                als „Festgefahren bei Raumfarbe editieren"). */
-            behalte:['#rname','#rheight','#ranm','.farbrow','#rzadd','#rzdel','#rzreset',
+            behalte:['#rname','#rheight','#rhkoppel','#ranm','.farbrow','#rzadd','#rzdel','#rzreset',
                      '#rzfertig','#rfoto','.fotos']},
   wand:    {panels:[/^Wand/, /^Fotos/],
             // Die Wandlaenge gehoert dazu — sie ist das Mass, das man am haeufigsten
@@ -16407,14 +17779,24 @@ const LEISTE = {
   /* Die Anwahl in der Etagenansicht. Die Ausschlüsse bei Mehrfachauswahl regeln sich
      von selbst: `#rdup` und `#rfoto` stehen dann gar nicht erst im Panel, und was es
      nicht gibt, nimmt die Leiste nicht auf. */
-  wahl:  ['#wahlEinzel','#wahlMehr','-','#rheight','farbe','-',
-          '#rlv','#rdup','#rdel','-','#rfoto'],
-  etage: ['#flooradd','#floorren','#floordup','#floordel','-','#modedraw','#modetpl'],
+  /* Aufgeräumt nach Nutzerwunsch (9.8.2026): Sperren ganz nach oben, über die Raumhöhe;
+     der Ketten-Knopf („folgt der Etage") fliegt raus — die Kopplung ist Panel-Arbeit,
+     keine Kurzbedienung; Spiegeln und Name+Anmerkung stecken in je einem Aufklappmenü.
+     `nameanm` und `spiegeln` gibt es nur bei EINEM Raum — bei mehreren fallen sie von
+     selbst weg, wie Duplizieren und Fotos. */
+  wahl:  ['#wahlEinzel','#wahlMehr','-','#rsperr','#rheight','nameanm','farbe','-',
+          'spiegeln','#rverbinden','-','#rlv','#rdup','#rdel','-','#rfoto'],
+  etage: ['#flooradd','#floorren','#floordup','#floordel','-','#fheight','#fheightall','-',
+          '#modedraw','#modetpl'],
   /* Zehn Werkzeuge und fünfzehn Farben stecken jetzt in zwei Aufklappmenüs — aus
      vierzehn Kacheln werden sechs. */
-  raum:  ['#rlv','#rdup','#rdel','-','farbe','objekte','-','#rfoto'],
+  /* Ebenfalls 9.8.2026: Sperren direkt unter der LV-Position, dazu Raumhöhe und das
+     Menü mit Name und Anmerkung — vorher kam man aus der eingeklappten Spalte an
+     nichts davon heran. */
+  raum:  ['#rlv','#rsperr','-','#rheight','nameanm','-','#rdup','#rdel','-',
+          'farbe','objekte','-','#rfoto'],
   wand:  ['#wlock','#magnettoggle','#wandverbinden','#wdickevon0','#wdickevon1','-',
-          '#wopdoor','#wopwin','#wallsplit','-','#walllv','#walldesel','#wfoto'],
+          '#wopdoor','#wopwin','#wallsplit','#raumteilen','-','#walllv','#walldesel','#wfoto'],
   /* Sieben Türtypen untereinander wären sieben Kacheln — sie stecken jetzt in einem
      Menü, dessen Knopf den gewählten Typ zeigt. Von den beiden Einträgen greift immer
      nur einer: an einer Tür gibt es keine Fenstertypen und umgekehrt. */
@@ -16437,13 +17819,20 @@ const KLAPP = {
      Symbol. Bei Tür und Fenster ist genau das die Auskunft — welcher Typ gerade gilt.
      Bei Farben und Werkzeugen gibt es keinen dauerhaft gewählten Eintrag. */
   tuertyp:    {q:'#sidebar [data-tuertyp]',    titel:'Türtyp',       ico:'tuer',    spiegel:true},
-  fenstertyp: {q:'#sidebar [data-fentyp]',     titel:'Fenstertyp',   ico:'fenster', spiegel:true}
+  fenstertyp: {q:'#sidebar [data-fentyp]',     titel:'Fenstertyp',   ico:'fenster', spiegel:true},
+  /* Name und Anmerkung auf EINEM Knopf (Nutzerwunsch 9.8.2026): beides ist Text, kein
+     Werkzeug — zusammen belegen sie eine Kachel statt zwei. Die Einträge sind FELDER,
+     keine Knöpfe; `leisteKlapp` tippt sie an statt sie zu klicken. */
+  nameanm:    {q:'#sidebar #rname, #sidebar #ranm',           titel:'Name & Anmerkung', ico:'stift'},
+  spiegeln:   {q:'#sidebar #rspiegelh, #sidebar #rspiegelv',  titel:'Spiegeln',         ico:'spiegelLR'}
 };
 function leisteKlapp(knopf, art){
   const alt=$('#leisteklapp');
   if(alt){ const war=alt.dataset.von; alt.remove(); if(war===art) return; }
-  const felder=[...document.querySelectorAll(KLAPP[art].q)];
+  // Abgeschaltete Einträge fallen weg — wie in der Leiste selbst
+  const felder=[...document.querySelectorAll(KLAPP[art].q)].filter(f=>!f.disabled);
   if(!felder.length) return;
+  const einFeld = f => f.tagName==='INPUT' || f.tagName==='TEXTAREA';
   const box=document.createElement('div');
   box.id='leisteklapp'; box.dataset.von=art;
   box.className = art==='farbe' ? 'farbe' : 'gross';   // Farbfelder sind kleiner
@@ -16451,6 +17840,9 @@ function leisteKlapp(knopf, art){
     const an=f.classList.contains('an')||f.classList.contains('active') ? ' an' : '';
     if(art==='farbe') return `<button data-nr="${i}" title="${esc(f.title||'')}"
       style="background:${f.dataset.farbe}" class="${an.trim()}"></button>`;
+    // Eingabefelder tragen ihren Namen — der Wert steht dann auf der weißen Seite
+    if(einFeld(f)) return `<button data-nr="${i}" title="${esc(feldName(f))}">${
+      ico('stift',true)}${esc(feldName(f))}</button>`;
     const bild=f.querySelector('svg'), txt=f.textContent.trim();
     return `<button data-nr="${i}" title="${esc(f.title||txt)}" class="${an.trim()}">${
       bild ? bild.outerHTML : esc(txt)}</button>`;
@@ -16460,7 +17852,14 @@ function leisteKlapp(knopf, art){
   box.style.left=(r.right+8)+'px';
   box.style.top=Math.max(8, Math.min(r.top, innerHeight-box.offsetHeight-8))+'px';
   box.querySelectorAll('[data-nr]').forEach(b=>b.onclick=()=>{
-    felder[+b.dataset.nr].click(); box.remove();
+    const f=felder[+b.dataset.nr];
+    /* Felder werden ANGETIPPT statt geklickt — derselbe Weg wie bei den Feld-Kacheln
+       der Leiste: an `pointerdown` hängen Maßseite und Textseite, ein `click()` setzte
+       nur den Fokus in ein Feld, das man bei eingeklappter Spalte gar nicht sieht. */
+    if(einFeld(f)) f.dispatchEvent(new PointerEvent('pointerdown',
+      {bubbles:true, cancelable:true, pointerId:1, pointerType:'touch', isPrimary:true}));
+    else f.click();
+    box.remove();
   });
 }
 document.addEventListener('pointerdown', e=>{
@@ -16481,12 +17880,13 @@ function leisteBauen(){
   (LEISTE[ort]||[]).forEach(wahl=>{
     if(wahl==='-'){ teile.push(null); return; }
     if(KLAPP[wahl]){
-      const k=KLAPP[wahl], felder=[...document.querySelectorAll(k.q)];
+      const k=KLAPP[wahl], felder=[...document.querySelectorAll(k.q)].filter(f=>!f.disabled);
       if(!felder.length) return;
       const aktiv=felder.find(f=>f.classList.contains('an'));
       const bild = k.spiegel && aktiv && aktiv.querySelector('svg')
         ? aktiv.querySelector('svg').outerHTML : ico(k.ico, true);
-      teile.push(`<button data-ziel="${wahl}" data-nr="0" title="${
+      // `klapp` zeichnet die Ecke unten rechts — der Knopf öffnet ein Menü, er schaltet nicht
+      teile.push(`<button data-ziel="${wahl}" data-nr="0" class="klapp" title="${
         esc(k.titel + (k.spiegel && aktiv ? ' — ' + (aktiv.title||'') : ''))}">${bild}</button>`);
       return;
     }
