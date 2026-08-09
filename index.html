@@ -17853,11 +17853,16 @@ function leisteKlapp(knopf, art){
   box.style.top=Math.max(8, Math.min(r.top, innerHeight-box.offsetHeight-8))+'px';
   box.querySelectorAll('[data-nr]').forEach(b=>b.onclick=()=>{
     const f=felder[+b.dataset.nr];
-    /* Felder werden ANGETIPPT statt geklickt — derselbe Weg wie bei den Feld-Kacheln
-       der Leiste: an `pointerdown` hängen Maßseite und Textseite, ein `click()` setzte
-       nur den Fokus in ein Feld, das man bei eingeklappter Spalte gar nicht sieht. */
-    if(einFeld(f)) f.dispatchEvent(new PointerEvent('pointerdown',
-      {bubbles:true, cancelable:true, pointerId:1, pointerType:'touch', isPrimary:true}));
+    /* Zahlenfelder gehen über die Maßseite — ihr Fänger hängt am `document` und gilt
+       in allen Ansichten, darum reicht ein durchgereichtes `pointerdown`. TEXTFELDER
+       öffnen die weiße Textseite DIREKT: deren Fänger gilt nur bis 640 px, und auf dem
+       iPad verpuffte der Tipp wortlos (gemeldet 9.8.2026). Die Spalte ist hier immer
+       eingeklappt — das Feld sieht niemand, egal wie breit der Schirm ist. */
+    if(einFeld(f)){
+      if(f.matches(MASSFELD)) f.dispatchEvent(new PointerEvent('pointerdown',
+        {bubbles:true, cancelable:true, pointerId:1, pointerType:'touch', isPrimary:true}));
+      else feldOeffnen(f);
+    }
     else f.click();
     box.remove();
   });
@@ -17915,10 +17920,13 @@ function leisteBauen(){
     if(!ziel) return;
     /* Bei Eingabefeldern nicht klicken, sondern antippen: an `pointerdown` hängt die
        Maßseite mit ihrem eigenen Ziffernblock. Ein `click()` würde nur den Fokus in ein
-       Feld setzen, das man gar nicht sieht — die Spalte ist ja eingeklappt. */
-    if(ziel.tagName==='INPUT'){
-      ziel.dispatchEvent(new PointerEvent('pointerdown',
+       Feld setzen, das man gar nicht sieht — die Spalte ist ja eingeklappt.
+       Textfelder öffnen die Textseite direkt, wie im Aufklappmenü: ihr Fänger gilt nur
+       bis 640 px, das eingeklappte Feld ist aber auf jeder Breite unsichtbar. */
+    if(ziel.tagName==='INPUT' || ziel.tagName==='TEXTAREA'){
+      if(ziel.matches(MASSFELD)) ziel.dispatchEvent(new PointerEvent('pointerdown',
         {bubbles:true, cancelable:true, pointerId:1, pointerType:'touch', isPrimary:true}));
+      else feldOeffnen(ziel);
       return;
     }
     ziel.click();
