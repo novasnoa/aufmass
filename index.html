@@ -475,23 +475,21 @@
     #blatt.zu{height:auto;}
     #blattzu, #leiste{display:none !important;}
     #blatt.zu #sidebar{display:none;}
-    #blatt.zieht #sidebar{display:block;}
     /* Aufgefahren ist das Blatt VOLLBILD unter der Kopfleiste — dasselbe Panel wie auf
        dem Tablet, nur eben ganzseitig (Nutzerwunsch 9.8.2026). */
     #blatt.auf{height:calc(100vh - 44px); height:calc(100dvh - 44px);}
-    #blatt.zieht{transition:none;}
-    #blattgriff{display:block; padding:4px 0 6px; touch-action:none; user-select:none; flex:0 0 auto;}
+    /* `touch-action:manipulation` statt `none`: der Griff wird nur noch getippt, und
+       `none` unterdrückte auf dem iPhone die Berührungsauswertung mehr als nötig. */
+    #blattgriff{display:block; padding:4px 0 6px; touch-action:manipulation; user-select:none; flex:0 0 auto;}
     #blattgriff .zieh{display:flex; align-items:center; gap:8px; padding:2px 12px 4px; cursor:grab;}
     #blattgriff .strich{width:32px; height:4px; border-radius:2px; background:#c2c8d2; flex:none;}
     #blatttitel{font-size:12px; color:var(--muted); overflow:hidden; text-overflow:ellipsis;
       white-space:nowrap; flex:1;}
     #blattgriff .pfeil{color:var(--muted); font-size:14px; transition:transform .18s;}
-    /* Die Schließen-Leiste UNTEN — im Vollbild UND während des Ziehens; zugeklappt gibt
-       es nichts zu schließen. Ein breiter Knopf am unteren Rand, wo der Daumen ohnehin
-       ist (Nutzerwunsch 9.8.2026, statt ✕ oben rechts). Das `.zieht` ist die
-       Rettungsleine: schluckt WebKit das Loslassen des Zugs, bliebe das Blatt sonst
-       offen stehen, ohne dass die Leiste je erschiene. */
-    #blatt.auf #blattfuss, #blatt.zieht #blattfuss{display:block; flex:0 0 auto; padding:8px 10px;
+    /* Die Schließen-Leiste UNTEN — nur im Vollbild; zugeklappt gibt es nichts zu
+       schließen. Ein breiter Knopf am unteren Rand, wo der Daumen ohnehin ist
+       (Nutzerwunsch 9.8.2026, statt ✕ oben rechts). */
+    #blatt.auf #blattfuss{display:block; flex:0 0 auto; padding:8px 10px;
       padding-bottom:calc(8px + env(safe-area-inset-bottom, 0px));
       border-top:1px solid var(--line); background:var(--panel);}
     #blattfuss button{width:100%; height:44px; border:1px solid var(--line);
@@ -2891,7 +2889,7 @@ let messungLaeuft=false;
 /* Das „b": am 9.8. gingen mehrere Stände aufs iPad, und ohne Zusatz war auf dem Gerät
    nicht zu erkennen, ob der reparierte oder der erste lief. Bei Nachbesserungen am
    selben Tag den Buchstaben hochzählen. */
-const APP_STAND='2026-08-09b';
+const APP_STAND='2026-08-09d';
 const WAND_STD=0.24;
 // Spanne des Schiebereglers im Wand-Panel. Von Hand darf man auch daneben liegen —
 // der Regler wird dann rot, damit der Ausreißer nicht unbemerkt bleibt.
@@ -5216,12 +5214,35 @@ function fingerLoesen(e){
   drag=null;
   try{ if(svg.hasPointerCapture(e.pointerId)) svg.releasePointerCapture(e.pointerId); }catch(_){}
 }
+/* Dasselbe noch einmal am DOKUMENT. Das Loslassen erreicht das SVG nicht, wenn der
+   Finger über einem anderen Element endet, wenn ein Dialog dazwischenfährt oder wenn
+   WebKit das Ereignis nach einer Zwei-Finger-Geste schlicht fallen lässt. Ohne diesen
+   zweiten Weg bliebe der Zeiger in der Liste stehen — siehe die Selbstheilung oben.
+   Doppeltes Aufräumen ist unschädlich: `delete` auf einen fehlenden Schlüssel tut nichts. */
+document.addEventListener('pointerup', e=>{ if(zeiger.has(e.pointerId)) fingerLoesen(e); }, true);
+document.addEventListener('pointercancel', e=>{ if(zeiger.has(e.pointerId)) fingerLoesen(e); }, true);
 svg.addEventListener('pointerdown', e=>{
+  /* ---- Selbstheilung gegen hängengebliebene Finger (Tickets vom 9.8.2026 abends:
+     „eine Wand bleibt angewählt, ich kann nichts mehr machen … das Paneel geht weiter
+     auf und zu", zweimal nach dem Zoomen).
+     `e.isPrimary` heißt: das ist der ERSTE Finger einer neuen Geste. Dann MUSS die
+     Liste leer sein. Steht noch etwas drin, hat WebKit ein `pointerup` verschluckt —
+     und ohne dieses Aufräumen gölte der nächste Tipp als zweiter Finger, `startPinch`
+     liefe los und der Plan nähme keine Anwahl mehr an. Das Blatt hängt an eigenen
+     Ereignissen und reagierte deshalb weiter: genau das gemeldete Bild. */
+  if(e.isPrimary && zeiger.size){ zeiger.clear(); pinch=null; drag=null; }
   zeiger.set(e.pointerId, {x:e.clientX, y:e.clientY});
   if(zeiger.size===2){ startPinch(); return; }
   if(zeiger.size>2) return;
   const p=svgPoint(e);
-  svg.setPointerCapture(e.pointerId);
+  /* `setPointerCapture` wirft, sobald der Zeiger nicht mehr als aktiv gilt — auf dem
+     iPhone nach einer Zwei-Finger-Geste keine Seltenheit. Der Fehler flöge hier
+     ungefangen aus `pointerdown` heraus und würde ALLES darunter abschneiden: keine
+     Anwahl, kein Ziehen, nichts. Von außen sieht das aus wie eine eingefrorene App,
+     während Blatt und Leisten (eigene Ereignisse) weiterlaufen — das gemeldete Bild.
+     Das Fangen kostet nichts: ohne Capture arbeitet der Zug über die Dokument-Fänger
+     weiter. Dieselbe Vorsicht wie am Blattgriff. */
+  try{ svg.setPointerCapture(e.pointerId); }catch(_){}
   /* Zeichnen: der Punkt entsteht erst beim LOSLASSEN und nur, wenn der Finger
      stehen geblieben ist — Schieben und Zoomen dürfen keinen Punkt setzen.
      Gesetzte Punkte lassen sich anfassen und verschieben. */
@@ -11305,7 +11326,7 @@ dlgFotoEdit.querySelectorAll('[data-close]').forEach(b=>
         const g=feGriff(feObj[feSel]), r=Math.max(12, c.width/28);
         if((p.x-g.x)**2 + (p.y-g.y)**2 < r*r){
           const o=feObj[feSel], m=feMitte(o);
-          c.setPointerCapture(e.pointerId);
+          try{ c.setPointerCapture(e.pointerId); }catch(_){}
           feDrag={idx:feSel, dreh:{m, start:Math.atan2(p.y-m.y, p.x-m.x), rot0:o.rot||0}};
           e.preventDefault(); return;
         }
@@ -11313,11 +11334,11 @@ dlgFotoEdit.querySelectorAll('[data-close]').forEach(b=>
       const i=feTreffer(p);
       feSel=i;
       if(i<0){ feRender(); return; }
-      c.setPointerCapture(e.pointerId);
+      try{ c.setPointerCapture(e.pointerId); }catch(_){}
       feDrag={a:p, idx:i};                       // ab jetzt hängt das Objekt am Zeiger
       feRender(); e.preventDefault(); return;
     }
-    c.setPointerCapture(e.pointerId);
+    try{ c.setPointerCapture(e.pointerId); }catch(_){}
     // Der Stift sammelt seine Punkte von Anfang an — ein Tupfer ist auch ein Strich
     feDrag = feTool==='stift'
       ? {a:p, obj:{t:'stift', pts:[p], col:feFarbe, op, w:s}}
@@ -17541,10 +17562,8 @@ function renderCrumb(){
   };
 }
 /* ---------- Werkzeugblatt am Handy ----------
-   Drei Hoehen: nur der Griff, halb, ganz. Tippen schaltet weiter, Ziehen setzt die
-   Hoehe frei und rastet beim Loslassen auf die naechste Stufe ein. Halb ist die
-   Voreinstellung: Plan und Eingabefelder gleichzeitig zu sehen ist beim Aufmessen
-   der Normalfall — man tippt eine Wandlaenge ein und will sehen, welche Wand. */
+   Zwei Zustände: zugeklappt (nur Griff und Kurzzeile) oder Vollbild. Ein Tipp auf den
+   Griff öffnet, der Knopf unten schließt — mehr nicht (Nutzerentscheid 9.8.2026). */
 const BLATT=['zu','auf'];
 function blattStufe(n){
   const b=$('#blatt'); if(!b) return;
@@ -17552,50 +17571,32 @@ function blattStufe(n){
   b.classList.add(BLATT[Math.max(0, Math.min(BLATT.length-1, n))]);
   if(view==='plan') renderCanvas();
 }
-const blattJetzt = () => BLATT.findIndex(k=>$('#blatt').classList.contains(k));
 {
-  const gr=$('#blattgriff'), b=$('#blatt');
-  let zug=null, zugWeit=false;
-  gr.addEventListener('pointerdown', e=>{
-    if(e.target.closest('#blattkurz')) return;      // Kurzbefehl, kein Ziehen
-    zugWeit=false;
-    zug={y:e.clientY, h:b.getBoundingClientRect().height, weit:false};
-    b.classList.add('zieht'); try{ gr.setPointerCapture(e.pointerId); }catch(_){}
+  /* ---- Kein Ziehen mehr (Nutzerentscheid 9.8.2026, zweite Runde) ----
+     „Klicken und loslassen öffnet das Paneel, Schließen klicken schließt es, das Hoch-
+     und Runterziehen kann raus."  Das Ziehen kostete jede Menge Zeigerbuchhaltung, und
+     auf dem iPhone sprang das Blatt beim Aufsetzen des Fingers auf und beim Loslassen
+     zurück — der Zieh-Zwischenzustand blendete die Schließen-Leiste ein und machte das
+     Blatt damit höher. Jetzt gibt es nur noch: Tipp auf den Griff öffnet, der Knopf
+     unten schließt. `click` statt `pointerup`, weil WebKit Zeigerereignisse fallen
+     lässt — `click` bekommt man aus einer Berührung immer. */
+  /* Der Handler hängt an der ZIEH-ZEILE, nicht am ganzen Griff. Vorher lag er am Griff
+     und prüfte beim Blubbern `closest('#blattkurz')` — das ging schief, sobald eine
+     Kachel neu zeichnen ließ: ihr Knopf war dann längst aus dem Baum genommen, `closest`
+     fand nichts mehr, und der Kurzbefehl öffnete zusätzlich das Blatt (gemeldet
+     9.8.2026: „einige Kurzbefehle haben mich direkt ins Panel gebracht"). An der
+     Ziehzeile kann ein Kachel-Klick gar nicht erst ankommen. */
+  $('#blattgriff').querySelector('.zieh').addEventListener('click', ()=>blattStufe(1));
+  /* Auch der leere Platz ZWISCHEN den Kacheln öffnet — so war es gemeint („auf einen
+     leeren Teil der Leiste klicken geht sie hoch"), falsch war nur das Zurückspringen.
+     Geprüft wird auf `button`, NICHT auf den Kasten: ein Kachel-Klick, der neu zeichnen
+     lässt, hat seinen Knopf beim Blubbern schon aus dem Baum — `closest('button')`
+     findet ihn trotzdem, weil das Element selbst mitzählt, `closest('#blattkurz')`
+     fand ihn nicht mehr. Genau daran hing der gemeldete Fehler. */
+  $('#blattkurz').addEventListener('click', e=>{
+    if(e.target.closest('button')) return;
+    blattStufe(1);
   });
-  gr.addEventListener('pointermove', e=>{
-    if(!zug) return;
-    const d=zug.y-e.clientY;
-    if(Math.abs(d)>6) zug.weit=true;
-    if(zug.weit) b.style.height=Math.max($('#blattgriff').offsetHeight, Math.min(innerHeight-46, zug.h+d))+'px';
-  });
-  const los=e=>{
-    if(!zug) return;
-    const h=b.getBoundingClientRect().height;
-    b.classList.remove('zieht');
-    try{ gr.releasePointerCapture(e.pointerId); }catch(_){}
-    zugWeit=zug.weit; zug=null;
-    if(!zugWeit) return;   // Tipp — den erledigt `click`, siehe unten
-    // gezogen: alles ueber einem Viertel des Schirms gilt als „auf"
-    blattStufe(h > innerHeight*0.25 ? 1 : 0);
-  };
-  gr.addEventListener('pointerup', los); gr.addEventListener('pointercancel', los);
-  /* Der TIPP auf den Griff läuft über `click` — das zuverlässigste Ereignis, das der
-     Browser aus einer Berührung macht, auch dort, wo WebKit Zeigerereignisse fallen
-     lässt (auf dem iPhone öffnete und schloss der Griff sonst nicht). Nach einem
-     ECHTEN Zug feuert unter `touch-action:none` ebenfalls ein `click` — den fängt
-     `zugWeit` ab, sonst klappte das frisch aufgezogene Blatt sofort wieder um. */
-  gr.addEventListener('click', e=>{
-    if(e.target.closest('#blattkurz')) return;
-    if(zugWeit){ zugWeit=false; return; }
-    blattStufe((blattJetzt()+1)%BLATT.length);
-  });
-  /* Rettungsleine für WebKit: landet das Loslassen trotz Capture nicht am Griff,
-     beendet das Dokument den Zug — `los` prüft selbst, ob überhaupt einer läuft.
-     Ohne das blieb das Blatt auf dem iPhone im Ziehen hängen: halb offen, ohne
-     Schließen-Leiste, und der nächste Griff-Tipp kam nie als Tipp an. */
-  document.addEventListener('pointerup', los);
-  document.addEventListener('pointercancel', los);
-  // Die Schließen-Leiste unten macht das Vollbild wieder zu (Nutzervorgabe 9.8.2026)
   $('#blattzuknopf').onclick=()=>blattStufe(0);
 }
 /* ---------- Die Handy-Ansicht (komplett neu am 2026-08-09, Ticket „Handyversion") ----------
