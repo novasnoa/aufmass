@@ -1284,6 +1284,20 @@
         denselben Stand haben. Nach dem Druck eines Abschlags bietet die App an, ihn
         hochzusetzen. Einzelne Zuordnungen lassen sich im LV-Dialog umhängen.</p>
     </fieldset>
+    <fieldset><legend>Wandstärken</legend>
+      <div class="row"><label>Außenwände (m)</label>
+        <input id="setWandAussen" type="text" inputmode="decimal" placeholder="0,24" style="width:80px; flex:0 0 auto">
+        <label style="flex:0 0 auto; width:auto">Innenwände (m)</label>
+        <input id="setWandInnen" type="text" inputmode="decimal" placeholder="0,115" style="width:80px; flex:0 0 auto">
+        <button class="btn small" id="setWandOk">Übernehmen</button></div>
+      <p class="hint" id="setWandInfo"></p>
+      <p class="hint">Ein <b>neuer Raum</b> bekommt die Außenwandstärke — er steht zunächst
+        frei. Die <b>Trennwand beim Raumteilen</b> bekommt die Innenwandstärke. Wird eine Wand
+        an einen Nachbarn herangezogen, gilt weiterhin dessen <b>tatsächliche</b> Stärke: eine
+        gemessene Wand schlägt jede Vorgabe. <b>Bestehende Wände bleiben unberührt</b> — zum
+        Nachziehen eines fertigen Raums dient „Alle Wände" im Wand-Panel. Die Vorgabe gehört
+        zum <b>Aufmaß</b>, nicht zum Gerät, und wandert mit nach Airtable.</p>
+    </fieldset>
     <fieldset><legend>LV-Positionen ohne Airtable</legend>
       <p class="hint">Ein <b>GAEB-Leistungsverzeichnis</b> lässt sich direkt einlesen — ohne Netz, ohne
         Airtable, auch auf dem iPad. Gelesen wird GAEB DA XML, also die Endungen
@@ -2889,7 +2903,7 @@ let messungLaeuft=false;
 /* Das „b": am 9.8. gingen mehrere Stände aufs iPad, und ohne Zusatz war auf dem Gerät
    nicht zu erkennen, ob der reparierte oder der erste lief. Bei Nachbesserungen am
    selben Tag den Buchstaben hochzählen. */
-const APP_STAND='2026-08-09d';
+const APP_STAND='2026-08-10b';
 const WAND_STD=0.24;
 // Spanne des Schiebereglers im Wand-Panel. Von Hand darf man auch daneben liegen —
 // der Regler wird dann rot, damit der Ausreißer nicht unbemerkt bleibt.
@@ -2900,6 +2914,38 @@ const wandDicke = (r,i) => {
   if(Number.isFinite(v) && v>0) return v;
   return Number.isFinite(r.wandStd) && r.wandStd>0 ? r.wandStd : WAND_STD;
 };
+/* ---------- Vorgabe für neue Wände (Ticket vom 9.8.2026) ----------
+   „Wandstärke der Außenwände und der Innenwände können in den Einstellungen
+   voreingestellt werden. Neue Wände erhalten dann immer die entsprechende Einstellung."
+
+   Die Vorgabe gehört zum **Aufmaß**, nicht zum Gerät: 24/11,5 ist eine Eigenschaft des
+   Gebäudes, und beide Rechner sollen nach dem Abgleich denselben Stand haben. Gespeichert
+   wird wie überall sparsam — steht dort der Werkswert, fehlt der Schlüssel ganz.
+
+   Wo sie greift, steht im Einstellungen-Dialog; kurz: neuer Raum → außen, Trennwand beim
+   Raumteilen → innen. Eine Wand, die an einen Nachbarn herangezogen wird, bekommt
+   weiterhin dessen tatsächliche Stärke (`staerkeVomMagnet`) — eine gemessene Wand schlägt
+   jede Vorgabe, sonst überschriebe die Voreinstellung ein echtes Aufmaß. */
+const WAND_VORGABE={aussen:WAND_STD, innen:0.115};
+const vorgabeGueltig = v => Number.isFinite(v) && v>0.01 && v<=2;
+const wandVorgabe = art => {
+  const v=(proj().wandVorgabe||{})[art];
+  return vorgabeGueltig(v) ? v : WAND_VORGABE[art];
+};
+function wandVorgabeSetzen(art, v){
+  if(!vorgabeGueltig(v)) return false;
+  const p=proj();
+  if(Math.abs(v-WAND_VORGABE[art])<0.0005){ if(p.wandVorgabe) delete p.wandVorgabe[art]; }
+  else { p.wandVorgabe=p.wandVorgabe||{}; p.wandVorgabe[art]=mm(v); }
+  if(p.wandVorgabe && !Object.keys(p.wandVorgabe).length) delete p.wandVorgabe;
+  return true;
+}
+/* Ein frisch angelegter Raum steht frei — seine Wände sind die Hülle. `wandStd` wird nur
+   geschrieben, wenn die Vorgabe vom Werkswert abweicht; sonst greift ohnehin WAND_STD. */
+function raumVorgabeSetzen(r){
+  const v=wandVorgabe('aussen');
+  if(Math.abs(v-WAND_STD)>0.0005) r.wandStd=v; else delete r.wandStd;
+}
 // Nach außen zeigende Wandnormale — über die Umlaufrichtung des Polygons, damit
 // es auch bei einspringenden Ecken (L-Form, Erker) stimmt
 function aussenNormale(r,i){
@@ -3159,11 +3205,24 @@ function wandRingD(r){
    Linie mitten im Mauerwerk. Deshalb erst alle Konturen doppelt breit zeichnen und
    dann sämtliche Wandkörper als eine zusammenhängende Fläche darüberlegen: Linien
    im Inneren verschwinden, von jeder echten Kante bleibt die halbe Strichbreite. */
+/* ---------- Farbe der Wandkörper ----------
+   Ein gesperrtes Stockwerk soll man im Plan SEHEN und nicht erst am Schloss ablesen
+   (Ticket vom 9.8.2026: „Sollen die Wände in der Farbe das anzeigen?"). Die Wandkörper
+   bekommen dafür einen leichten Rotstich — kräftig genug, um beim Hinsehen aufzufallen,
+   blass genug, um nicht mit einer Farbzone verwechselt zu werden.
+
+   **Nur am Bildschirm.** Der Druck übergibt `fuell` und `linie` ohnehin selbst; eine
+   Sperre ist ein Zustand der Bearbeitung und hat im Aufmaß-PDF nichts zu suchen. */
+const WAND_FUELL='#d3d7de', WAND_LINIE='#2b3345';
+const WAND_FUELL_ZU='#e6d4d4', WAND_LINIE_ZU='#6d4747';
+const wandFarben = fid => etageOffen(fid)
+  ? {fuell:WAND_FUELL, linie:WAND_LINIE}
+  : {fuell:WAND_FUELL_ZU, linie:WAND_LINIE_ZU};
 function wandLage(rooms, opt){
   opt=opt||{};
   const alle=rooms.map(wandRingD).filter(Boolean).join(' ');
   if(!alle) return '';
-  const fuell=opt.fuell||'#d3d7de', linie=opt.linie||'#2b3345';
+  const fuell=opt.fuell||WAND_FUELL, linie=opt.linie||WAND_LINIE;
   const sw=opt.sw!=null ? opt.sw : Math.max(0.012, vb.w/900);
   return `<path d="${alle}" fill="none" stroke="${linie}" stroke-width="${sw*2}"`+
       ` stroke-linejoin="miter" pointer-events="none"/>`+
@@ -3174,7 +3233,7 @@ function wandKoerper(r, opt){
   opt=opt||{};
   const dRing=wandRingD(r);
   if(!dRing) return '';
-  const fuell=opt.fuell||'#d3d7de', linie=opt.linie||'#2b3345';
+  const fuell=opt.fuell||WAND_FUELL, linie=opt.linie||WAND_LINIE;
   const sw=opt.sw!=null ? opt.sw : Math.max(0.012, vb.w/900);
   // Der Strich liegt auf beiden Konturen — Außen- und Innenkante der Wand
   return `<path d="${dRing}" fill="${fuell}" fill-rule="evenodd" stroke="${linie}"`+
@@ -3276,10 +3335,21 @@ function openingMarks(r, lbl){
       if(tt.art==='offen') return;                             // Öffnung: nur der Wanddurchbruch
       const s=o.swing||1;
       const perp={x:-uy*s, y:ux*s};                            // Aufschlag-/Blattseite
+      /* ---- Wo das Türblatt ansetzt (Ticket vom 9.8.2026) ----
+         „Das Türblatt beginnt immer auf der Innenkante des Raumes, in den sie sich
+         öffnet." Bisher saß es immer auf der Innenkante des ZEICHNENDEN Raums — bei
+         einer nach außen aufschlagenden Tür also auf der falschen Wandseite, das Blatt
+         schwenkte quer durch das Mauerwerk. Jetzt wandert die Grundlinie um die volle
+         Wandstärke, sobald die Aufschlagseite nach außen zeigt. Diese Fläche IST die
+         Innenkante des Nachbarraums: zwischen zwei Räumen steht genau ein Wandkörper.
+         Schlägt die Tür in diesen Raum auf, bleibt alles wie bisher (`vs` = 0). */
+      const nachAussen=(perp.x*nn.x+perp.y*nn.y)>0.001;
+      const vs=nachAussen?dck:0;
+      const b0={x:p0.x+nn.x*vs, y:p0.y+nn.y*vs}, b1={x:p1.x+nn.x*vs, y:p1.y+nn.y*vs};
       // Glas hebt sich in derselben Farbe ab wie die Fenster
       const blatt = tt.glas ? '#4d90d6' : '#5a6475';
       const bogen = tt.glas ? '#9cc6ea' : '#8a93a5';
-      out+=`<line x1="${p0.x}" y1="${p0.y}" x2="${p1.x}" y2="${p1.y}" stroke="#8a93a5" stroke-width="0.02"/>`;
+      out+=`<line x1="${b0.x}" y1="${b0.y}" x2="${b1.x}" y2="${b1.y}" stroke="#8a93a5" stroke-width="0.02"/>`;
       /* Verknüpfte Tür (geteilte Wand): Symbol nur in dem Raum zeichnen, in den sie
          aufschlägt bzw. auf dessen Seite das Blatt liegt — sonst erschienen zwei
          Symbole für dieselbe physische Tür. */
@@ -3287,17 +3357,17 @@ function openingMarks(r, lbl){
       if(o.link && !pointInPoly(probe, r.points)) return;
       if(tt.art==='doppel'){
         const halb=o.width/2;
-        const M={x:(p0.x+p1.x)/2, y:(p0.y+p1.y)/2};
-        out+=tuerBlatt(p0, M, halb, perp, blatt, bogen);
-        out+=tuerBlatt(p1, M, halb, perp, blatt, bogen);
+        const M={x:(b0.x+b1.x)/2, y:(b0.y+b1.y)/2};
+        out+=tuerBlatt(b0, M, halb, perp, blatt, bogen);
+        out+=tuerBlatt(b1, M, halb, perp, blatt, bogen);
       } else if(tt.art==='schiebe'){
         // Blatt liegt parallel VOR der Wand, darunter der Laufweg-Pfeil
         const off=Math.max(0.06, dck*0.45);
-        const A={x:p0.x+perp.x*off, y:p0.y+perp.y*off}, B={x:p1.x+perp.x*off, y:p1.y+perp.y*off};
+        const A={x:b0.x+perp.x*off, y:b0.y+perp.y*off}, B={x:b1.x+perp.x*off, y:b1.y+perp.y*off};
         out+=`<line x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}" stroke="${blatt}" stroke-width="0.055"/>`;
         const pf=off+0.09, ax=o.width*0.30;                    // Pfeil in Laufrichtung (zum Anschlag hin)
         const ri=o.hinge?-1:1;                                 // Anschlag = Seite, in die es schiebt
-        const M={x:(p0.x+p1.x)/2+perp.x*pf, y:(p0.y+p1.y)/2+perp.y*pf};
+        const M={x:(b0.x+b1.x)/2+perp.x*pf, y:(b0.y+b1.y)/2+perp.y*pf};
         const E={x:M.x+ux*ri*ax, y:M.y+uy*ri*ax};
         out+=`<line x1="${M.x-ux*ri*ax}" y1="${M.y-uy*ri*ax}" x2="${E.x}" y2="${E.y}" stroke="${bogen}" stroke-width="0.02"/>`;
         const sp=0.05;
@@ -3305,8 +3375,8 @@ function openingMarks(r, lbl){
           ` M ${E.x} ${E.y} L ${E.x-ux*ri*sp-perp.x*sp} ${E.y-uy*ri*sp-perp.y*sp}" fill="none"`+
           ` stroke="${bogen}" stroke-width="0.02"/>`;
       } else {
-        const H=o.hinge?p1:p0;                                 // Angelpunkt (Anschlag)
-        const T=o.hinge?p0:p1;                                 // Schließkante
+        const H=o.hinge?b1:b0;                                 // Angelpunkt (Anschlag)
+        const T=o.hinge?b0:b1;                                 // Schließkante
         out+=tuerBlatt(H, T, o.width, perp, blatt, bogen);
       }
     } else {
@@ -4097,7 +4167,7 @@ function renderCanvas(){
       out+=`<path d="${d}" fill="${r.id===sel.roomId?'#e8f0fe':'#fdfcf8'}" data-roomid="${r.id}"/>`;
       out+=raumFarbeSvg(r);                    // Sanierungsbereiche auch in der Übersicht
     });
-    out+=wandLage(rooms);
+    out+=wandLage(rooms, wandFarben(activeFloorId));
     // Angewählter Raum im Anwahlmodus: kräftiger Rahmen, damit die Wahl eindeutig ist
     rooms.filter(r=>wahlHat(r.id)).forEach(wr=>{
       out+=`<path d="${polyD(wr.points)}" fill="none" stroke="#2f6fed"`+
@@ -4118,7 +4188,7 @@ function renderCanvas(){
     if(fr){
       out+=`<path d="${d}" fill="${selR?'#e8f0fe':'#fdfcf8'}" data-roomid="${r.id}"${dim?' style="cursor:pointer"':''}/>`;
       out+=raumFarbeSvg(r);
-      out+=wandKoerper(r);
+      out+=wandKoerper(r, wandFarben(r.floorId));
     }
     out+=openingMarks(r, lbl);
     out+=wallMarks(r, lbl);
@@ -4628,6 +4698,57 @@ function doorAbsSeg(r,o){
   const t0=Math.max(0, Math.min(o.offset, L-o.width));
   return {p0:{x:a.x+u.x*t0, y:a.y+u.y*t0}, p1:{x:a.x+u.x*(t0+o.width), y:a.y+u.y*(t0+o.width)}};
 }
+/* Liegt die Tür (Segment `seg`) in Wand j von Raum S? Liefert ihre Lage längs dieser
+   Wand zurück. **Dieselbe Prüfung dient dem Suchen des Partners UND dem Aufräumen** —
+   zwei getrennte Fassungen liefen mit der Zeit auseinander, und dann löscht die eine,
+   was die andere gerade angelegt hat. */
+function tuerInWand(S, j, seg, eps){
+  const n=S.points.length;
+  if(!(j>=0 && j<n)) return null;
+  const a2=S.points[j], b2=S.points[(j+1)%n];
+  const L2=dist(a2,b2); if(L2<0.05) return null;
+  const u2={x:(b2.x-a2.x)/L2, y:(b2.y-a2.y)/L2};
+  const dl=pt=>Math.abs((pt.x-a2.x)*(-u2.y)+(pt.y-a2.y)*u2.x);
+  if(dl(seg.p0)>eps || dl(seg.p1)>eps) return null;          // Tür liegt nicht in dieser Wand
+  const t0=(seg.p0.x-a2.x)*u2.x+(seg.p0.y-a2.y)*u2.y;
+  const t1=(seg.p1.x-a2.x)*u2.x+(seg.p1.y-a2.y)*u2.y;
+  const lo=Math.min(t0,t1), hi=Math.max(t0,t1);
+  if(lo<-0.02 || hi>L2+0.02) return null;                    // außerhalb des Wandsegments
+  return {a2, u2, lo, hi};
+}
+/* ---------- Verlassene Partnertüren einsammeln (Ticket vom 9.8.2026) ----------
+   „Beim Schieben einer Tür auf eine andere Wand muss sich die Tür in dem
+   gegenüberliegenden Raum löschen, wenn die entsprechende Wand verlassen wird, und im
+   neuen Raum erstellen."
+
+   Angelegt wurde die neue Partnertür schon immer — stehengeblieben ist die alte. Und
+   das war nicht nur eine Leiche: `syncSharedDoors` ruft `pushDoorToPartner` für JEDE
+   Tür auf, also auch für die liegengebliebene. Die fand ihre alte gemeinsame Wand
+   weiterhin, griff über `link` die verschobene Tür — und zog sie auf die alte Wand
+   ZURÜCK. Das Verschieben hielt also bis zur nächsten Wandänderung.
+
+   Geprüft wird mit der größeren der beiden Toleranzen (eigener Raum, Partnerraum):
+   eine Tür soll nicht samt ihrer LV-Zuordnungen verschwinden, bloß weil auf einer
+   Seite die Wandstärke nicht stimmt. Andere Etagen bleiben unangetastet — Türpaare
+   gibt es nur innerhalb einer Etage (`etageDuplizieren` vergibt neue `link`s). */
+function partnerAufraeumen(R, D, seg, epsR, behalten){
+  if(!D.link) return;
+  const weg=[];
+  proj().rooms.forEach(S=>{
+    if(S.floorId!==R.floorId || !(S.openings||[]).length) return;
+    const raus=[];
+    S.openings.forEach(x=>{
+      if(x.link!==D.link || x.id===D.id || (behalten && x.id===behalten.id)) return;
+      const eps=Math.max(epsR, wandDicke(S, x.wall)+0.06);
+      if(tuerInWand(S, x.wall, seg, eps)) return;              // liegt noch unter der Tür
+      raus.push(x.id);
+    });
+    if(!raus.length) return;
+    S.openings=S.openings.filter(x=>!raus.includes(x.id));
+    weg.push(...raus);
+  });
+  if(weg.length) dropLvFor(weg);                               // Zuordnungen der gelöschten Tür
+}
 // Spiegelt Tür D aus Raum R in den Raum, dessen Wand deckungsgleich unter der Tür liegt.
 function pushDoorToPartner(R,D){
   if(D.type!=='door') return;
@@ -4643,15 +4764,8 @@ function pushDoorToPartner(R,D){
   for(const S of rooms){
     const n=S.points.length;
     for(let j=0;j<n;j++){
-      const a2=S.points[j], b2=S.points[(j+1)%n];
-      const L2=dist(a2,b2); if(L2<0.05) continue;
-      const u2={x:(b2.x-a2.x)/L2, y:(b2.y-a2.y)/L2};
-      const dl=pt=>Math.abs((pt.x-a2.x)*(-u2.y)+(pt.y-a2.y)*u2.x);
-      if(dl(seg.p0)>eps || dl(seg.p1)>eps) continue;          // Tür liegt nicht in dieser Wand
-      const t0=(seg.p0.x-a2.x)*u2.x+(seg.p0.y-a2.y)*u2.y;
-      const t1=(seg.p1.x-a2.x)*u2.x+(seg.p1.y-a2.y)*u2.y;
-      const lo=Math.min(t0,t1), hi=Math.max(t0,t1);
-      if(lo<-0.02 || hi>L2+0.02) continue;                     // außerhalb des Wandsegments
+      const lage=tuerInWand(S, j, seg, eps); if(!lage) continue;
+      const {a2, u2, lo, hi}=lage;
       if(!D.link) D.link=uid();
       let P=(S.openings||[]).find(x=>x.link===D.link && x.id!==D.id);
       if(!P){
@@ -4671,9 +4785,15 @@ function pushDoorToPartner(R,D){
         P.hinge=pHinge; P.swing=pSwing;
       }
       if(D.tuerTyp) P.tuerTyp=D.tuerTyp; else delete P.tuerTyp;   // gleiche Tür = gleicher Typ
+      partnerAufraeumen(R, D, seg, eps, P);     // die Tür in der VERLASSENEN Wand fällt weg
       return;
     }
   }
+  /* Keine gemeinsame Wand mehr: die Tür sitzt jetzt in einer Außenwand. Der Verbund
+     wird ganz aufgelöst — erst aufräumen, dann `link` löschen, sonst fehlt dem
+     Aufräumen die Kennung, an der es die Partner erkennt. */
+  partnerAufraeumen(R, D, seg, eps, null);
+  delete D.link;
 }
 function syncSharedDoors(){
   proj().rooms.forEach(R=>(R.openings||[]).forEach(D=>pushDoorToPartner(R,D)));
@@ -5218,9 +5338,25 @@ function fingerLoesen(e){
    Finger über einem anderen Element endet, wenn ein Dialog dazwischenfährt oder wenn
    WebKit das Ereignis nach einer Zwei-Finger-Geste schlicht fallen lässt. Ohne diesen
    zweiten Weg bliebe der Zeiger in der Liste stehen — siehe die Selbstheilung oben.
-   Doppeltes Aufräumen ist unschädlich: `delete` auf einen fehlenden Schlüssel tut nichts. */
-document.addEventListener('pointerup', e=>{ if(zeiger.has(e.pointerId)) fingerLoesen(e); }, true);
-document.addEventListener('pointercancel', e=>{ if(zeiger.has(e.pointerId)) fingerLoesen(e); }, true);
+   Doppeltes Aufräumen ist unschädlich: `delete` auf einen fehlenden Schlüssel tut nichts.
+
+   ---------- BLASENPHASE, NICHT CAPTURE (berichtigt 10.8.2026) ----------
+   Zuerst hingen die beiden am `document` in der **Capture-Phase** (`true`). Damit liefen
+   sie VOR dem `pointerup` des SVG — und `fingerLoesen` setzt `drag=null`. Am ganzen
+   `drag` hängt aber die Auswertung des Tipps: Wand, Ecke, Öffnung, Objekt, Raum, jeder
+   Klick im Plan. Das Netz fing also nicht nur die verlorenen Ereignisse ab, sondern
+   räumte dem SVG jedes normale Loslassen weg. Gemeldet als: **„einfacher Klick im Plan
+   reagiert nicht, ich kann nur durch 0,5 Sekunden Halten anwählen"** — und genau das
+   Halten ist der Beweis, denn die Anwahl über den langen Druck läuft auf einem Zeitgeber
+   aus `pointerdown` und braucht das Loslassen gar nicht.
+
+   In der Blasenphase kommt zuerst das SVG dran; das nimmt den Zeiger in seiner ersten
+   Zeile selbst aus der Liste, und `zeiger.has(...)` ist hier dann schon falsch. Das Netz
+   greift nur noch, wenn das Ereignis am SVG WIRKLICH vorbeiging — so war es gemeint.
+   Verschluckt jemand das Ereignis ganz (`stopPropagation`), bleibt die Selbstheilung im
+   nächsten `pointerdown` als zweite Sicherung. */
+document.addEventListener('pointerup', e=>{ if(zeiger.has(e.pointerId)) fingerLoesen(e); });
+document.addEventListener('pointercancel', e=>{ if(zeiger.has(e.pointerId)) fingerLoesen(e); });
 svg.addEventListener('pointerdown', e=>{
   /* ---- Selbstheilung gegen hängengebliebene Finger (Tickets vom 9.8.2026 abends:
      „eine Wand bleibt angewählt, ich kann nichts mehr machen … das Paneel geht weiter
@@ -6090,6 +6226,7 @@ function closeDraft(){
   if(draft.points.length<3){ cancelModes(); return; }
   const r={id:uid(), floorId:activeFloorId, name:'Raum '+(proj().rooms.length+1),
     height:neueRaumHoehe(activeFloorId), points:draft.points, openings:[]};
+  raumVorgabeSetzen(r);                          // Wandstärke aus den Einstellungen
   proj().rooms.push(r); save();
   /* Neu gezeichnete Räume beginnen in der Anwahl statt in der Raumansicht: direkt
      danach setzt man Höhe, Farbe und LV-Position — und kann gleich weitere Räume
@@ -6195,6 +6332,7 @@ function commitPlace(p){
      einen Raum — dann gilt er als von Hand gesetzt und folgt der Etage nicht mehr. */
   const eh=etagenHoehe(activeFloorId);
   if(eh && r.height!==eh) r.hEigen=true;
+  raumVorgabeSetzen(r);                          // Wandstärke aus den Einstellungen
   proj().rooms.push(r); save();
   lastHeight=r.height;
   // Aus der Vorlage genau wie beim Freihandzeichnen: der Raum steht da und ist
@@ -6535,29 +6673,74 @@ function oeffnungSetzen(r, o, feld, v){
   return true;
 }
 const wandLaengeVon = (pts,i) => dist(pts[i], pts[(i+1)%pts.length]);
+/* Welche Wände dieses Raums liegen an einem Nachbarraum? `anliegendeWaende(...).par`
+   heißt: dort steht Wand gegen Wand, genau eine Wandstärke Abstand — also die geteilte
+   Wand zweier Räume. Die Flucht-Treffer zählen hier NICHT: eine Wand, die eine fremde
+   fortsetzt, ist nicht an sie angeschlossen. */
+function angeschlosseneWaende(r, nachbarn){
+  const s=new Set();
+  if(!nachbarn.length) return s;
+  r.points.forEach((_,k)=>{ if(anliegendeWaende(r,k,nachbarn).par.length) s.add(k); });
+  return s;
+}
 /* Setzt die Wandlänge. Die Änderung fängt bevorzugt eine PARALLELE Wand ab: sie
    wächst oder schrumpft nur, alles dazwischen wird starr mitgeschoben. Gewählt wird
    die entfernteste parallele Wand ("die gegenüberliegende wächst mit") — gesperrte
    nie, und keine, die dabei umklappen würde (dann ist die nächstnähere dran).
    Gibt es keine passende parallele Wand, gilt das alte Verhalten (alle
    nachfolgenden Ecken wandern, die Schlusswand verzieht sich) — aber nur, wenn
-   dabei keine gesperrte Wand ihre Länge verlöre. Rendert nicht selbst. */
+   dabei keine gesperrte Wand ihre Länge verlöre. Rendert nicht selbst.
+
+   ---------- WELCHE SEITE GIBT NACH (Ticket vom 9.8.2026) ----------
+   „Sollten sie das immer weg von ihren verbundenen Wänden tun? Räume sollten sich dabei
+   erst in letzter Konsequenz in andere Räume hinein bewegen."
+
+   Zu jeder Abfangwand gibt es ZWEI Fassungen: die vordere Eckenkette gibt nach oder die
+   hintere. **Beide haben dieselbe Form** — sie unterscheiden sich nur um eine
+   Verschiebung um d, also allein darin, welche Seite des Raums stehen bleibt. Bisher
+   wurde immer die vordere genommen; damit wanderte die Änderung blind in eine Richtung,
+   auch wenn dort der Nachbar stand.
+
+   Gewählt wird jetzt nach drei Merkmalen, in dieser Reihenfolge:
+     1. **nicht in einen anderen Raum hinein** (`polyUeberlappt` gegen die Nachbarn),
+     2. **anliegende Wände bleiben stehen** — es wandert die Seite, an der kein Nachbar
+        hängt, denn eine geteilte Wand zu verschieben reißt den Anschluss auf,
+     3. bei Gleichstand die bisherige Reihenfolge (entfernteste Abfangwand zuerst).
+   Gezählt werden nur Wände, die GANZ mitwandern (beide Ecken in der Kette). Die Wand,
+   deren Länge gesetzt wird, und die Abfangwand bleiben in ihrer Linie — sie werden
+   länger oder kürzer, verlassen ihren Platz aber nicht. */
 function setWallLength(r, i, L){
   const p=r.points, n=p.length, a=p[i], b=p[(i+1)%n];
   const cur=dist(a,b);
   if(cur<1e-6||!isFinite(L)||L<=0) return false;
   const ux=(b.x-a.x)/cur, uy=(b.y-a.y)/cur;
   const dx=(L-cur)*ux, dy=(L-cur)*uy;
-  // Ecken i+1..j (zyklisch) verschieben — Wand j fängt die Änderung ab
-  const versuch=(j)=>{
+  const nachbarn=proj().rooms.filter(o=>o.floorId===r.floorId && o.id!==r.id && (o.points||[]).length>2);
+  const anliegend=angeschlosseneWaende(r, nachbarn);
+  // Eckenkette von `von` bis `bis` (zyklisch, beide einschließlich)
+  const kette=(von,bis)=>{ const e=[]; let k=von; while(true){ e.push(k); if(k===bis) break; k=(k+1)%n; } return e; };
+  const bauen=(ecken,vz)=>{
     const neu=p.map(q=>({...q}));
-    let k=(i+1)%n;
-    while(true){ neu[k]={x:neu[k].x+dx, y:neu[k].y+dy}; if(k===j) break; k=(k+1)%n; }
+    ecken.forEach(e=>{ neu[e]={x:neu[e].x+dx*vz, y:neu[e].y+dy*vz}; });
     return neu;
+  };
+  // Wände, die ihren Platz VERLASSEN — beide Ecken wandern mit
+  const bewegteWaende=ecken=>{
+    const s=new Set(ecken);
+    return p.map((_,k)=>k).filter(k=>s.has(k) && s.has((k+1)%n));
   };
   const gesperrtVerletzt=(neu)=>p.map((_,k)=>k)
     .filter(k=>k!==i && wandGesperrt(r,k)
       && Math.abs(wandLaengeVon(neu,k)-wandLaengeVon(p,k))>0.0005);
+  const faehrtHinein=neu=>nachbarn.some(o=>polyUeberlappt(neu, o.points));
+  // Eine Fassung bewerten; null heißt „geht nicht"
+  const pruefen=(ecken, vz, rang)=>{
+    const neu=bauen(ecken, vz);
+    if(gesperrtVerletzt(neu).length) return null;
+    return {neu, rang, rein:faehrtHinein(neu)?1:0,
+      loest:bewegteWaende(ecken).filter(k=>anliegend.has(k)).length};
+  };
+  const beste=w=>w.sort((A,B)=>A.rein-B.rein || A.loest-B.loest || A.rang-B.rang)[0];
   // Parallele, nicht gesperrte Wände als Abfang-Kandidaten, entfernteste zuerst
   const kandidaten=[];
   let parallelGesperrt=false;        // gegenüber liegt ein Schloss — dann geben die Winkel nach
@@ -6570,14 +6753,19 @@ function setWallLength(r, i, L){
     kandidaten.push({j, abst});
   }
   kandidaten.sort((x,y)=>y.abst-x.abst);
-  for(const {j} of kandidaten){
-    const neu=versuch(j);
+  const wahlen=[];
+  kandidaten.forEach(({j}, rang)=>{
+    /* Die Abfangwand darf dabei nicht verschwinden oder umklappen. Das hängt allein an
+       der Form, nicht an der Seite — beide Fassungen bestehen oder scheitern gemeinsam. */
     const alt={x:p[(j+1)%n].x-p[j].x, y:p[(j+1)%n].y-p[j].y};
-    const nv ={x:neu[(j+1)%n].x-neu[j].x, y:neu[(j+1)%n].y-neu[j].y};
-    // Abfangwand würde (fast) verschwinden oder die Richtung umkehren → nächste
-    if(Math.hypot(nv.x,nv.y)<0.002 || alt.x*nv.x+alt.y*nv.y<=0) continue;
-    if(gesperrtVerletzt(neu).length) continue;
-    r.points=neu;
+    const probe=bauen(kette((i+1)%n, j), 1);
+    const nv={x:probe[(j+1)%n].x-probe[j].x, y:probe[(j+1)%n].y-probe[j].y};
+    if(Math.hypot(nv.x,nv.y)<0.002 || alt.x*nv.x+alt.y*nv.y<=0) return;
+    [pruefen(kette((i+1)%n, j), 1, rang), pruefen(kette((j+1)%n, i), -1, rang)]
+      .forEach(w=>{ if(w) wahlen.push(w); });
+  });
+  if(wahlen.length){
+    r.points=beste(wahlen).neu;
     syncSharedDoors(); save();
     return true;
   }
@@ -6585,13 +6773,20 @@ function setWallLength(r, i, L){
      wie sie ist, also geben die Winkel nach. Der alte Rückfall würde stattdessen die
      Schlusswand verziehen — an einem Trapez mit gemessener Grundlinie das Falsche. */
   if(parallelGesperrt) return winkelWeg(r, i, L, ux, uy, L-cur);
-  // Rückfall: altes Verhalten — die Schlusswand verzieht sich
-  const neu=p.map(q=>({...q}));
-  for(let k=i+1;k<n;k++){ neu[k].x+=dx; neu[k].y+=dy; }
-  if(!gesperrtVerletzt(neu).length){
-    r.points=neu;
-    syncSharedDoors(); save();
-    return true;
+  /* Rückfall: altes Verhalten — die Schlusswand verzieht sich. Auch hier gibt es die
+     zwei Seiten, und auch hier wird nach denselben Merkmalen gewählt. Bei i = n-1 wäre
+     die vordere Kette leer und die hintere der ganze Raum (eine reine Verschiebung, die
+     nichts misst) — dann bleibt nur der Winkelweg. */
+  if(i<n-1){
+    const vorne=[], hinten=[];
+    for(let k=i+1;k<n;k++) vorne.push(k);
+    for(let k=0;k<=i;k++) hinten.push(k);
+    const rw=[pruefen(vorne, 1, 0), pruefen(hinten, -1, 0)].filter(Boolean);
+    if(rw.length){
+      r.points=beste(rw).neu;
+      syncSharedDoors(); save();
+      return true;
+    }
   }
   // Letzter Weg: nur die eigenen Endpunkte bewegen — die Nachbarwände kippen mit
   return winkelWeg(r, i, L, ux, uy, L-cur);
@@ -7282,7 +7477,9 @@ function kopiePlatz(r){
    bis zur gegenüberliegenden Wand. Es entstehen ZWEI Räume mit einer neuen Trennwand
    dazwischen — die Umkehrung von „Räume verbinden": das Polygon ist die Innenkante, die
    neue Wand braucht ihren Streifen, die Gesamtfläche SCHRUMPFT um ihn. Stärke ist die
-   Vorgabe des Raums (`wandDicke(r,-1)` = `wandStd` bzw. 0,24), mittig auf den Schnitt.
+   **Innenwand-Vorgabe aus den Einstellungen** (seit 10.8.2026; vorher die Raumvorgabe
+   `wandDicke(r,-1)`) — eine Trennwand ist die eine Wand, von der sicher ist, dass sie
+   innen liegt. Sie sitzt mittig auf dem Schnitt.
 
    Der linke bzw. obere Teil behält Raum, Name, Fotos und Anmerkung; der andere wird
    „Raum N". Objekte gehen in den Teil, in dem mehr von ihnen liegt (Nutzerentscheid).
@@ -7295,7 +7492,7 @@ function raumTeilen(r, i, tWunsch){
   if(!raumOffen(r)){ melde('Die Etage ist gesperrt — zum Teilen das Schloss öffnen.', true); return null; }
   const n=r.points.length;
   const [A,B]=wallPoints(r,i), L=dist(A,B);
-  const d=wandDicke(r,-1);                       // die Raum-Vorgabe, siehe oben
+  const d=wandVorgabe('innen');                  // Innenwand-Vorgabe, siehe oben
   const RAND=0.05;
   if(L<d+4*RAND){ melde('Diese Wand ist zu kurz zum Teilen.', true); return null; }
   const u={x:(B.x-A.x)/L, y:(B.y-A.y)/L};
@@ -14388,6 +14585,9 @@ $('#settingsbtn').onclick=()=>{
   $('#setDeckInfo').textContent=deckInfoText();
   $('#setAbschlag').value=p.abschlag;
   $('#setAbschlagInfo').textContent=abschlagInfo();
+  $('#setWandAussen').value=fmt(wandVorgabe('aussen'),3);
+  $('#setWandInnen').value=fmt(wandVorgabe('innen'),3);
+  wandVorgabeInfo();
   $('#setStand').textContent=APP_STAND;
   $('#setDatei').textContent=dateiStand();
   setStatus('');
@@ -14422,6 +14622,30 @@ $('#setAbschlagOk').onclick=()=>{
   $('#setAbschlag').value=n;
   $('#setAbschlagInfo').textContent=abschlagInfo();
   melde(`Laufender Abschlag: ${n}. Neue Zuordnungen bekommen diese Nummer.`);
+};
+/* Steht dort noch der Werkswert, sagt es das auch — sonst sieht man zwei Zahlen und
+   weiß nicht, ob sie eingestellt oder nur voreingestellt sind. */
+function wandVorgabeInfo(msg, err){
+  const el=$('#setWandInfo'); if(!el) return;
+  el.style.color=err?'var(--danger)':'var(--muted)';
+  if(msg){ el.textContent=msg; return; }
+  el.textContent=proj().wandVorgabe
+    ? `Für dieses Aufmaß eingestellt: außen ${fmt(wandVorgabe('aussen'),3)} m · innen ${fmt(wandVorgabe('innen'),3)} m.`
+    : `Werkseinstellung: außen ${fmt(WAND_VORGABE.aussen,3)} m · innen ${fmt(WAND_VORGABE.innen,3)} m.`;
+}
+$('#setWandOk').onclick=()=>{
+  const a=parseNum($('#setWandAussen').value), i=parseNum($('#setWandInnen').value);
+  if(!vorgabeGueltig(a) || !vorgabeGueltig(i)){
+    wandVorgabeInfo('Bitte zwei Stärken zwischen 0,01 m und 2,00 m eintragen.', true);
+    return;
+  }
+  wandVorgabeSetzen('aussen', a); wandVorgabeSetzen('innen', i);
+  save();
+  $('#setWandAussen').value=fmt(wandVorgabe('aussen'),3);
+  $('#setWandInnen').value=fmt(wandVorgabe('innen'),3);
+  wandVorgabeInfo();
+  melde(`Wandstärke-Vorgabe: außen ${fmt(wandVorgabe('aussen'),3)} m, innen ${fmt(wandVorgabe('innen'),3)} m — `+
+    'gilt für neue Räume und neue Trennwände. Bestehende Wände bleiben, wie sie sind.');
 };
 $('#setSave').onclick=()=>{
   const tok=settingsUebernehmen();
