@@ -34,10 +34,22 @@
   input,select,textarea{font:inherit;}
 
   #topbar{display:flex; align-items:center; gap:8px; padding:8px 12px; background:#1c2330; color:#fff; height:52px;}
-  #topbar .logo{font-weight:700; letter-spacing:.3px; margin-right:6px; white-space:nowrap;}
+  /* Das Zeichen bleibt, der Schriftzug geht als Erstes — er ist das Entbehrlichste in
+     der Kopfzeile (Nutzeransage 10.8.2026: „wenn der Platz oben zu eng wird, nimm
+     Grundriss & Aufmaß weg und lass da nur das Symbol stehen"). */
+  #topbar .logo{font-weight:700; letter-spacing:.3px; margin-right:6px; white-space:nowrap;
+    display:flex; align-items:center; gap:7px;}
+  /* Der Abschlags-Chip: links die Nummer, rechts der Betrag. Er steht direkt neben den
+     Reitern, weil er zu „LV-Positionen" gehört und nicht zu den Werkzeugen rechts. */
+  #abschlagchip{display:flex; align-items:center; gap:8px; font-size:12px;}
+  #abschlagchip b{font-weight:600;}
+  #abschlagnr .kurz{display:none;}         /* nur am Telefon, siehe unten */
+  #abschlagchip span{color:#aab4c8; font-variant-numeric:tabular-nums;}
+  #abschlagchip.leer span{opacity:.65;}
   #topbar select{background:#2a3345; color:#fff; border:1px solid #3a465e; border-radius:6px; padding:5px 8px; max-width:180px;}
   .tabs{display:flex; gap:4px; margin-left:8px;}
-  .tabs button{background:transparent; color:#aab4c8; border:none; padding:7px 12px; border-radius:6px;}
+  .tabs button{background:transparent; color:#aab4c8; border:none; padding:7px 12px; border-radius:6px;
+    white-space:nowrap;}
   .tabs button.active{background:#2f6fed; color:#fff;}
   #topbar .spacer{flex:1;}
   .tb{background:#2a3345; color:#fff; border:1px solid #3a465e; border-radius:6px; padding:6px 10px; white-space:nowrap;}
@@ -444,12 +456,38 @@
   #lvtip b{display:block; margin-bottom:4px; color:#8fe3bd; font-variant-numeric:tabular-nums;}
   #lvtip i{display:block; margin-top:6px; color:#9aa6bb; font-size:11px; font-style:normal;}
   /* Auf Touch-Geräten ist die Liste schmaler — dort darf der Kasten fast voll breit werden */
+  /* ---------- Wenn es oben eng wird, fällt zuerst der Schriftzug ----------
+     Seit der Abschlags-Chip neben den Reitern steht, wird die Kopfzeile deutlich früher
+     eng als bei 640 px — auf dem iPad im Hochformat (768) etwa. Der Schriftzug ist das
+     Entbehrlichste dort oben: das Zeichen sagt dasselbe, und wie die App heißt, weiß man
+     nach dem zweiten Öffnen. Beim Fahren über das Zeichen steht der Name als Hinweis. */
+  @media (max-width:1050px){
+    #topbar .logo b{display:none;}
+    #topbar .logo{margin-right:0;}
+    /* Das allein reicht nicht: bei 768 px (iPad hochkant) lief die Kopfzeile schon vor
+       dem Chip um gut hundert Pixel über, die Knöpfe rechts wurden abgeschnitten. Also
+       klappt „⋯" jetzt hier schon auf statt erst am Telefon — dafür ist es da. */
+    #tbmehrbtn{display:inline-block;}
+    #tbmehr{display:none; position:fixed; right:6px; top:54px; z-index:60;
+      flex-direction:column; align-items:stretch; gap:4px; padding:8px;
+      background:#1c2330; border-radius:10px; box-shadow:0 6px 22px rgba(0,0,0,.35);}
+    #tbmehr.auf{display:flex;}
+    #tbmehr .tb{text-align:left; font-size:13px;}
+  }
   /* ---------- Handy: der Plan bekommt den Bildschirm, die Werkzeuge fahren von unten
      hoch. Nebeneinander blieben von 375 px nur 67 px fuer den Plan uebrig. Quer
      (ab 641 px) bleibt es bei der Spalte — da ist genug Platz. ---------- */
   @media (max-width:640px){
     #topbar{height:44px; padding:6px 8px; gap:6px;}
-    #topbar .logo{display:none;}
+    /* Nur der Schriftzug fällt weg, das Zeichen bleibt stehen. */
+    #topbar .logo b{display:none;}
+    #topbar .logo{margin-right:0;}
+    /* Am Telefon schrumpfen die langen Wörter auf ihren Kern: aus „Abschlag 1" wird „1",
+       aus „LV-Positionen" wird „LV". Beides steht neben einem Reiter bzw. einer Zahl, die
+       den Rest schon sagen — und ohne das lief die Kopfzeile bei 375 px über. */
+    #abschlagnr .lang, #tablv .lang{display:none;}
+    #abschlagnr .kurz{display:inline;}
+    #topbar{gap:5px;}
     #topbar .tb{padding:6px 8px; font-size:12px;}
     #projname{max-width:34vw;}
     #btchiptext{display:none;}
@@ -978,14 +1016,17 @@
 <body>
 
 <div id="topbar">
-  <span class="logo">📐 Grundriss &amp; Aufmaß</span>
+  <span class="logo" title="Grundriss &amp; Aufmaß">📐<b>Grundriss &amp; Aufmaß</b></span>
   <button class="tb" id="projname" title="Aktuelles Aufmaß — anklicken für Sichern, Laden und Neu"></button>
   <button class="tb icon" id="undobtn" title="Rückgängig (Strg+Z)" disabled>↶</button>
   <button class="tb icon" id="redobtn" title="Wiederholen (Strg+Y)" disabled>↷</button>
   <div class="tabs">
     <button id="tabplan" class="active">Plan</button>
-    <button id="tablv">LV-Positionen</button>
+    <button id="tablv">LV<span class="lang">-Positionen</span></button>
   </div>
+  <!-- Der laufende Abschlag und was in ihm steht — steht IMMER da, in beiden Ansichten.
+       Anklicken öffnet die LV-Übersicht auf genau diesen Abschlag gefiltert. -->
+  <button class="tb" id="abschlagchip"><b id="abschlagnr"></b><span id="abschlagsum"></span></button>
   <div class="spacer"></div>
   <div id="btchip"><span class="dot"></span><span id="btchiptext">Laser: getrennt</span></div>
   <button class="tb icon" id="tbmehrbtn" title="Weitere Funktionen">⋯</button>
@@ -2909,7 +2950,7 @@ let messungLaeuft=false;
 /* Das „b": am 9.8. gingen mehrere Stände aufs iPad, und ohne Zusatz war auf dem Gerät
    nicht zu erkennen, ob der reparierte oder der erste lief. Bei Nachbesserungen am
    selben Tag den Buchstaben hochzählen. */
-const APP_STAND='2026-08-10d';
+const APP_STAND='2026-08-10h';
 const WAND_STD=0.24;
 // Spanne des Schiebereglers im Wand-Panel. Von Hand darf man auch daneben liegen —
 // der Regler wird dann rot, damit der Ausreißer nicht unbemerkt bleibt.
@@ -3840,6 +3881,47 @@ function zoneMarks(r, lbl){
    Im Abschlags-Druck verschwindet nichts — Objekte, die nicht zu diesem Abschlag
    gehören, werden nur blass gezeichnet (`ABS_BLASS`). So bleibt der Plan lesbar
    und man sieht trotzdem sofort, was abgerechnet wird. */
+/* ---------- Nummer, Eckgriffe und Drehgriff eines rechteckigen Objekts ----------
+   Frei drehbar seit 2026-08-07 — die Griffe müssen deshalb MITDREHEN. Bis dahin wurden
+   sie über `%180` an einer achsparallelen Hülle aufgehängt; das galt nur für 0/90/180/270
+   und griffe bei jedem anderen Winkel ins Leere.
+
+   Seit dem 10.8.2026 benutzen SYMBOLE und FLÄCHEN dieselbe Funktion (Nutzerwunsch: „bei
+   den Flächen führe die Drehung auf dem Plan ein, dort fehlt sie noch"). Vorher stand der
+   Block nur im Symbolzweig, und der Flächenzweig hatte eine eigene, ungedrehte Fassung —
+   zwei Stellen für dasselbe Bild, von denen eine die Drehung nicht kannte. */
+function rechteckGriffe(g, lbl, interactive, isSel){
+  const cx=g.x+g.w/2, cy=g.y+g.h/2;
+  const dreh=(px,py)=>{
+    const a=(g.rot||0)*Math.PI/180, dx=px-cx, dy=py-cy;
+    return {x:cx+dx*Math.cos(a)-dy*Math.sin(a), y:cy+dx*Math.sin(a)+dy*Math.cos(a)};
+  };
+  /* Der Umriss als Ausweichweg — MITGEDREHT. Damit sitzt die Nummer auch bei
+     schräggestellten Objekten an ihrer Ecke und nicht daneben. */
+  const d=lbl*0.45;
+  const eck=[[g.x+g.w+d, g.y-d],[g.x+g.w+d, g.y+g.h+d],
+             [g.x-d, g.y+g.h+d],[g.x-d, g.y-d]].map(([px,py])=>dreh(px,py));
+  let out=objBadge(g, eck[0].x, eck[0].y, lbl, interactive, badgeWeg(eck, true));
+  if(!isSel) return out;
+  [[g.x,g.y,0],[g.x+g.w,g.y,1],[g.x+g.w,g.y+g.h,2],[g.x,g.y+g.h,3]].forEach(([lx,ly,k])=>{
+    const q=dreh(lx,ly);
+    const an=sel.objH===k, hs=lbl*(an?0.45:0.35), tr=lbl*(an?2.6:1.2);
+    if(an) out+=`<circle cx="${q.x}" cy="${q.y}" r="${tr}" fill="url(#ziehzone)" style="pointer-events:none"/>`;
+    out+=`<rect x="${q.x-hs}" y="${q.y-hs}" width="${2*hs}" height="${2*hs}" fill="${an?'#2f6fed':'#fff'}" stroke="#2f6fed" stroke-width="${lbl*0.08}" data-obj="${g.id}" data-objh="${k}" style="cursor:nwse-resize"/>`;
+    out+=`<circle cx="${q.x}" cy="${q.y}" r="${tr}" fill="transparent" data-obj="${g.id}" data-objh="${k}" style="cursor:nwse-resize"/>`;
+  });
+  /* Drehgriff über der Oberkante, an einem Stiel — so wie man es aus der Bildbearbeitung
+     kennt. Anfassen und im Kreis führen; `objdreh` rastet auf 5° und zieht rechte Winkel an. */
+  const oben=dreh(cx, g.y), stiel=dreh(cx, g.y-lbl*1.9);
+  out+=`<line x1="${oben.x}" y1="${oben.y}" x2="${stiel.x}" y2="${stiel.y}"
+    stroke="#2f6fed" stroke-width="${lbl*0.08}" style="pointer-events:none"/>`;
+  out+=`<circle cx="${stiel.x}" cy="${stiel.y}" r="${lbl*0.42}" fill="#fff"
+    stroke="#2f6fed" stroke-width="${lbl*0.11}" data-obj="${g.id}" data-objdreh="1"
+    style="cursor:grab"/>`;
+  out+=`<circle cx="${stiel.x}" cy="${stiel.y}" r="${lbl*2.2}" fill="transparent"
+    data-obj="${g.id}" data-objdreh="1" style="cursor:grab"/>`;
+  return out;
+}
 function objMarks(r, lbl, interactive){
   let out='';
   (r.objects||[]).forEach(g=>{
@@ -3859,21 +3941,15 @@ function objMarks(r, lbl, interactive){
         out+=`<pattern id="strp${g.id}" patternUnits="userSpaceOnUse" width="${sw*cols.length}" height="1" patternTransform="rotate(45)">${cols.map((c,i)=>`<rect x="${i*sw}" y="0" width="${sw}" height="1" fill="${c}"/>`).join('')}</pattern>`;
         fill=`url(#strp${g.id})`; stroke=cols[0]; fillOp=isSel?0.55:0.4;
       }
+      /* Gedreht wie ein Symbol (seit 10.8.2026): die Fläche selbst steckt in einer
+         Dreh-Gruppe, Nummer und Griffe rechnen die Drehung nach (`rechteckGriffe`).
+         Die Maße ändern sich dabei nicht — eine gedrehte Fläche hat dieselbe Größe. */
+      out+=`<g transform="rotate(${g.rot||0} ${g.x+g.w/2} ${g.y+g.h/2})">`;
       out+=`<rect x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" fill="${fill}" fill-opacity="${fillOp}" stroke="${isSel?'#2f6fed':stroke}" stroke-width="${isSel?0.05:0.03}" stroke-dasharray="0.1 0.06"${interactive?` data-obj="${g.id}" style="cursor:move"`:''}/>`;
+      out+=`</g>`;
       /* Die Nummer sitzt an der oberen rechten Ecke, knapp außerhalb — und wandert bei
          Gedränge um genau diesen Umriss herum. So bleibt sie immer AM Kasten. */
-      const d=lbl*0.45;
-      out+=objBadge(g, g.x+g.w+d, g.y-d, lbl, interactive, badgeWeg([
-        {x:g.x+g.w+d, y:g.y-d}, {x:g.x+g.w+d, y:g.y+g.h+d},
-        {x:g.x-d, y:g.y+g.h+d}, {x:g.x-d, y:g.y-d}], true));
-      if(isSel){
-        [[g.x,g.y,0],[g.x+g.w,g.y,1],[g.x+g.w,g.y+g.h,2],[g.x,g.y+g.h,3]].forEach(([px,py,k])=>{
-          const an=sel.objH===k, hs=lbl*(an?0.45:0.35), tr=lbl*(an?2.6:1.2);
-          if(an) out+=`<circle cx="${px}" cy="${py}" r="${tr}" fill="url(#ziehzone)" style="pointer-events:none"/>`;
-          out+=`<rect x="${px-hs}" y="${py-hs}" width="${2*hs}" height="${2*hs}" fill="${an?'#2f6fed':'#fff'}" stroke="#2f6fed" stroke-width="${lbl*0.08}" data-obj="${g.id}" data-objh="${k}" style="cursor:nwse-resize"/>`;
-          out+=`<circle cx="${px}" cy="${py}" r="${tr}" fill="transparent" data-obj="${g.id}" data-objh="${k}" style="cursor:nwse-resize"/>`;
-        });
-      }
+      out+=rechteckGriffe(g, lbl, interactive, isSel);
     } else if(ist360(g)){
       /* Standort einer 360°-Aufnahme: Kreis mit Blickkegel. Der Pfeil zeigt, wohin
          die Kameravorderseite gerichtet war — daraus leitet sich ab, welche der vier
@@ -4038,38 +4114,7 @@ function objMarks(r, lbl, interactive){
         }
       }
       out+=`</g>`;
-      /* Frei drehbar seit 2026-08-07 — die Griffe muessen deshalb MITDREHEN. Bis dahin
-         wurden sie ueber `%180` an einer achsparallelen Huelle aufgehaengt; das galt nur
-         fuer 0/90/180/270 und griffe bei jedem anderen Winkel ins Leere. */
-      const dreh=(px,py)=>{
-        const a=(g.rot||0)*Math.PI/180, dx=px-cx, dy=py-cy;
-        return {x:cx+dx*Math.cos(a)-dy*Math.sin(a), y:cy+dx*Math.sin(a)+dy*Math.cos(a)};
-      };
-      /* Der Umriss als Ausweichweg — MITGEDREHT. Damit sitzt die Nummer auch bei
-         schräggestellten Bauteilen an der Ecke des Symbols und nicht daneben. */
-      const d=lbl*0.45;
-      const eck=[[g.x+g.w+d, g.y-d],[g.x+g.w+d, g.y+g.h+d],
-                 [g.x-d, g.y+g.h+d],[g.x-d, g.y-d]].map(([px,py])=>dreh(px,py));
-      out+=objBadge(g, eck[0].x, eck[0].y, lbl, interactive, badgeWeg(eck, true));
-      if(isSel){
-        [[g.x,g.y,0],[g.x+g.w,g.y,1],[g.x+g.w,g.y+g.h,2],[g.x,g.y+g.h,3]].forEach(([lx,ly,k])=>{
-          const q=dreh(lx,ly);
-          const an=sel.objH===k, hs=lbl*(an?0.45:0.35), tr=lbl*(an?2.6:1.2);
-          if(an) out+=`<circle cx="${q.x}" cy="${q.y}" r="${tr}" fill="url(#ziehzone)" style="pointer-events:none"/>`;
-          out+=`<rect x="${q.x-hs}" y="${q.y-hs}" width="${2*hs}" height="${2*hs}" fill="${an?'#2f6fed':'#fff'}" stroke="#2f6fed" stroke-width="${lbl*0.08}" data-obj="${g.id}" data-objh="${k}" style="cursor:nwse-resize"/>`;
-          out+=`<circle cx="${q.x}" cy="${q.y}" r="${tr}" fill="transparent" data-obj="${g.id}" data-objh="${k}" style="cursor:nwse-resize"/>`;
-        });
-        /* Drehgriff ueber der Oberkante, an einem Stiel — so wie man es von
-           Bildbearbeitung kennt. Anfassen und im Kreis fuehren. */
-        const oben=dreh(cx, g.y), stiel=dreh(cx, g.y-lbl*1.9);
-        out+=`<line x1="${oben.x}" y1="${oben.y}" x2="${stiel.x}" y2="${stiel.y}"
-          stroke="#2f6fed" stroke-width="${lbl*0.08}" style="pointer-events:none"/>`;
-        out+=`<circle cx="${stiel.x}" cy="${stiel.y}" r="${lbl*0.42}" fill="#fff"
-          stroke="#2f6fed" stroke-width="${lbl*0.11}" data-obj="${g.id}" data-objdreh="1"
-          style="cursor:grab"/>`;
-        out+=`<circle cx="${stiel.x}" cy="${stiel.y}" r="${lbl*2.2}" fill="transparent"
-          data-obj="${g.id}" data-objdreh="1" style="cursor:grab"/>`;
-      }
+      out+=rechteckGriffe(g, lbl, interactive, isSel);
     } else {
       // Linie in LV-Farbe; mehrere LV-Positionen → farblich abwechselnde Streifen entlang der Linie
       const cols=objLvColors(g);
@@ -6085,17 +6130,16 @@ svg.addEventListener('pointermove', e=>{
       }
       renderCanvas(); return;
     }
-    if(g.type==='rect'){
-      const corners=[[g.x,g.y],[g.x+g.w,g.y],[g.x+g.w,g.y+g.h],[g.x,g.y+g.h]];
-      const opp=corners[(drag.h+2)%4];
-      g.x=Math.min(q.x,opp[0]); g.y=Math.min(q.y,opp[1]);
-      g.w=Math.max(0.05,Math.abs(q.x-opp[0])); g.h=Math.max(0.05,Math.abs(q.y-opp[1]));
-    } else if(g.type==='sym'){
-      /* Bei freier Drehung wird im EIGENEN System des Symbols gerechnet: Zeigerstelle
+    if(g.type==='rect' || g.type==='sym'){
+      /* Bei freier Drehung wird im EIGENEN System des Objekts gerechnet: Zeigerstelle
          zurueckdrehen, dort ganz normal am Rechteck ziehen, danach die Mitte so
          nachschieben, dass die gegenueberliegende Ecke im Plan stehen bleibt. Ohne
-         diese Korrektur wandert das Symbol beim Ziehen davon, weil sich die Mitte
-         verschiebt und die Drehung um sie herum stattfindet. */
+         diese Korrektur wandert das Objekt beim Ziehen davon, weil sich die Mitte
+         verschiebt und die Drehung um sie herum stattfindet.
+         Seit 10.8.2026 gilt derselbe Weg für FLÄCHEN — die kannten vorher nur die
+         achsparallele Fassung und wären mit einer Drehung davongelaufen. Bei `rot`=0
+         fällt die Rechnung auf genau das zurück, was dort vorher stand. */
+      const klein = g.type==='rect' ? 0.05 : 0.2;      // kleinste Kante, wie gehabt je Art
       const a=(g.rot||0)*Math.PI/180, ca=Math.cos(a), sa=Math.sin(a);
       const c={x:g.x+g.w/2, y:g.y+g.h/2};
       const zurueck=(pt)=>{ const dx=pt.x-c.x, dy=pt.y-c.y;
@@ -6107,7 +6151,7 @@ svg.addEventListener('pointermove', e=>{
       const opp=ecken[(drag.h+2)%4];
       const oppWelt=vor({x:opp[0], y:opp[1]}, c);        // steht im Plan fest
       g.x=Math.min(ql.x,opp[0]); g.y=Math.min(ql.y,opp[1]);
-      g.w=Math.max(0.2,Math.abs(ql.x-opp[0])); g.h=Math.max(0.2,Math.abs(ql.y-opp[1]));
+      g.w=Math.max(klein,Math.abs(ql.x-opp[0])); g.h=Math.max(klein,Math.abs(ql.y-opp[1]));
       const c2={x:g.x+g.w/2, y:g.y+g.h/2};
       const oppNeu=vor({x:opp[0], y:opp[1]}, c2);
       g.x+=oppWelt.x-oppNeu.x; g.y+=oppWelt.y-oppNeu.y;
@@ -6596,6 +6640,36 @@ function openLimits(r, o){
     else if(s>=t1-0.0005) hi=Math.min(hi,s);
   });
   return {L, lo, hi};
+}
+/* ---------- Breite mittig ändern (Fader, 10.8.2026, Nutzerwunsch) ----------
+   „Ein Fader unter Anschlag/Aufschlag, der die Breite der beiden Objekte in beide
+   Richtungen gleichzeitig verändert, zwischen 0,3 und 2,5 m."
+
+   Die MITTE bleibt stehen, beide Kanten wandern gleich weit. Das Zahlenfeld „Breite (m)"
+   oben tut ausdrücklich etwas anderes: dort bleibt die linke Kante stehen und die Öffnung
+   wächst nach rechts. Beides hat seinen Sinn — eine Tür, die man mittig aufweitet, und
+   eine, deren Anschlag feststeht.
+
+   **Begrenzt wird symmetrisch:** was auf der ENGEREN Seite noch frei ist, gilt für beide.
+   Sonst wüchse die Öffnung doch wieder einseitig und der Regler hielte sein Versprechen
+   nicht. Woher der Platz kommt, sagt `openLimits`: die Nachbaröffnungen und die
+   Wandenden. Der Regler bekommt diesen Wert als `max` — er lässt sich also gar nicht
+   erst weiter ziehen, statt stumm stehen zu bleiben. */
+const OEFF_MAXW=2.5;
+function oeffnungMitte(r, o){
+  const {L}=openLimits(r, o);
+  return Math.max(0, Math.min(o.offset, L-o.width)) + o.width/2;
+}
+function oeffnungMaxBreite(r, o){
+  const {lo, hi}=openLimits(r, o), m=oeffnungMitte(r, o);
+  return Math.max(OPEN_MINW, Math.min(OEFF_MAXW, 2*Math.min(m-lo, hi-m)));
+}
+function oeffnungBreiteMittig(r, o, wunsch){
+  const {lo, hi}=openLimits(r, o), m=oeffnungMitte(r, o);
+  const w=Math.max(OPEN_MINW, Math.min(wunsch, oeffnungMaxBreite(r, o)));
+  o.width=mm(w);
+  o.offset=mm(Math.max(lo, Math.min(m-w/2, hi-w)));
+  return o.width;
 }
 // Passenden Offset auf einer (anderen) Wand suchen: nächstgelegene freie Lücke
 function fitOpening(r, o, wallIdx, tWanted){
@@ -8620,7 +8694,12 @@ function panelObjekt(p, selObj){
           <div class="stat"><span>Fläche</span><b>${fmt(objMass(selObj,'L')*objMass(selObj,'B'),3)} m²</b></div>
           <div class="stat"><span>Umfang</span><b>${fmt(2*(objMass(selObj,'L')+objMass(selObj,'B')),3)} m</b></div>
           ${(selObj.festL||selObj.festB)?`<div class="stat"><span style="color:var(--muted)">gezeichnet</span><b style="color:var(--muted)">${fmt(selObj.w,3)} × ${fmt(selObj.h,3)} m</b></div>`:''}
-          <p class="hint">Ziehen verschiebt, Eckgriffe ändern die Größe. ${koppelHinweis(selObj)} Entf = löschen, Esc = abwählen.</p></div>
+          <div class="row"><label>Drehung (°)</label>
+            <input type="number" min="0" max="359" step="5" id="objgrad" value="${Math.round(selObj.rot||0)}" style="width:80px">
+            <button class="btn small" id="objrot" style="flex:1">${ico('drehen')}+90°</button></div>
+          <p class="hint">Ziehen verschiebt, Eckgriffe ändern die Größe. Im Plan lässt sich die Fläche
+            am <b>Griff über der Oberkante</b> frei drehen — er rastet auf 5°, rechte Winkel ziehen an.
+            Die Maße ändern sich beim Drehen nicht. ${koppelHinweis(selObj)} Entf = löschen, Esc = abwählen.</p></div>
           ${aktionen}`;
       } else if(istFotoMass(selObj)){
         const sl=fmSlots(selObj), fo=selObj.fotos||[];
@@ -8801,6 +8880,21 @@ function panelObjekt(p, selObj){
    Grundriss der Tür, nicht ein Sinnbild, und sind darum bewusst nicht einfarbig —
    Glas ist blau, Mauerwerk grau, genau wie im Plan. Die Regel „alles blau" gilt für
    Bedienelemente, nicht für Vorschauen des Gezeichneten. */
+/* Der Regler unter Anschlag/Aufschlag. Steht bei Türen UND Fenstern — beide werden
+   mittig aufgeweitet, und beim Fenster ist es sogar der Normalfall. Rechnerei dazu in
+   `oeffnungBreiteMittig`. */
+function breiteFader(r, o, zu){
+  const max=oeffnungMaxBreite(r, o);
+  const eng=max<=OPEN_MINW+0.001;                 // links und rechts steht schon etwas
+  return `<div class="row">
+    <label title="Die Mitte bleibt stehen, beide Kanten wandern gleich weit. Das Feld „Breite (m)“ oben lässt dagegen die linke Kante stehen.">Breite mittig</label>
+    <input type="range" id="opbreitereg" min="${Math.round(OPEN_MINW*100)}" max="${Math.round(max*100)}"
+      step="1" value="${Math.round(Math.min(o.width, max)*100)}" style="flex:1"${(zu||eng)?' disabled':''}
+      title="Verändert die Breite in beide Richtungen gleichzeitig — ${fmt(OPEN_MINW,2)} bis ${fmt(OEFF_MAXW,2)} m, begrenzt durch die Nachbarn">
+    <b id="opbreitewert" style="flex:0 0 64px; text-align:right; font-variant-numeric:tabular-nums">${fmt(o.width,2)} m</b></div>
+    ${eng&&!zu?`<p class="hint">Zum Verbreitern ist kein Platz — links und rechts steht schon etwas.
+      Verschieben schafft welchen.</p>`:''}`;
+}
 function panelOeffnung(p, r, selOp){
   const tuer = selOp.type==='door';
   const nr = selOp.nr ? ' '+selOp.nr : '';
@@ -8832,6 +8926,7 @@ function panelOeffnung(p, r, selOp){
       </div>`
       :`<div class="row tuerrow">${FEN_TYPEN.map(t=>
         typKnopf(t,'fentyp',(selOp.fenTyp||'einfach')===t.id, fenIcon(t))).join('')}</div>`}
+    ${breiteFader(r, selOp, zu)}
     ${zu?`<p class="hint" style="color:var(--danger)"><b>Gesperrt:</b> Die Maße sind
       festgesetzt. LV-Positionen und Fotos lassen sich weiter anhängen — zum Ändern das
       Schloss oben öffnen, es gilt für die ganze Etage.</p>`:''}
@@ -9396,11 +9491,19 @@ function wireEtage(on, r){
     planAusblenden(!pl.aus);
   });
 
+  /* „Frei zeichnen" lässt die ANSICHT stehen (Nutzerwunsch 10.8.2026). Vorher lief hier
+     `zoomFit()`: man hatte sich die Stelle zurechtgezoomt, an der der neue Raum entstehen
+     soll, und der Knopf warf einen auf die ganze Etage zurück — man musste zweimal
+     hinnavigieren. Wer die Übersicht will, hat den Knopf ⌂ daneben.
+
+     Ein Sonderfall „aus dem Raum heraus" ist nicht nötig: den Knopf gibt es nur im
+     Etage-Panel und in der Etage-Reihe der Leisten, man steht also ohnehin schon in der
+     Etagenansicht. `focusRoomId=null` bleibt als billige Absicherung stehen. */
   on('#modedraw','onclick',()=>{
     if(mode==='draw'){ cancelModes(); return; }
     focusRoomId=null;
     mode='draw'; draft={points:[],cursor:null,dir:null,typed:''}; sel={roomId:null,wall:null,vertex:null};
-    renderAll(); zoomFit(); updateDrawHint();
+    renderAll(); updateDrawHint();
   });
   on('#modetpl','onclick',openTemplateDialog);
   document.querySelectorAll('[data-selroom]').forEach(el=>{
@@ -9920,9 +10023,10 @@ function lvZiehLoslassen(e){
       Raumwechsel steht dort eine andere Zahl.
 
    Beides kann die abgerechnete Menge ändern, ohne dass man es sieht. Darum wird vorher
-   und nachher gerechnet und bei Abweichung gefragt. `alleNein` wird EINMAL bestimmt und
-   für beide Seiten benutzt — es hängt an der Gruppe gleicher LV-Nummern und ändert sich
-   durch den Umzug nicht; zweimal zu bestimmen hieße, Äpfel mit Birnen zu vergleichen. */
+   und nachher gerechnet und bei Abweichung gefragt. Beide Seiten rechnen dabei mit
+   derselben Regel — seit dem 10.8.2026 entscheidet die Zeile selbst, und ihre Richtungen
+   rührt der Umzug nicht an. (Vorher hing das an der Gruppe gleicher LV-Nummern und musste
+   eigens EINMAL bestimmt werden, sonst verglich man Äpfel mit Birnen.) */
 function lvVerschieben(a, ziel){
   /* Fotoaufmaß: die Zuordnung wird bei jedem `save()` aus den Markierungen im Bild neu
      gesetzt (`fmAttrsNachziehen`). Ein Umzug hielte keine Sekunde — also gar nicht erst. */
@@ -9936,8 +10040,7 @@ function lvVerschieben(a, ziel){
 
   const vonText=lvZielName({roomId:a.roomId, wall:a.wall, objId:a.objId});
   const nachText=lvZielName(ziel);
-  const alleNein=lvGroupAlleNein([a]);
-  const vorher=lvCalc(a, alleNein);
+  const vorher=lvCalc(a);
   const sicherung=JSON.parse(JSON.stringify(a));
 
   a.roomId=ziel.roomId;
@@ -9946,7 +10049,7 @@ function lvVerschieben(a, ziel){
   else if(ziel.wall!=null){ a.wall=ziel.wall; delete a.objId; }
   else { delete a.wall; delete a.objId; }
   lvMasseNachziehen();                    // Kopplungen neu ziehen, ungültige lösen
-  const nachher=lvCalc(a, alleNein);
+  const nachher=lvCalc(a);
 
   if(Math.abs(nachher.wert-vorher.wert) > 0.0005){
     const grund=[];
@@ -10273,6 +10376,21 @@ function wireOeffnung(on, r){
     });
     const selOp = sel.openId ? (r.openings||[]).find(o=>o.id===sel.openId) : null;
     if(selOp){
+      /* Der Breiten-Regler läuft live mit, gespeichert wird erst beim Loslassen — sonst
+         stünde nach einem Zug ein Dutzend Schritte im Rückgängig-Verlauf. `renderAll()`
+         verbietet sich währenddessen: es baute das Panel und damit den Regler mitten im
+         Zug neu. Die Sperre steht hier und nicht nur als `disabled` am Regler — dieselbe
+         Regel wie in `oeffnungSetzen`. */
+      const breiteSetzen=v=>{
+        if(!raumOffen(r)) return;
+        const w=oeffnungBreiteMittig(r, selOp, v);
+        const f=$('#opwidth');      if(f) f.value=fmt(w,3);
+        const a=$('#opbreitewert'); if(a) a.textContent=fmt(w,2)+' m';
+        pushDoorToPartner(r, selOp);                      // die Partnertür wird mit breiter
+        renderCanvas();
+      };
+      on('#opbreitereg','oninput',e=>breiteSetzen((+e.target.value||OPEN_MINW*100)/100));
+      on('#opbreitereg','onchange',()=>{ save(); renderAll(); });
       wireFotos('opfoto', selOp, 'fotos');                // Fotos an Tür/Fenster
       document.querySelectorAll('[data-fentyp]').forEach(b=>{    // Fenstertyp (Flügelzahl)
         b.onclick=()=>{
@@ -12385,17 +12503,16 @@ function lvWahlAnzeigen(){
    nie mit einer zweiten Formel daneben, sonst stünde hier irgendwann etwas anderes als
    in der Abrechnung.
 
-   `alleNein` gilt für die GANZE LV-Position: die Ersatzformel L×H + L×B greift nur, wenn
-   nirgends in der Gruppe eine Richtung gesetzt ist. Die noch nicht gespeicherten Werte
-   des Dialogs zählen dabei mit, die gespeicherte Fassung **derselben** Zuordnung
-   dagegen nicht — sonst rechnete die Vorschau gegen ihren eigenen alten Stand. */
+   Seit dem 10.8.2026 entscheidet **jede Zeile für sich** (siehe `lvCalc`) — die Vorschau
+   braucht die Geschwister der Position deshalb nicht mehr zu kennen. Vorher wurde die
+   Gruppe hier eigens gebildet, aus den gespeicherten Geschwistern plus dem noch
+   ungespeicherten Dialogstand und ohne die gespeicherte Fassung derselben Zuordnung. */
 function lvErgebnisZeigen(){
   const el=$('#lvErgebnis'); if(!el) return;
-  const p=proj(), d=lvDialogDaten();
+  const d=lvDialogDaten();
   if(!d.lv){ el.className=''; el.title='';
     el.innerHTML='<span>Noch keine Position gewählt</span>'; return; }
-  const andere=(p.attrs||[]).filter(x=>x.lv===d.lv && x.id!==lvEditId && imAbschlag(x));
-  const res=lvCalc(d, lvGroupAlleNein(andere.concat([d])));
+  const res=lvCalc(d);
   el.className = res.fehlt.length ? 'fehlt' : '';
   el.title = res.formel || '';           // die Formel als Tooltip, wie in der Positionstabelle
   el.innerHTML = `<span>Ergebnis${res.fehlt.length
@@ -12973,9 +13090,19 @@ const ansichtTxt = a => DIRS.filter(k=>a[k]).map(k=>k[0].toUpperCase()).join(' '
 // Stück wird gezählt, nicht gemessen — eingetragene Maße spielen für die Rechnung
 // keine Rolle und werden in den Tabellen deshalb nicht mitgeschleppt.
 const zeigtMasse = a => a.einheit!=='Stuck';
-function lvGroupAlleNein(list){
-  return !list.some(hatAnsicht);
-}
+/* ---------- Jede Zeile entscheidet für sich (Nutzerentscheid 10.8.2026) ----------
+   Bis dahin galt die Ersatzformel L×H + L×B für die GANZE LV-Position: sie griff nur,
+   wenn nirgends in der Gruppe eine Richtung gesetzt war (`lvGroupAlleNein`). Damit
+   schaltete EINE Zeile mit Richtungen die Rechnung aller übrigen um — und die standen
+   danach still auf 0, weil sie ohne Richtung keine Fläche haben.
+
+   Genau so gemeldet: eine Position mit acht Zeilen, eine davon „V O L", die anderen
+   sieben auf 0,000 m². Jetzt gilt: **Richtungen gesetzt → Ansichtsflächen, sonst
+   L×H + L×B.** Keine Zeile ändert mehr, wie eine andere rechnet.
+
+   Was das kostet, offen gesagt: In gemischten Positionen ändern sich damit auch die
+   Mengen ALTER Aufmaße — die bisherigen Nullzeilen zählen ab jetzt mit. Gespeichert wird
+   dabei nichts Neues; es ist eine reine Rechenregel und wäre jederzeit umkehrbar. */
 /* ---------- Festgehaltene Raummaße (`a.raumFest`, seit 2026-08-08) ----------
    Vier Formeln lesen den Raum statt eingetragener Zahlen: Grundfläche, Ansichtsfläche,
    Raumvolumen und der Umfang als Länge. Nur SIE ändern sich, wenn der Raum sich ändert —
@@ -12996,7 +13123,7 @@ const lvRaumMasse = a => {
   const st=roomStats(r);
   return {area:st.area, per:st.per, hoehe:r.height||0, vol:st.vol};
 };
-function lvCalc(a, alleNein){
+function lvCalc(a){
   const num=v=>Number.isFinite(v)?v:0;
   /* `st` und `r` sind ab hier die MASSE, mit denen gerechnet wird — bei einer
      festgehaltenen Position die gesicherten, sonst die des lebenden Raums. Beides sind
@@ -13034,9 +13161,10 @@ function lvCalc(a, alleNein){
       formel=`${fmt3(menge)} × (2 × ${fmt3(st.area)} + ${fmt3(st.per)} × ${fmt3(r.height)}) = ${fmt3(ans)} (Ansichtsfläche)`;
     } else if(a.nutzGrund && st){
       wert=menge*st.area; formel=`${fmt3(menge)} × ${fmt3(st.area)} (Bodenfläche)`;
-    } else if(alleNein){
-      // Ersatzformel: gewollt greift nur einer der beiden Terme — je nachdem ob H oder B gefüllt ist.
-      // Deshalb nur meckern, wenn gar nichts rechenbar ist.
+    } else if(!hatAnsicht(a)){
+      /* Keine Richtung an DIESER Zeile → Ersatzformel. Gewollt greift nur einer der
+         beiden Terme, je nachdem ob H oder B gefüllt ist; deshalb nur meckern, wenn gar
+         nichts rechenbar ist. Seit 10.8.2026 je Zeile statt je Position — siehe oben. */
       braucht.add('L');
       if(!H && !B) braucht.add('H');
       wert=menge*(L*H + L*B); formel=`${fmt3(menge)} × (L×H + L×B)`;
@@ -13121,9 +13249,8 @@ function lvGroups(){
     m.get(k).push(a);
   });
   return [...m.entries()].sort((x,y)=>lvCmp(x[0],y[0])).map(([lv,list])=>{
-    const alleNein=lvGroupAlleNein(list);
     const einheiten=[...new Set(list.map(a=>a.einheit).filter(Boolean))];
-    const res=list.map(a=>lvCalc(a, alleNein));
+    const res=list.map(a=>lvCalc(a));
     const summe=res.reduce((s,x)=>s+x.wert, 0);
     const fehlend=[...new Set(res.flatMap(x=>x.fehlt))];
     const soll=lvSollWert(lv);                                  // vorgesehene Menge laut LV
@@ -13136,7 +13263,7 @@ function lvGroups(){
     const betrag=(Number.isFinite(preis) && einheiten.length<2) ? summe*preis : NaN;
     // Was die Position laut LV wert ist — vorgesehene Menge × Preis, ohne das Aufmaß
     const sollBetrag=(Number.isFinite(preis) && Number.isFinite(soll)) ? soll*preis : NaN;
-    return {lv, list, alleNein, einheiten, summe, fehlend, soll, ueber, preis, betrag, sollBetrag,
+    return {lv, list, einheiten, summe, fehlend, soll, ueber, preis, betrag, sollBetrag,
       sym:einheiten.length===1?(EINH_SYM[einheiten[0]]||''):'',
       kurz:(p.lvTexts||{})[lv] || (list.find(a=>a.kurz)||{}).kurz || ''};
   });
@@ -13168,6 +13295,27 @@ function lvGroupsGefiltert(){
 // Welche Abschlagsnummern kommen im Aufmaß überhaupt vor?
 const lvAbschlaege = () => [...new Set((proj().attrs||[]).filter(a=>a.lv).map(abschlagVon))]
   .sort((a,b)=>a-b);
+/* ---------- Was steht im LAUFENDEN Abschlag? (Kopfzeile, 10.8.2026) ----------
+   Gerechnet über dieselbe Gruppierung wie die LV-Übersicht — `lvGroups()` mit gesetztem
+   `druckFilter`, nie eine zweite Formel daneben. Sonst stünde oben irgendwann eine andere
+   Zahl als in der Abrechnung, und man wüsste nicht, welcher zu trauen ist.
+
+   Der Filter wird im `finally` zurückgesetzt: `lvGroups` kann werfen, und ein
+   hängengebliebener `druckFilter` färbte danach den ganzen Plan blass. */
+function abschlagStand(){
+  const nr=proj().abschlag;
+  const alt=druckFilter;
+  druckFilter={art:'teil', nr};
+  let groups;
+  try{ groups=lvGroups(); } finally{ druckFilter=alt; }
+  const mitPreis=groups.filter(g=>Number.isFinite(g.betrag));
+  return {nr,
+    betrag: mitPreis.reduce((s,g)=>s+g.betrag, 0),
+    positionen: groups.length,
+    mitPreis: mitPreis.length,
+    ohnePreis: groups.length-mitPreis.length,
+    zuordnungen: groups.reduce((s,g)=>s+g.list.length, 0)};
+}
 /* Das GANZE Leistungsverzeichnis für den LV-Tab: alle Positionen aus dem Katalog, auch
    die ohne jede Zuordnung — die stehen mit 0 da. So sieht man auf einen Blick, was noch
    offen ist, statt nur das schon Aufgemessene.
@@ -13182,7 +13330,7 @@ function lvGroupsVoll(){
     const einheit=(p.lvUnits||{})[lv] || einheitAusKurz((p.lvTexts||{})[lv]);
     const einheiten=einheit?[einheit]:[];
     const preis=lvPreisWert(lv), soll=lvSollWert(lv);
-    return {lv, list:[], alleNein:false, einheiten, summe:0, fehlend:[],
+    return {lv, list:[], einheiten, summe:0, fehlend:[],
       soll, ueber:false, preis,
       betrag:Number.isFinite(preis) ? 0 : NaN,
       sollBetrag:(Number.isFinite(preis) && Number.isFinite(soll)) ? soll*preis : NaN,
@@ -13381,7 +13529,7 @@ function lvDetailAuffrischen(){
   g.list.forEach(a=>{
     const td=document.querySelector(`#lvview [data-lvres="${CSS.escape(a.id)}"]`);
     if(!td) return;
-    const res=lvCalc(a, g.alleNein);
+    const res=lvCalc(a);
     td.title=res.formel+(res.fehlt.length?' — fehlt: '+res.fehlt.join(', '):'');
     td.innerHTML=`<b${res.fehlt.length?' style="color:var(--danger)"':''}>${fmt3(res.wert)}</b> ${res.sym}`+
       (res.fehlt.length?` <span style="color:var(--danger)" title="${esc(res.fehlt.join(', '))} fehlt">⚠</span>`:'');
@@ -13446,7 +13594,7 @@ function renderLvDetail(){
       const flags=[a.nutzGrund?'Grundfl.':null,a.nutzAnsicht?'Ansicht':null,
         a.nutzVolumen?'Raumvol.':null, a.nutzUmfang?'Umfang→L':null,
         a.autoL?'L↔Wand':null, a.autoH?'H↔Raum':null, a.autoObj?'L/B↔Objekt':null].filter(Boolean).join(', ')||'–';
-      const res=lvCalc(a, g.alleNein);
+      const res=lvCalc(a);
       // Maße und Abschlag direkt in der Zeile: unauffälliges Feld, das erst beim Anfassen auffällt
       const zahl=(feld, wert, leerErlaubt=true) => {
         // Gekoppelte Maße grün gerandet — sonst wäre nicht zu sehen, warum sich eine Zahl
@@ -13490,7 +13638,7 @@ function renderLvDetail(){
     </table></div>
     <p class="hint" style="margin-top:8px">Menge, Einheit, Maße und Abschlag lassen sich <b>direkt in der Zeile</b>
       ändern — beim Abschlag auch mit den Pfeiltasten. Ergebnis je Zeile wie in magicplan gerechnet — Formel als Tooltip.
-      ${g.alleNein&&g.einheiten[0]==='Flache'?'Ohne gesetzte Richtungen gilt für diese Position L×H + L×B.':''}</p>`;
+      ${g.einheiten[0]==='Flache'?'Jede Zeile entscheidet für sich: mit Ansichtsflächen zählen die gesetzten Seiten, ohne gilt L×H + L×B.':''}</p>`;
   $('#lvback').onclick=()=>{ lvDrill=null; lvMarkiert.clear(); renderLv(); };
   $('#lvneuhier').onclick=()=>openLvDialog(null, sel.roomId||((proj().rooms[0]||{}).id), null,
     {projekt:true, lv:g.lv});
@@ -17251,8 +17399,7 @@ function lvDruckTabelle(lvs, p, alle, zebraAb){
     <th class="num">Ergebnis</th>
   </tr></thead><tbody>
   ${lvs.map((a,i)=>{
-    const alleNein=lvGroupAlleNein((p.attrs||[]).filter(x=>x.lv===a.lv && imAbschlag(x)));
-    const res=lvCalc(a, alleNein);
+    const res=lvCalc(a);
     return `<tr class="${(i+z0)%2?'zebra':''}"><td>${esc(a.lv)}</td>
       <td>${esc(kurzDruck(a.kurz||(p.lvTexts||{})[a.lv]||''))}</td>
       <td>${esc(nummerDruck(a))}</td>
@@ -17438,7 +17585,7 @@ function lvTitelHoehe(g){
    dem letzten Teil. Bei mehreren Teilen steht „Teil n" rechts im Titelbalken. */
 function lvTabelle(g, sp, rows, teil, teile){
   const zell=(a)=>{
-    const r=roomById(a.roomId), res=lvCalc(a, g.alleNein), td=[];
+    const r=roomById(a.roomId), res=lvCalc(a), td=[];
     if(sp.mitEtage) td.push(`<td>${esc(r?floorName(r.floorId):'')}</td>`);
     td.push(`<td>${esc(r?r.name:'– gelöschter Raum –')}</td>`);
     td.push(`<td>${esc(nummerDruck(a))}</td>`);
@@ -17974,8 +18121,38 @@ function renderTopbar(){
       + (p.gesichertAm?`\nzuletzt gesichert: ${new Date(p.gesichertAm).toLocaleString('de-DE')}`:'')
       + (geaendert?'\nungesicherte Änderungen':'\nStand ist gesichert')
     : 'Noch keiner Baustelle zugeordnet — beim ersten Sichern wird sie festgelegt';
+  abschlagChipZeigen();
+}
+/* Der Chip neben den Reitern: laufender Abschlag und was in ihm steht.
+   **Er sagt, wenn die Zahl nicht die ganze Wahrheit ist** — eine Summe, die die Hälfte
+   der Positionen stillschweigend auslässt, wäre schlimmer als gar keine:
+     · noch keine Zuordnung in diesem Abschlag  → „noch nichts"
+     · Zuordnungen ja, aber nirgends ein Preis  → „ohne Preise"
+     · Preise nur teilweise                     → „1.234,56 € +" (das + heißt: mindestens)
+   Die Einzelheiten stehen im Hinweis am Zeiger. */
+function abschlagChipZeigen(){
+  const el=$('#abschlagchip'); if(!el) return;
+  const st=abschlagStand();
+  // Am Telefon bleibt „A1" statt „Abschlag 1" — eine nackte 1 neben dem Reiter sagt nichts
+  $('#abschlagnr').innerHTML=`<span class="lang">Abschlag </span><span class="kurz">A</span>${st.nr}`;
+  const txt = !st.zuordnungen ? 'noch nichts'
+    : !st.mitPreis           ? 'ohne Preise'
+    : fmtGeld(st.betrag)+' €'+(st.ohnePreis?' +':'');
+  $('#abschlagsum').textContent=txt;
+  el.classList.toggle('leer', !st.zuordnungen || !st.mitPreis);
+  el.title = `Laufender Abschlag ${st.nr}\n`
+    + (!st.zuordnungen
+        ? 'Noch keine LV-Zuordnung in diesem Abschlag.'
+        : `${st.zuordnungen} Zuordnung${st.zuordnungen===1?'':'en'} in ${st.positionen} Position${st.positionen===1?'':'en'}`
+          + (st.ohnePreis ? `\n${st.ohnePreis} davon ohne Einheitspreis — die Summe ist also mindestens so hoch.` : ''))
+    + '\n\nAnklicken: LV-Positionen auf diesen Abschlag gefiltert.'
+    + '\nDie Nummer selbst steht in ⚙ Einstellungen → Abrechnung.';
 }
 $('#projname').onclick=()=>$('#cloudbtn').click();
+/* Anklicken führt dorthin, wo die Zahl herkommt — die Übersicht, auf genau diesen
+   Abschlag gefiltert. Ein Chip, der nur dasteht, lässt einen mit der Frage allein,
+   aus welchen Positionen er sich zusammensetzt. */
+$('#abschlagchip').onclick=()=>{ lvAbschlagWahl=proj().abschlag; view='lv'; renderAll(); };
 $('#tabplan').onclick=()=>{ view='plan'; renderAll(); };
 $('#tablv').onclick=()=>{ view='lv'; renderAll(); };
 $('#helpbtn').onclick=()=>$('#dlgHelp').showModal();
@@ -18123,7 +18300,8 @@ const HANDYZEILE={
   raum:     ['#rlv','objekte','raumdaten','raumakt','#rfoto'],
   wand:     ['#walllv','wandmass','wandbau','nachbarn','#wfoto'],
   oeffnung: ['#objlv','tuertyp','fenstertyp','messen','opakt','#opfoto'],  // Typ: nur einer greift
-  flaeche:  ['#objlv','messen','#objname','objakt','#objfoto'],
+  // Seit die Fläche drehbar ist (10.8.2026) steht bei ihr dasselbe Menü wie am Symbol
+  flaeche:  ['#objlv','messen','#objname','objaktdreh','#objfoto'],
   linie:    ['#objlv','liniewerk','#objname','objakt','#objfoto'],
   schacht:  ['#objlv','messen','#objname','objakt','#objfoto'],
   treppe:   ['#objrot','messen','#objname','objakt','#objfoto'],
