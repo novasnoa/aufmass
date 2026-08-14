@@ -793,6 +793,7 @@
   .schalter{display:grid; grid-template-columns:1fr; gap:6px;}
   .schalter.zwei{grid-template-columns:1fr 1fr;}
   .schalter.drei{grid-template-columns:repeat(3,1fr);}
+  .schalter.vier{grid-template-columns:repeat(2,1fr);}   /* zwei mal zwei — vier nebeneinander wären zu schmal */
   .schalter label{display:flex; align-items:center; justify-content:center; text-align:center;
     min-height:46px; padding:4px 6px; border:1px solid var(--line); border-radius:9px;
     background:#fff; font-size:13px; line-height:1.25; cursor:pointer;}
@@ -1204,10 +1205,15 @@
       <!-- Alle drei nehmen ein Maß aus dem RAUM statt aus den Feldern darüber. Jedes
            greift nur bei seiner Einheit: die beiden Flächen bei „Fläche", das Volumen
            bei „Volumen" — sonst rechnet die Formel unverändert weiter. -->
-      <div class="schalter drei" id="lvFlaechenZeile">
+      <div class="schalter vier" id="lvFlaechenZeile">
         <label><input type="checkbox" id="lvNutzGrund"><span>Grundfläche</span></label>
         <label title="Alle Wände + Decke + Boden: 2 × Grundfläche + Umfang × Raumhöhe"><input type="checkbox" id="lvNutzAnsicht"><span>Ansichtsfläche</span></label>
         <label title="Rauminhalt: Grundfläche × Raumhöhe — wirkt bei der Einheit „Volumen“"><input type="checkbox" id="lvNutzVolumen"><span>Volumen</span></label>
+        <!-- Wieder da seit 10.8.2026. Der Schalter war ganz ausgebaut worden; gemeint war
+             nur, dass er an der WAND nichts zu suchen hat — dort ist die Länge die
+             Wandlänge. Am Raum ist der Umfang genau das, womit eine Sockelleiste oder
+             eine Randfuge gerechnet wird. -->
+        <label title="Umfang des Raums — wirkt bei der Einheit „Länge“"><input type="checkbox" id="lvNutzUmfang"><span>Umfang</span></label>
       </div>
       <div class="schalter zwei" id="lvKopplungZeile">
         <label id="lvAutoLZeile" title="Wird die Wand gezogen oder ihre Länge getippt, zieht dieses Maß mit"><input type="checkbox" id="lvAutoL"><span>Länge folgt der Wand</span></label>
@@ -2666,10 +2672,17 @@ function lineLen(g){ let s=0; for(let i=0;i<g.points.length-1;i++) s+=dist(g.poi
 // Objektnummern laufen projektweit — sonst gäbe es beim Verschieben in andere Räume Doppelungen.
 // Wände zählen mit: auch sie bekommen eine Nummer, sobald ihnen eine LV-Position zugeordnet ist.
 const nextObjNr = () => proj().rooms.reduce((m,r)=>{
-  const a=[...(r.objects||[]), ...(r.openings||[])].reduce((k,g)=>Math.max(k, g.nr||0), m);
+  let a=[...(r.objects||[]), ...(r.openings||[])].reduce((k,g)=>Math.max(k, g.nr||0), m);
+  // Die Wände der freien Flächen zählen mit — sonst bekäme eine von ihnen eine
+  // Nummer ein zweites Mal, und im Plan gäbe es zweimal dieselbe Plakette.
+  (r.objects||[]).forEach(g=>{
+    if(g.wandNr) a=Object.values(g.wandNr).reduce((k,v)=>Math.max(k, v||0), a);
+  });
   return Object.values(r.wallNr||{}).reduce((k,v)=>Math.max(k, v||0), a);
 }, 0)+1;
 const wallNrOf = (r,i) => r ? (r.wallNr||{})[i] : null;
+// Nummer einer Wand der freien Fläche — vergeben erst, wenn eine LV-Position dranhängt
+const flWandNrOf = (g,k) => (g && g.wandNr) ? g.wandNr[k] : null;
 /* Eine Wand mit Fotos braucht ebenfalls eine Nummer — sonst steht im Bericht unter dem
    Bild „Wand 3", und im Plan ist nichts, woran man Wand 3 erkennt. Läuft in `save()`
    mit, damit jeder Weg erfasst ist: Kamera, Dateiauswahl, Foto-Stapel, 360°-Zerlegung. */
@@ -2711,6 +2724,96 @@ function wandNummernPflegen(){
 
    **Fehlt das Merkmal, gilt „gekoppelt"** — deshalb `fest…` statt `auto…` wie bei den
    Wandmaßen: so brauchen vorhandene Objekte keine Umstellung. */
+/* ---------- Die freie Fläche (Vieleck) — ein Raum im Raum (seit 2026-08-13) ----------
+   „Ich brauche bei Neues Objekt neben Mobiliar freie Fläche, nenne es im Panel einfach
+   Fläche. Die funktioniert wie ein freigezeichneter Raum, jedoch als Objekt." Und
+   nachgeschoben: „Baue doch eine Höhe in die Fläche ein und auch Wände (aber ohne
+   Stärke) einfach 5 cm."
+
+   Damit ist sie genau das: ein **Raum im Raum**. Sie hat einen frei gezeichneten Umriss,
+   eine eigene Höhe und ringsum eine Wand — deren Stärke aber nicht einstellbar ist,
+   sondern fest bei 5 cm liegt. Aus Umriss und Höhe fallen dieselben vier Maße wie am
+   Raum: Grundfläche, Umfang, Ansichtsfläche und Volumen. Genau die vier lesen die
+   Automatikschalter im LV-Dialog — bei einer Zuordnung an einer solchen Fläche eben aus
+   dem OBJEKT statt aus dem Raum (siehe `lvRaumMasse`). Neue Schalter braucht es dafür
+   keine, und die Regeln bleiben Wort für Wort dieselben.
+
+   **Sie zieht dem Raum nichts ab.** Ein Schacht verformt die Raumkontur, diese Fläche
+   nicht: sie liegt IM Raum und beschreibt eine eigene Leistung (ein Podest, eine
+   abgetrennte Kabine, ein Bereich mit anderem Aufbau). Der Raum bleibt, wie er ist.
+
+   Das aufgezogene Rechteck heißt seit demselben Tag „Rechteck" — der Name „Fläche"
+   gehört jetzt dem Vieleck. Beide bleiben: das Rechteck trägt die Kopplung von Länge
+   und Breite (`festL`/`festB`), die ein Vieleck nicht haben kann. */
+const FL_WAND=0.05;                    // Wandstärke der freien Fläche — fest, nicht einstellbar
+const istFlaeche = g => !!g && g.type==='flaeche';
+const flPunkte = g => (g && g.points) || [];
+/* Dieselben vier Zahlen, die `roomStats` für einen Raum liefert — nur eben aus dem
+   Vieleck. Ansichtsfläche = 2 × Grundfläche + Umfang × Höhe, wie am Raum auch. */
+function flStats(g){
+  const pts=flPunkte(g);
+  const area = pts.length>=3 ? polyArea(pts) : 0;
+  const per  = pts.length>=2 ? polyPerimeter(pts) : 0;
+  const hoehe = Number.isFinite(g&&g.hoehe) ? g.hoehe : 0;
+  return {area, per, hoehe, vol:area*hoehe, ansicht:2*area + per*hoehe};
+}
+/* ---------- Wandnummern der Fläche nachziehen ----------
+   An einer Wand kann eine LV-Zuordnung hängen (`a.flWall`). Kommt eine Ecke dazu oder
+   fällt eine weg, verschieben sich die Nummern dahinter — und die Zuordnung zeigte sonst
+   auf eine andere Wand. Dieselbe Sorge wie `wandRefsUmschreiben` am Raum, nur viel
+   kleiner: es gibt hier nur EIN Feld.
+   `um` bildet die alte Nummer auf die neue ab. */
+function flWandRefsUmschreiben(g, um){
+  (proj().attrs||[]).forEach(a=>{
+    if(a.objId!==g.id || a.flWall==null) return;
+    const n=um(a.flWall);
+    if(n==null) delete a.flWall; else a.flWall=n;
+  });
+  // Die Wandnummern wandern mit — sonst stünde die Plakette danach an einer anderen Wand
+  if(g.wandNr){
+    const neu={};
+    Object.keys(g.wandNr).forEach(k=>{
+      const n=um(+k);
+      if(n!=null && !neu[n]) neu[n]=g.wandNr[k];
+    });
+    g.wandNr=neu;
+  }
+}
+/* Länge einer Wand der freien Fläche setzen: die HINTERE Ecke wandert auf der Wandachse
+   vor oder zurück, die vordere bleibt stehen. Damit folgt die nächste Wand mit — genau
+   das, was man sieht, wenn man an einem Raum eine Wandlänge einträgt. Die Maschinerie
+   des Raums (`setWallLength` mit Abfangwänden, Nachbarräumen und Sperren) braucht es
+   hier nicht: eine Fläche hat keine Nachbarn und keine gesperrten Wände. */
+function flWandLaenge(g, k, L){
+  const pts=flPunkte(g), n=pts.length;
+  if(!(k>=0 && k<n) || !isFinite(L) || L<0.02) return false;
+  const A=pts[k], B=pts[(k+1)%n];
+  const alt=Math.hypot(B.x-A.x, B.y-A.y);
+  if(alt<1e-6) return false;
+  const neu=pts.map(q=>({...q}));
+  neu[(k+1)%n]={x:mm(A.x+(B.x-A.x)/alt*L), y:mm(A.y+(B.y-A.y)/alt*L)};
+  if(polySchneidetSich(neu)) return false;
+  g.points=neu;
+  return true;
+}
+/* Schneidet sich der Umriss selbst? Beim Schließen abgefangen — aus einer Acht ließe
+   sich weder eine Fläche noch ein Umfang ablesen, und `polyArea` meldete stumm eine
+   Differenz statt eines Fehlers. Nachbarsegmente teilen sich einen Punkt und zählen
+   deshalb nicht. */
+function polySchneidetSich(pts){
+  const n=pts.length;
+  if(n<4) return false;
+  const kreuzt=(a,b,c,d)=>{
+    const o=(p,q,r)=>Math.sign((q.x-p.x)*(r.y-p.y)-(q.y-p.y)*(r.x-p.x));
+    const o1=o(a,b,c), o2=o(a,b,d), o3=o(c,d,a), o4=o(c,d,b);
+    return o1!==o2 && o3!==o4;                       // Berührungen lassen wir durchgehen
+  };
+  for(let i=0;i<n;i++) for(let j=i+1;j<n;j++){
+    if(j===i || (j+1)%n===i || (i+1)%n===j) continue;
+    if(kreuzt(pts[i], pts[(i+1)%n], pts[j], pts[(j+1)%n])) return true;
+  }
+  return false;
+}
 const objHatMass = g => g && (g.type==='rect' || g.type==='line');
 const objFormL = g => g.type==='rect' ? g.w : lineLen(g);
 const objFormB = g => g.type==='rect' ? g.h : null;
@@ -2786,6 +2889,17 @@ function lvMasseNachziehen(){
     /* Hängt die Zuordnung an einer Tür oder einem Fenster, kommen BEIDE Maße aus dem
        Bauteil — nicht die Höhe aus dem Raum wie an der Wand. Dieselben Merker, andere
        Quelle; siehe `lvKoppelMass`. */
+    /* Wand einer freien Fläche: Länge aus IHRER Wand, Höhe aus der Fläche. Steht vor der
+       Öffnung, weil `a.objId` hier auf die Fläche zeigt und der Öffnungs-Zweig sonst
+       leer ausginge — und danach die Raumhöhe einträge, die hier nicht gemeint ist. */
+    if(a.flWall!=null){
+      const g=(r.objects||[]).find(x=>x.id===a.objId);
+      const pts=flPunkte(g), n=pts.length;
+      if(!istFlaeche(g) || !(a.flWall>=0 && a.flWall<n)){ delete a.autoL; delete a.autoH; return; }
+      if(a.autoL) a.laenge=mm(dist(pts[a.flWall], pts[(a.flWall+1)%n]));
+      if(a.autoH) a.hoehe=mm(flStats(g).hoehe);
+      return;
+    }
     const op = a.objId ? (r.openings||[]).find(o=>o.id===a.objId) : null;
     if(op){
       if(a.autoL) a.laenge=mm(op.width);
@@ -2820,6 +2934,14 @@ function lvZielText(a, leerBeiRaum){
       const n=a.fmMark ? fmMarkNr(og, a.fmMark) : 0;
       return (og.nr?'#'+og.nr+' ':'')+'Fotoaufmaß'+(n?' Nr '+n:'');
     }
+    /* Wand einer freien Fläche: ihre EIGENE Nummer, genau wie bei einer Raumwand. Sie
+       muss dieselbe sein, die im Plan auf der Wand steht — sonst zeigt die Plakette 7
+       und die Liste „Fläche 1 · Wand 3", und niemand findet die Zeile zum Strich.
+       Ohne Nummer (kann nicht vorkommen, solange eine Position dranhängt) der Rückfall. */
+    if(og && istFlaeche(og) && a.flWall!=null){
+      const wn=flWandNrOf(og, a.flWall);
+      return wn ? ('#'+wn) : ((objAnzeige(og)||'Fläche')+' · Wand '+(a.flWall+1));
+    }
     return og?objAnzeige(og):'– gelöscht –';
   }
   if(a.wall!=null){
@@ -2830,10 +2952,14 @@ function lvZielText(a, leerBeiRaum){
   return leerBeiRaum?'':'Raum';
 }
 const objLabel = g => g ? (g.type==='door'?'Tür':g.type==='window'?'Fenster':(g.name||'')) : '';
-// Flächen und Linien tragen Standardnamen („Fläche 1", „Linie 2") — die zeigen wir nicht an,
-// dort genügt die Objektnummer. Symbole, Türen und Fenster behalten ihre Bezeichnung.
-const objStdName = g => g && (g.type==='rect'||g.type==='line')
-  && /^(fläche|flaeche|linie)\s*\d*$/i.test(String(g.name||'').trim());
+/* Flächen, Rechtecke und Linien tragen Standardnamen („Fläche 1", „Linie 2") — die zeigen
+   wir nicht an, dort genügt die Objektnummer. Symbole, Türen und Fenster behalten ihre
+   Bezeichnung.
+   **Beide Muster müssen bleiben:** Bis zum 13.8.2026 hieß das aufgezogene Rechteck
+   „Fläche N". Fiele „Fläche" aus der Regel, stünde in jedem alten Aufmaß plötzlich ein
+   Name in den Plaketten, wo vorher nur die Nummer stand. */
+const objStdName = g => g && (g.type==='rect'||g.type==='line'||g.type==='flaeche')
+  && /^(fläche|flaeche|rechteck|linie)\s*\d*$/i.test(String(g.name||'').trim());
 function objAnzeige(g){
   if(!g) return '';
   const nr=g.nr?'#'+g.nr:'';
@@ -2950,7 +3076,7 @@ let messungLaeuft=false;
 /* Das „b": am 9.8. gingen mehrere Stände aufs iPad, und ohne Zusatz war auf dem Gerät
    nicht zu erkennen, ob der reparierte oder der erste lief. Bei Nachbesserungen am
    selben Tag den Buchstaben hochzählen. */
-const APP_STAND='2026-08-10h';
+const APP_STAND='2026-08-13f';
 const WAND_STD=0.24;
 // Spanne des Schiebereglers im Wand-Panel. Von Hand darf man auch daneben liegen —
 // der Regler wird dann rot, damit der Ausreißer nicht unbemerkt bleibt.
@@ -3246,6 +3372,18 @@ function wandRingD(r){
   if(!aussen.length) return '';
   const d=pts=>pts.map((p,i)=>(i?'L':'M')+p.x+' '+p.y).join(' ')+' Z';
   return d(polyDreh(aussen, true))+' '+d(polyDreh(innenPolygon(r), false));
+}
+/* Der Wandring einer freien Fläche — dieselbe Rechnung wie am Raum, nur mit fester
+   Stärke und ohne Innenkontur-Umweg: eine Fläche trägt weder Halbwand noch Schacht.
+   Über `aussenPolygon` und nicht über einen eigenen Versatz, damit die Ecken auf
+   Gehrung stoßen; sonst stünden dort Stummel über. */
+function flWandD(g){
+  const pts=flPunkte(g);
+  if(pts.length<3) return '';
+  const aussen=aussenPolygon({points:pts, wandStd:FL_WAND});
+  if(!aussen.length) return '';
+  const d=ps=>ps.map((p,i)=>(i?'L':'M')+p.x+' '+p.y).join(' ')+' Z';
+  return d(polyDreh(aussen, true))+' '+d(polyDreh(pts, false));
 }
 /* Alle Wände einer Etage als EINE Lage.
    Stoßen zwei verschieden dicke Wände aneinander, lägen sonst ihre Innenkanten als
@@ -3669,7 +3807,22 @@ function objLvColors(g){
   const p=proj();
   const seen=new Set(), cols=[];
   (p.attrs||[]).forEach(a=>{
-    if(a.objId===g.id && a.lv && !seen.has(a.lv)){
+    /* Zuordnungen an einer WAND der Fläche färben nicht die ganze Fläche — sonst läge
+       über einem Podest die Farbe seines Sockelputzes. Sie färben ihre Wand, siehe
+       `flWandColors`. */
+    if(a.objId===g.id && a.flWall==null && a.lv && !seen.has(a.lv)){
+      seen.add(a.lv);
+      const c=lvColor(p,a.lv); if(c) cols.push(c);
+    }
+  });
+  return cols;
+}
+// Farben der Zuordnungen an EINER Wand einer freien Fläche
+function flWandColors(g, k){
+  const p=proj();
+  const seen=new Set(), cols=[];
+  (p.attrs||[]).forEach(a=>{
+    if(a.objId===g.id && a.flWall===k && a.lv && !seen.has(a.lv)){
       seen.add(a.lv);
       const c=lvColor(p,a.lv); if(c) cols.push(c);
     }
@@ -3799,11 +3952,41 @@ let plakettenAus=false;
 function objBadge(g, x, y, lbl, interactive, weg){
   if(plakettenAus) return '';
   const p=proj();
-  const a=(p.attrs||[]).find(t=>t.objId===g.id && t.lv);
+  /* `flWall==null`: Eine Zuordnung an der WAND einer freien Fläche gehört der Wand,
+     nicht der Fläche — sie bekommt ihre eigene Plakette (`flWandMarks`). Bei allen
+     anderen Objekten gibt es das Feld nicht, dort ändert die Bedingung nichts. */
+  const a=(p.attrs||[]).find(t=>t.objId===g.id && t.lv && t.flWall==null);
   if(!a || !g.nr) return '';
   const col=lvColor(p, a.lv) || '#8a93a5';
   const dat=interactive?` data-obj="${g.id}" style="cursor:move"`:'';
   return badgeSvg(x, y, badgeR(lbl), col, g.nr||'', dat, weg);
+}
+/* ---------- Nummern-Plaketten der Wände einer freien Fläche (13.8.2026) ----------
+   Gemeldet: „Die farbliche Markierung finde ich toll, aber die Nummer landet nicht auf
+   der Linie." Sie landete nirgends — die Wände hatten gar keine Nummer. Sie bekommen
+   sie jetzt wie Raumwände: eigene Zählung (`g.wandNr`), vergeben erst, wenn wirklich
+   eine LV-Position daran hängt, und die Plakette sitzt **mittig in ihrem Wandband**.
+   Aufgebaut wie `wallMarks`, nur mit fester Stärke und ohne Fotos. */
+function flWandMarks(g, lbl, interactive){
+  if(plakettenAus) return '';
+  const p=proj(), pts=flPunkte(g), n=pts.length;
+  const nrn=g.wandNr||{};
+  let out='';
+  for(let k=0;k<n;k++){
+    const nr=nrn[k]; if(!nr) continue;
+    const A=pts[k], B=pts[(k+1)%n], L=dist(A,B); if(L<0.05) continue;
+    const a=(p.attrs||[]).find(x=>x.objId===g.id && x.flWall===k && x.lv);
+    const an=aussenNormale({points:pts}, k), tief=FL_WAND/2, rr=badgeR(lbl);
+    // Ausweichweg: die Wandachse selbst — eine Wandnummer bleibt auf ihrer Wand
+    const ux=(B.x-A.x)/L, uy=(B.y-A.y)/L, ein=Math.min(rr, L/2-0.001);
+    const weg=badgeWeg([{x:A.x+an.x*tief+ux*ein, y:A.y+an.y*tief+uy*ein},
+                        {x:B.x+an.x*tief-ux*ein, y:B.y+an.y*tief-uy*ein}]);
+    const dat=interactive?` data-obj="${g.id}" data-flwall="${k}" style="cursor:move"`:'';
+    const m=badgeSvg((A.x+B.x)/2+an.x*tief, (A.y+B.y)/2+an.y*tief, rr,
+      (a && lvColor(p, a.lv))||'#8a93a5', nr, dat, weg);
+    out += (a && imAbschlag(a)) ? m : `<g opacity="${ABS_BLASS}">${m}</g>`;
+  }
+  return out;
 }
 /* Nummern-Plaketten der Wände — mittig IM Mauerwerk, nicht daneben */
 function wallMarks(r, lbl){
@@ -3950,6 +4133,87 @@ function objMarks(r, lbl, interactive){
       /* Die Nummer sitzt an der oberen rechten Ecke, knapp außerhalb — und wandert bei
          Gedränge um genau diesen Umriss herum. So bleibt sie immer AM Kasten. */
       out+=rechteckGriffe(g, lbl, interactive, isSel);
+    } else if(istFlaeche(g)){
+      /* Der Umriss, seine 5-cm-Wand und die Füllung in LV-Farbe — dasselbe Bild wie beim
+         Rechteck, nur eben als Vieleck. Der Wandring wird genau wie beim Raum gebaut
+         (`aussenPolygon` mit fester Stärke), damit die Ecken auf Gehrung stoßen und nicht
+         als Stummel überstehen. */
+      const cols=objLvColors(g);
+      const pts=flPunkte(g);
+      let fill='#f2b23e', stroke='#c98a2b', fillOp=isSel?0.35:0.18;
+      if(cols.length===1){ fill=cols[0]; stroke=cols[0]; fillOp=isSel?0.45:0.28; }
+      else if(cols.length>1){
+        const sw=0.18;
+        out+=`<pattern id="strp${g.id}" patternUnits="userSpaceOnUse" width="${sw*cols.length}" height="1" patternTransform="rotate(45)">${cols.map((c,i)=>`<rect x="${i*sw}" y="0" width="${sw}" height="1" fill="${c}"/>`).join('')}</pattern>`;
+        fill=`url(#strp${g.id})`; stroke=cols[0]; fillOp=isSel?0.55:0.4;
+      }
+      const dIn=polyD(pts);
+      out+=`<path d="${dIn}" fill="${fill}" fill-opacity="${fillOp}" stroke="none"${
+        interactive?` data-obj="${g.id}" style="cursor:move"`:' style="pointer-events:none"'}/>`;
+      const ring=flWandD(g);
+      if(ring) out+=`<path d="${ring}" fill-rule="evenodd" fill="${WAND_FUELL}" stroke="${WAND_LINIE}"
+        stroke-width="0.02" style="pointer-events:none"/>`;
+      out+=`<path d="${dIn}" fill="none" stroke="${isSel?'#2f6fed':stroke}"
+        stroke-width="${isSel?0.05:0.03}" style="pointer-events:none"/>`;
+      /* ---------- Eigene Wände (13.8.2026, Nutzerwunsch) ----------
+         „Ich möchte die Fläche anwählen, Wände verschieben und teilen können wie bei
+         einem Raum." Jede Kante bekommt ihre eigene Trefferfläche. Zwei Dinge fallen
+         damit zusammen:
+           1. Man kommt an die Wand heran — vorher war die Kante nur gemalt, ein Tipp
+              darauf fiel durch auf die Wand des RAUMS darunter.
+           2. Und genau deshalb gewinnt sie dort auch: Die Linie trägt `data-obj`, und
+              `kandidatenUnter` stellt Objekte VOR Wände und Ecken. Eine bündig an die
+              Raumwand gezeichnete Fläche ist also an ihrer eigenen Kante zu fassen.
+         Die Linie wird NACH der Füllung gezeichnet und liegt damit oben: am Rand
+         gewinnt die Wand, in der Mitte die Fläche. Beide tragen dieselbe Objekt-ID,
+         `kandidatenUnter` führt sie deshalb als EINEN Kandidaten — das Durchtippen
+         springt also nicht zwischen ihnen hin und her. */
+      /* Wände mit eigener LV-Zuordnung tragen deren Farbe — als Strich AUF dem Wandband,
+         nicht als Füllung der Fläche. So sieht man am Plan, welche Wand abgerechnet ist,
+         ohne dass die Fläche selbst umgefärbt würde. Mehrere Positionen: gestrichelt
+         abwechselnd, dieselbe Machart wie bei der Linie. */
+      pts.forEach((a,k)=>{
+        const wc=flWandColors(g,k);
+        if(!wc.length) return;
+        const sw=Math.max(FL_WAND*0.9, 0.04);
+        if(wc.length===1){
+          out+=`<line x1="${a.x}" y1="${a.y}" x2="${pts[(k+1)%pts.length].x}" y2="${pts[(k+1)%pts.length].y}"
+            stroke="${wc[0]}" stroke-width="${sw}" stroke-linecap="butt" style="pointer-events:none"/>`;
+        } else {
+          const seg=0.3;
+          wc.forEach((c,i)=>{
+            out+=`<line x1="${a.x}" y1="${a.y}" x2="${pts[(k+1)%pts.length].x}" y2="${pts[(k+1)%pts.length].y}"
+              stroke="${c}" stroke-width="${sw}" stroke-dasharray="${seg} ${Math.round((wc.length-1)*seg*100)/100}"
+              stroke-dashoffset="${Math.round(i*seg*100)/100}" style="pointer-events:none"/>`;
+          });
+        }
+      });
+      if(interactive) pts.forEach((a,k)=>{
+        const b=pts[(k+1)%pts.length];
+        if(isSel && sel.flWall===k)
+          out+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#2f6fed"
+            stroke-opacity="0.5" stroke-width="${lbl*0.55}" stroke-linecap="round" style="pointer-events:none"/>`;
+        out+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="transparent"
+          stroke-width="${Math.max(FL_WAND*2.2, lbl*0.85)}" stroke-linecap="butt"
+          data-obj="${g.id}" data-flwall="${k}" style="cursor:move"/>`;
+      });
+      /* Die Nummer steht IN der Fläche, nicht neben ihr (Nutzerwunsch 13.8.2026: „auch
+         die Flächennummer nicht auf der Fläche"). Sie saß an der oberen rechten Ecke des
+         umschließenden Kastens — bei einer L-Form liegt der weit neben dem Vieleck, und
+         eine Nummer neben ihrem Objekt zeigt auf nichts. `raumMitte` liefert einen Punkt,
+         der auch bei einspringenden Ecken INNEN liegt; ein Ausweichweg ist deshalb weder
+         nötig noch erwünscht — die Mitte ist die Mitte.
+         Dazu die Plaketten der Wände, mittig in ihrem eigenen Wandband. */
+      const bm=raumMitte(g);
+      out+=objBadge(g, bm.x, bm.y, lbl, interactive, null);
+      out+=flWandMarks(g, lbl, interactive);
+      if(isSel) pts.forEach((pt,k)=>{
+        const an = sel.objH===k;
+        const hs=lbl*(an?0.45:0.35), tr=lbl*(an?2.6:1.2);
+        if(an) out+=`<circle cx="${pt.x}" cy="${pt.y}" r="${tr}" fill="url(#ziehzone)" style="pointer-events:none"/>`;
+        out+=`<rect x="${pt.x-hs}" y="${pt.y-hs}" width="${2*hs}" height="${2*hs}" fill="${an?'#2f6fed':'#fff'}" stroke="#2f6fed" stroke-width="${lbl*0.08}" data-obj="${g.id}" data-objh="${k}" style="cursor:pointer"/>`;
+        out+=`<circle cx="${pt.x}" cy="${pt.y}" r="${tr}" fill="transparent" data-obj="${g.id}" data-objh="${k}" style="cursor:pointer"/>`;
+      });
     } else if(ist360(g)){
       /* Standort einer 360°-Aufnahme: Kreis mit Blickkegel. Der Pfeil zeigt, wohin
          die Kameravorderseite gerichtet war — daraus leitet sich ab, welche der vier
@@ -3976,8 +4240,15 @@ function objMarks(r, lbl, interactive){
        Halbwand im Raum soll wie eine Wand aussehen und nicht wie ein Gerät.
        MOBILIAR ist schwarz: es ist eine Zeichnung, kein Gerät und kein Mauerwerk. */
       const moeb=istMoebel(g);
-      const st=isSel?'#2f6fed':(moeb?'#1b1f27':(istBauteil(g)?'#3b4557':'#0e7d5c'));
-      const fl=moeb ? (isSel?'#e8f0fe':'#ffffff') : (istBauteil(g) ? (isSel?'#e8f0fe':'#eef0f4') : '#e6f6ef');
+      /* Die Trennwand ist zwar Mobiliar, sieht aber aus wie Mauerwerk (Nutzerwunsch
+         13.8.2026: „Bei Mobiliar gibt es Trennwand, mach diese farblich wie die
+         Wände"). Sie IST ja auch eine Wand — nur eine, die nicht zum Raum gehört.
+         Geändert wird allein das Bild: Fläche und Umfang des Raums lässt sie
+         unberührt, dafür wäre `bauteil` nötig. */
+      const wand=wieWand(g);
+      const st=isSel?'#2f6fed':(wand?WAND_LINIE:(moeb?'#1b1f27':(istBauteil(g)?'#3b4557':'#0e7d5c')));
+      const fl=wand ? (isSel?'#e8f0fe':WAND_FUELL)
+        : (moeb ? (isSel?'#e8f0fe':'#ffffff') : (istBauteil(g) ? (isSel?'#e8f0fe':'#eef0f4') : '#e6f6ef'));
       out+=`<g transform="rotate(${g.rot||0} ${cx} ${cy})">`;
       /* Der Kasten um ein Möbel ist UNSICHTBAR — er wäre bei einem WC schlicht falsch.
          Er bleibt als Trefferfläche stehen (`fill-opacity` 0 stört das Anklicken nicht,
@@ -3985,7 +4256,10 @@ function objMarks(r, lbl, interactive){
          bekommt. Das Abdecken des Hintergrunds übernimmt die gezeichnete FORM selbst,
          siehe `moebelBild`. Angewählt bekommt der Kasten seine blaue Kontur wie jedes
          andere Objekt — dann soll man ja gerade sehen, wie groß das Ding ist. */
-      out+=`<rect x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" fill="${fl}" fill-opacity="${moeb?(isSel?0.35:0):0.9}" stroke="${moeb&&!isSel?'none':st}" stroke-width="${isSel?0.06:0.04}"${interactive?` data-obj="${g.id}" style="cursor:move"`:''}/>`;
+      /* Bei der Trennwand ist der Kasten das BILD und deshalb sichtbar: gefüllt wie ein
+         Wandkörper, dünn umrandet wie einer (0,02 statt 0,04 — bei 5 cm Dicke bliebe von
+         einem 4-cm-Strich nichts als Kontur übrig). */
+      out+=`<rect x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" fill="${fl}" fill-opacity="${(moeb&&!wand)?(isSel?0.35:0):0.9}" stroke="${(moeb&&!wand&&!isSel)?'none':st}" stroke-width="${isSel?0.06:(wand?0.02:0.04)}"${interactive?` data-obj="${g.id}" style="cursor:move"`:''}/>`;
       if(moeb){
         out+=moebelBild(g, st);
       } else if(g.sub==='rfa'){
@@ -4461,7 +4735,7 @@ function renderCanvas(){
 
   if(durch<1) out+='</g>';   // ab hier wieder voll deckend: Griffe und Vorschauen beim Zeichnen
 
-  if(mode==='draw' && draft.points.length){
+  if(zeichenModus() && draft.points.length){
     const d=draft.points.map((p,i)=>(i?'L':'M')+p.x+' '+p.y).join(' ');
     out+=`<path d="${d}" fill="none" stroke="#2f6fed" stroke-width="0.08" stroke-dasharray="0.15 0.1"/>`;
     // Gesetzte Punkte sind anfassbar; der Startpunkt zieht an (Raum schließen)
@@ -4531,7 +4805,7 @@ function renderCanvas(){
   $('#zeichnung').innerHTML=out;       // NICHT svg.innerHTML — sonst flöge `#planlage` mit
   planLageZeichnen();                  // Raster und Planbild: nur Attribute nachführen
   plakettenAus=false;                  // Druck und Raumansicht zeigen die Nummern weiter
-  svg.classList.toggle('draw', mode==='draw'||mode==='place'||mode==='objrect'||mode==='objline'||mode==='objsym'||mode==='addopen');
+  svg.classList.toggle('draw', zeichenModus()||mode==='place'||mode==='objrect'||mode==='objline'||mode==='objsym'||mode==='addopen');
 }
 
 function zoomFit(){
@@ -5180,6 +5454,8 @@ function umlaufVon(g){
   // Der gebundene Schacht ebenso: seine Rückseite liegt in der Wandflucht
   if(schachtGebunden(g)) return schachtUmlauf(g, wandR);
   if(g.type==='sym') return istBauteil(g) ? 2*((g.w||0)+(g.h||0)) : 0;
+  // Beim Vieleck ist der Umlauf sein Umfang — einmal außen herum, nichts steckt in einer Wand
+  if(istFlaeche(g)) return flStats(g).per;
   if(g.type==='rect'){
     const L=objMass(g,'L'), B=objMass(g,'B');
     return (Number.isFinite(L)&&Number.isFinite(B)) ? 2*(L+B) : 0;
@@ -5401,7 +5677,7 @@ function fmAttrsNachziehen(){
          „Vorn" L×H, Laenge menge×L, Stueck nur die Menge. */
       a.menge=mm(fmMenge(m)); a.laenge=0; a.breite=0; a.hoehe=0;
       a.vorn=a.hinten=a.links=a.rechts=a.oben=a.unten=false;
-      a.nutzGrund=a.nutzAnsicht=a.nutzVolumen=false;
+      a.nutzGrund=a.nutzAnsicht=a.nutzVolumen=a.nutzUmfang=false;
       if(m.art==='flaeche'){ a.laenge=mm(+m.laenge||0); a.hoehe=mm(+m.breite||0); a.vorn=true; }
       else if(m.art==='linie'){ a.laenge=mm(+m.laenge||0); }
     });
@@ -5548,7 +5824,7 @@ svg.addEventListener('pointerdown', e=>{
   /* Zeichnen: der Punkt entsteht erst beim LOSLASSEN und nur, wenn der Finger
      stehen geblieben ist — Schieben und Zoomen dürfen keinen Punkt setzen.
      Gesetzte Punkte lassen sich anfassen und verschieben. */
-  if(mode==='draw'){
+  if(zeichenModus()){
     const zt=e.target;
     if(zt && zt.dataset && zt.dataset.drafth!==undefined){
       const i=+zt.dataset.drafth;
@@ -5699,18 +5975,35 @@ svg.addEventListener('pointerdown', e=>{
         // Ecke/Punkt: erst anwählen, ziehen geht erst beim zweiten Anfassen
         const k=+t.dataset.objh;
         const schon = !neuesObjekt && sel.objH===k;
-        sel={...sel, objH:k};
+        sel={...sel, objH:k, flWall:null};
         if(schon) drag={kind:'objh', room:r, g, h:k, moved:false, orig:JSON.parse(JSON.stringify(g))};
         renderAll(); return;
       }
-      sel={...sel, objH:null};
+      /* Wand einer freien Fläche — dieselbe Regel wie bei jedem Griff: erst anwählen,
+         ziehen erst beim zweiten Anfassen. Verschoben wird sie PARALLEL, wie die Wand
+         eines Raums; die beiden Nachbarwände wachsen bzw. schrumpfen dabei mit. */
+      if(t.dataset.flwall!==undefined && istFlaeche(g)){
+        const k=+t.dataset.flwall;
+        const schon = !neuesObjekt && sel.flWall===k;
+        sel={...sel, objH:null, flWall:k};
+        if(schon) drag={kind:'flwall', room:r, g, w:k, start:p, moved:false,
+          orig:JSON.parse(JSON.stringify(g))};
+        renderAll(); return;
+      }
+      sel={...sel, objH:null, flWall:null};
       /* Linie: die Stelle merken, an der getippt wurde — „＋ Ecke einfügen" setzt die
          neue Ecke dann dort statt im längsten Abschnitt. Das nächstgelegene Segment
-         entscheidet, denn die Trefferfläche liegt über der ganzen Linie. */
+         entscheidet, denn die Trefferfläche liegt über der ganzen Linie.
+         **Nur die Linie.** Die freie Fläche hatte ihn kurzzeitig auch — dort erschien
+         damit beim Antippen einer Kante ein grüner Ring, der aussah wie eine Anwahl
+         („es gibt den grünen Punkt, als sei eine Wand angewählt"). Sie braucht ihn nicht:
+         eine neue Ecke entsteht bei ihr über „Wand teilen" an der Wand, die man ohnehin
+         schon angetippt hat. */
       if(g.type==='line' && (g.points||[]).length>1){
         let best=null;
-        for(let j=0;j<g.points.length-1;j++){
-          const s=aufStrecke(p, g.points[j], g.points[j+1]); if(!s) continue;
+        const segs = g.points.length-1;
+        for(let j=0;j<segs;j++){
+          const s=aufStrecke(p, g.points[j], g.points[(j+1)%g.points.length]); if(!s) continue;
           const d=Math.hypot(p.x-s.p.x, p.y-s.p.y);
           if(!best || d<best.d) best={d, seg:j, t:s.t, p:s.p};
         }
@@ -5827,7 +6120,7 @@ svg.addEventListener('pointermove', e=>{
   if(zeiger.has(e.pointerId)) zeiger.set(e.pointerId, {x:e.clientX, y:e.clientY});
   if(pinch){ if(zeiger.size>=2) updatePinch(); return; }
   const p=svgPoint(e);
-  if(mode==='draw'){
+  if(zeichenModus()){
     if(drag && drag.kind==='drafth'){          // gesetzten Punkt ziehen (mit Magnet)
       const s=draftSnap(p, drag.idx);
       if(dist(s, drag.orig)>0.005) drag.moved=true;
@@ -6041,6 +6334,27 @@ svg.addEventListener('pointermove', e=>{
     bauteilRasten(g, drag.room);          // Wand, Schacht, Treppe an die Raumwand
     if(dx||dy) drag.moved=true;
     renderCanvas();
+  } else if(drag.kind==='flwall'){
+    /* Wand einer freien Fläche parallel verschieben. Gerechnet wird vom Stand beim
+       Anfassen aus (`drag.orig`), nie Schritt auf Schritt — sonst summierten sich
+       Rundungen auf, und ein Zurückziehen träfe die Ausgangslage nicht mehr.
+       Die beiden Ecken wandern gemeinsam auf der Wandnormalen; die Nachbarwände hängen
+       an ihnen und ändern dabei ihre Länge, genau wie am Raum. */
+    const g=drag.g, o=drag.orig, k=drag.w, n=o.points.length;
+    const A=o.points[k], B=o.points[(k+1)%n];
+    const L=Math.hypot(B.x-A.x, B.y-A.y);
+    if(L>1e-6){
+      const nx=-(B.y-A.y)/L, ny=(B.x-A.x)/L;
+      const d=mm((p.x-drag.start.x)*nx + (p.y-drag.start.y)*ny);
+      const neu=o.points.map(q=>({...q}));
+      neu[k]={x:mm(A.x+nx*d), y:mm(A.y+ny*d)};
+      neu[(k+1)%n]={x:mm(B.x+nx*d), y:mm(B.y+ny*d)};
+      /* Über die gegenüberliegende Kante hinausgeschoben, klappt der Umriss um und
+         schneidet sich selbst. Dann bleibt die Wand einfach stehen — dieselbe Antwort
+         wie beim Schließen eines gezeichneten Umrisses. */
+      if(!polySchneidetSich(neu)){ g.points=neu; drag.moved=true; }
+    }
+    renderCanvas();
   } else if(drag.kind==='raumdreh'){
     /* Dieselbe Rasterung wie beim Objekt: 5°-Schritte, und rechte Winkel ziehen an —
        die trifft man auf dem Tablett sonst nie genau. Gedreht wird immer vom Stand beim
@@ -6155,10 +6469,20 @@ svg.addEventListener('pointermove', e=>{
       const c2={x:g.x+g.w/2, y:g.y+g.h/2};
       const oppNeu=vor({x:opp[0], y:opp[1]}, c2);
       g.x+=oppWelt.x-oppNeu.x; g.y+=oppWelt.y-oppNeu.y;
+    } else if(istFlaeche(g)){
+      /* Die Ecke einer freien Fläche geht FREI (Nutzerwunsch 13.8.2026: „außerdem
+         bewegen sich Ecken in einem starren Raster, das bitte ausschalten"). Sie war
+         zuerst auf 45° gerastet — dasselbe Raster wie beim Zeichnen. Beim Zeichnen ist
+         das richtig, dort entsteht die Form; beim Nachbessern steht sie schon, und dann
+         will man den Punkt genau dorthin setzen, wo er hingehört, nicht auf die nächste
+         Rasterstufe. Gerundet wird nur noch auf den Millimeter.
+         Rechte Winkel bekommt man weiterhin über die WAND: sie verschiebt sich parallel
+         und lässt die Winkel dabei unangetastet. */
+      g.points[drag.h]={x:mm(q.x), y:mm(q.y)};
     } else {
       const k=drag.h, pts=g.points;
       const fix=pts[k-1]||pts[k+1];
-      if(fix) q=linRaster(fix,q);          // dasselbe 15°-Raster wie beim Zeichnen
+      if(fix) q=linRaster(fix, q);          // Linie: dasselbe 15°-Raster wie beim Zeichnen
       pts[k]={x:q.x, y:q.y};
     }
     drag.moved=true;
@@ -6190,7 +6514,7 @@ svg.addEventListener('pointerup', e=>{
     else renderCanvas();
     return;
   }
-  if(drag && mode==='draw'){
+  if(drag && zeichenModus()){
     const d=drag; drag=null;
     if(d.kind==='drafth'){
       const n=draft.points.length;
@@ -6273,7 +6597,7 @@ svg.addEventListener('pointerup', e=>{
         const x=Math.min(drag.start.x,drag.cur.x), y=Math.min(drag.start.y,drag.cur.y);
         const w=Math.abs(drag.cur.x-drag.start.x), h=Math.abs(drag.cur.y-drag.start.y);
         if(w>0.05 && h>0.05){
-          const g={id:uid(), type:'rect', name:'Fläche '+(r.objects.filter(o=>o.type==='rect').length+1), x, y, w, h};
+          const g={id:uid(), type:'rect', name:'Rechteck '+(r.objects.filter(o=>o.type==='rect').length+1), x, y, w, h};
           r.objects.push(g); sel.objId=g.id; save();
         }
       }
@@ -6309,6 +6633,17 @@ svg.addEventListener('pointerup', e=>{
     }
     if(drag && drag.kind==='zoneh'){
       if(drag.moved) save();
+      drag=null; renderAll(); return;
+    }
+    /* Wand der freien Fläche: eigener Zweig, weil sie den Raum wechseln kann — beim
+       Parallelverschieben wandert die Mitte mit. Deshalb dieselbe Umzugsprüfung wie
+       beim Verschieben des ganzen Objekts. */
+    if(drag && drag.kind==='flwall'){
+      if(drag.moved){
+        const moved=reassignObjectRoom(drag.room, drag.g);
+        if(moved){ focusRoomId=moved.id; sel={roomId:moved.id, wall:null, vertex:null, objId:drag.g.id, flWall:drag.w}; }
+        save();
+      }
       drag=null; renderAll(); return;
     }
     if(drag && drag.moved && drag.kind==='vertex' && lockPruefen(drag.room, drag.lockSnap)){
@@ -6352,7 +6687,7 @@ svg.addEventListener('dblclick', e=>{
      abgeschlossen. Am Rechner mit der Maus kommt `dblclick` verlässlich an, auf dem
      Tablett gar nicht; darum beide. Ist der Zug schon fertig, ist `linZug` null und der
      Aufruf verpufft. */
-  if(mode==='draw' && draft.points.length>=3) closeDraft();
+  if(zeichenModus() && draft.points.length>=3) closeDraft();
   else if(mode==='objline' && linZug && linZug.points.length>=2) linieFertig();
 });
 svg.addEventListener('wheel', e=>{
@@ -6365,6 +6700,13 @@ $('#zout').onclick=()=>zoomBy(1.25);
 $('#zfit').onclick=zoomFit;
 
 /* ---------- Zeichnen ---------- */
+/* ---------- Die freie Fläche wird gezeichnet wie ein Raum ----------
+   Sie benutzt bewusst DENSELBEN Entwurf (`draft`) und dieselben Handler: Ecken antippen,
+   45°-Raster, gesetzte Punkte lassen sich noch verschieben, der Startpunkt bzw. ein
+   Doppeltipp schließt, die Länge lässt sich tippen oder lasern. Nur `closeDraft`
+   entscheidet am Ende, ob daraus ein Raum oder ein Objekt wird — ein zweiter Zeichensatz
+   für dasselbe Bild wäre die Stelle, an der die beiden auseinanderlaufen. */
+const zeichenModus = () => mode==='draw' || mode==='objflaeche';
 function snapDir(p){
   if(!draft.points.length) return {x:mm(p.x), y:mm(p.y)};
   const a=draft.points[draft.points.length-1];
@@ -6406,12 +6748,12 @@ function linAbbrechen(){ linZug=null; linTipp={zeit:0, p:null}; }
 /* Das Raster einer Linienecke gegenüber der vorigen. Dieselbe Funktion dient dem
    ZEICHNEN und dem späteren Ziehen einer Ecke — sonst zöge man eine Linie im 15er-Raster
    und verschöbe sie danach im 45er. */
-function linRaster(fix, q){
+function linRaster(fix, q, grad){
   const frei={x:mm(q.x), y:mm(q.y)};
   if(!magnetAn()) return frei;
   const dx=q.x-fix.x, dy=q.y-fix.y, L=Math.hypot(dx,dy);
   if(L<0.02) return frei;
-  const stufe=LIN_RASTER*Math.PI/180;
+  const stufe=(grad||LIN_RASTER)*Math.PI/180;
   const ang=Math.round(Math.atan2(dy,dx)/stufe)*stufe;
   const Lr=mm(L);
   return {x:mm(fix.x+Math.cos(ang)*Lr), y:mm(fix.y+Math.sin(ang)*Lr)};
@@ -6482,6 +6824,7 @@ function addSegment(L){
 }
 function closeDraft(){
   if(draft.points.length<3){ cancelModes(); return; }
+  if(mode==='objflaeche'){ flaecheFertig(); return; }
   const r={id:uid(), floorId:activeFloorId, name:'Raum '+(proj().rooms.length+1),
     height:neueRaumHoehe(activeFloorId), points:draft.points, openings:[]};
   raumVorgabeSetzen(r);                          // Wandstärke aus den Einstellungen
@@ -6491,9 +6834,44 @@ function closeDraft(){
      dazunehmen. Hineinzoomen ist ein Tipp mehr, Herauszoomen wäre einer. */
   cancelModes(); etagenWahl=[r.id]; sel={roomId:r.id, wall:null, vertex:null}; renderAll();
 }
+/* Aus dem Entwurf wird ein Objekt im offenen Raum. Die Höhe kommt vom Raum — eine
+   Fläche IM Raum ist im Zweifel so hoch wie er; wer es anders will, trägt es im Panel
+   ein. */
+function flaecheFertig(){
+  const r=focusRoomId?roomById(focusRoomId):null;
+  const pts=draft.points.map(q=>({...q}));
+  if(!r){
+    melde('Kein Raum offen — die Fläche wurde nicht angelegt.', true);
+    cancelModes(); return;
+  }
+  if(polySchneidetSich(pts)){
+    /* Nicht schließen, sondern stehen lassen: die Punkte sind noch da und lassen sich
+       an Ort und Stelle zurechtziehen. Wegwerfen wäre die teurere Antwort. */
+    melde('Der Umriss überschneidet sich — die Ecke, die sich kreuzt, erst zurechtziehen.', true);
+    return;
+  }
+  r.objects=r.objects||[];
+  const g={id:uid(), type:'flaeche',
+    name:'Fläche '+(r.objects.filter(istFlaeche).length+1),
+    points:pts, hoehe:r.height||0};
+  r.objects.push(g);
+  cancelModes();
+  sel={roomId:r.id, wall:null, vertex:null, objId:g.id};
+  save(); renderAll();
+}
 function updateDrawHint(){
   const h=$('#drawhint');
-  if(mode==='draw'){
+  if(mode==='objflaeche'){
+    h.style.display='block';
+    const n=draft.points.length;
+    let txt='<b>Fläche:</b> '+(
+      n===0 ? 'erste Ecke antippen'
+    : n===1 ? 'nächste Ecke antippen'
+    : `${n} Ecken — weiter antippen`);
+    if(draft.typed) txt += ` &nbsp;|&nbsp; Eingabe: <b>${draft.typed} m</b> (Enter)`;
+    if(n>=3) txt += ' &nbsp;|&nbsp; auf den <b>grünen Startpunkt</b> ziehen oder Doppelklick = schließen';
+    h.innerHTML=txt+' &nbsp;|&nbsp; Esc = abbrechen';
+  } else if(mode==='draw'){
     h.style.display='block';
     const n=draft.points.length;
     let txt = n===0 ? 'Ersten Eckpunkt antippen' :
@@ -6515,7 +6893,7 @@ function updateDrawHint(){
     h.innerHTML='Position wählen und <b>klicken</b>, um den Raum zu platzieren &nbsp;|&nbsp; Esc = abbrechen';
   } else if(mode==='objrect'){
     h.style.display='block';
-    h.innerHTML='<b>Fläche aufziehen:</b> Ecke anklicken, ziehen, loslassen &nbsp;|&nbsp; Esc = abbrechen';
+    h.innerHTML='<b>Rechteck aufziehen:</b> Ecke anklicken, ziehen, loslassen &nbsp;|&nbsp; Esc = abbrechen';
   } else if(mode==='objline'){
     h.style.display='block';
     const n=linZug?linZug.points.length:0;
@@ -6556,7 +6934,7 @@ document.addEventListener('keydown', e=>{
     else if(focusRoomId) exitRoom();
     return;
   }
-  if(mode==='draw'){
+  if(zeichenModus()){
     if(/^[0-9]$/.test(e.key)) draft.typed+=e.key;
     else if(e.key===','||e.key==='.') draft.typed+= draft.typed.includes(',')?'':',';
     else if(e.key==='Backspace') draft.typed=draft.typed.slice(0,-1);
@@ -6917,6 +7295,11 @@ function hwMarks(r, lbl, aktiv){
 /* Objekt gehört zu dem Raum, in dem es hauptsächlich liegt (Mittelpunkt entscheidet).
    Liegt es nach dem Verschieben in einem anderen Raum, wandert es dorthin — samt LV-Positionen. */
 function objCenter(g){
+  /* Bei der freien Fläche entscheidet ein Punkt IM Vieleck, nicht die Mitte des
+     umschließenden Kastens: bei einer L- oder U-Form läge die außerhalb, und das Objekt
+     wanderte beim Verschieben in den falschen Raum (oder in gar keinen). Dieselbe Falle
+     wie beim Raumnamen am 7.8.2026 — `raumMitte` ist genau dafür gebaut. */
+  if(istFlaeche(g) && (g.points||[]).length>=3) return raumMitte(g);
   if(g.points){ const bb=bboxOf(g.points); return {x:(bb.minx+bb.maxx)/2, y:(bb.miny+bb.maxy)/2}; }
   return {x:g.x+g.w/2, y:g.y+g.h/2};
 }
@@ -7656,7 +8039,11 @@ function raeumeVerbinden(rs, vorab){
        ein zweites Mal verbunden, sind seine festgehaltenen Maße die des URSPRÜNGLICHEN
        Raums — die heutigen wären genau die Zahl, vor der eingefroren wurde. (Beim ersten
        Anlauf sprang eine Position dadurch von 50,00 auf 97,40 m².) */
-    if(!a.raumFest && (a.nutzGrund || a.nutzAnsicht || a.nutzVolumen || a.nutzUmfang)){
+    /* Zuordnungen an einer freien Fläche sind hiervon NICHT betroffen: sie rechnen mit
+       den Maßen der Fläche, und die wandert beim Verbinden unverändert mit. Ein
+       eingefrorenes Raummaß würde bei ihnen sogar gewinnen (`lvRaumMasse` liest die
+       Fläche zuerst) — geschrieben wird es deshalb gar nicht erst. */
+    if(!a.raumFest && !lvFlaecheVon(a) && (a.nutzGrund || a.nutzAnsicht || a.nutzVolumen || a.nutzUmfang)){
       a.raumFest=raumMass[a.roomId];
       bericht.festeMengen++;
     }
@@ -8279,10 +8666,15 @@ function eckeLoeschen(r, i){
 /* `mp` = Merkpunkt {seg, t}, also die zuletzt angetippte Stelle auf DIESER Linie.
    Ist er da, entsteht die Ecke genau dort; sonst wie bisher mittig — im längsten
    Abschnitt bzw. neben der gewählten Ecke. */
+/* `zu` = geschlossener Umriss (die freie Fläche): dann gibt es eine Kante mehr — die
+   vom letzten zum ersten Punkt —, und der Nachbar der letzten Ecke ist die erste. */
 function eckeInLinieEinfuegen(g, k, mp){
   let i, a, b, neu;
-  if(mp && mp.seg>=0 && mp.seg<g.points.length-1){
-    i=mp.seg; a=g.points[i]; b=g.points[i+1];
+  const zu=istFlaeche(g), n=g.points.length;
+  const segs = zu ? n : n-1;
+  const nach = j => g.points[(j+1)%n];
+  if(mp && mp.seg>=0 && mp.seg<segs){
+    i=mp.seg; a=g.points[i]; b=nach(i);
     const L=dist(a,b);
     if(L<0.02) return null;
     const RAND=0.02, t=Math.max(RAND, Math.min(L-RAND, mp.t));
@@ -8290,13 +8682,13 @@ function eckeInLinieEinfuegen(g, k, mp){
   } else {
     if(k==null){
       i=0; let best=-1;
-      for(let j=0;j<g.points.length-1;j++){
-        const d=dist(g.points[j], g.points[j+1]);
+      for(let j=0;j<segs;j++){
+        const d=dist(g.points[j], nach(j));
         if(d>best){ best=d; i=j; }
       }
-    } else i = k<g.points.length-1 ? k : k-1;
+    } else i = (zu || k<n-1) ? k : k-1;
     if(i<0) return null;
-    a=g.points[i]; b=g.points[i+1];
+    a=g.points[i]; b=nach(i);
     neu={x:mm((a.x+b.x)/2), y:mm((a.y+b.y)/2)};
   }
   g.points.splice(i+1, 0, neu);
@@ -8304,7 +8696,12 @@ function eckeInLinieEinfuegen(g, k, mp){
 }
 // Ecke einer Linie entfernen — die Nachbarsegmente verschmelzen
 function punktLoeschen(g, k){
-  if(g.points.length<=2){ alert('Eine Linie braucht mindestens zwei Ecken.'); return false; }
+  const min = istFlaeche(g) ? 3 : 2;
+  if(g.points.length<=min){
+    alert(istFlaeche(g) ? 'Eine Fläche braucht mindestens drei Ecken.'
+                        : 'Eine Linie braucht mindestens zwei Ecken.');
+    return false;
+  }
   g.points.splice(k, 1);
   return true;
 }
@@ -8351,6 +8748,10 @@ const ICONS = {
   kopie:     '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/>',
   stift:     '<path d="M4 20h4L18 10l-4-4L4 16z"/>',
   flaeche:   '<rect x="3" y="6" width="18" height="12" rx="1.5"/>',
+  /* Die freie Fläche als Vieleck mit einer einspringenden Ecke — sie muss sich vom
+     Rechteck daneben auf einen Blick unterscheiden, und genau das kann sie ja: eine
+     Form, die kein Rechteck ist. */
+  vieleck:   '<path d="M4 5h9v6h7v8H4z"/>',
   linie:     '<path d="M3 19 10 6l11 6"/>',
   rundum:    '<ellipse cx="12" cy="12" rx="9" ry="5"/><circle cx="12" cy="12" r="3"/>',
   fotomass:  '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 15l4-5 3 3 3-4"/>',
@@ -8458,8 +8859,16 @@ function lvHerkunft(a){
     if(!og) return {rang:2, key:'weg:'+a.objId, titel:'– gelöschtes Objekt –'};
     const name = og.type==='door' ? 'Tür' : og.type==='window' ? 'Fenster'
       : istFotoMass(og) ? 'Fotoaufmaß' : ist360(og) ? '360°-Aufnahme'
-      : og.type==='rect' ? 'Fläche' : og.type==='line' ? 'Linie'
+      : og.type==='rect' ? 'Rechteck' : istFlaeche(og) ? 'Fläche' : og.type==='line' ? 'Linie'
       : (SYMDEFS[og.sub]||{}).label || 'Objekt';
+    /* Jede Wand einer freien Fläche bekommt ihre EIGENE Überschrift — sonst stünden
+       Zuordnungen der Fläche und die ihrer vier Wände in einem Topf, und man sähe nicht
+       mehr, was wo abgerechnet wurde. */
+    if(istFlaeche(og) && a.flWall!=null){
+      const wn=flWandNrOf(og, a.flWall);
+      return {rang:2, key:'objw:'+og.id+':'+a.flWall, nr:og.nr||0,
+              titel:`${name}${og.nr?` (${og.nr})`:''} · Wand ${a.flWall+1}${wn?` (${wn})`:''}`};
+    }
     return {rang:2, key:'obj:'+og.id, titel:name+(og.nr?` (${og.nr})`:''), nr:og.nr||0};
   }
   if(a.wall!=null){
@@ -8686,8 +9095,110 @@ function panelObjekt(p, selObj){
             <b>Griffe auf den Ecken</b> ziehen sie in Form — erst antippen, dann ziehen,
             wie bei Raumecken. Rechte Winkel rasten ein.</p></div>
           ${aktionen}`;
-      } else if(selObj.type==='rect'){
+      } else if(istFlaeche(selObj)){
+        /* Ein Raum im Raum: eigener Umriss, eigene Höhe, ringsum 5 cm Wand. Die vier
+           Zahlen darunter sind dieselben, mit denen die Automatikschalter im LV-Dialog
+           rechnen — sie stehen hier, damit man vor dem Zuordnen sieht, was herauskommt. */
+        const fs=flStats(selObj);
+        const zeigt=selObj.ohneAufmass!==true;
+        const pk=flPunkte(selObj), nP=pk.length;
+        const wk = (sel.flWall!=null && sel.flWall<nP) ? sel.flWall : null;
+        /* ---------- Die Wand hat ihr EIGENES Panel (13.8.2026, Nutzerwunsch) ----------
+           Gemeldet: „Es gibt immer noch keine Unterscheidung, ob ich auf der Fläche oder
+           einer Wand bin — Wände haben Duplizieren und Fläche Ecke hinzufügen."
+
+           Genau das war der Fehler: die Wand stand als Block IM Flächen-Panel. Darüber
+           blieb die Überschrift „Fläche", darunter standen weiter Name, Höhe, Ecke
+           einfügen, Duplizieren und Löschen — also war überhaupt nicht zu sehen, dass
+           gerade eine Wand gewählt ist. Am Raum ist es seit jeher anders: eine angewählte
+           Wand TAUSCHT die Seitenleiste aus. Jetzt hier auch.
+
+           Was an der Wand steht, ist damit auch beantwortet: nur, was zur Wand gehört.
+           Duplizieren und Löschen betreffen die ganze Fläche und stehen deshalb nur dort;
+           Ecke einfügen/löschen ebenso. */
+        /* Und dieselbe Trennung für die ECKE. „Ecke einfügen" ist damit ganz weg: eine
+           neue Ecke entsteht über **Wand teilen** an der Wand, die man ohnehin schon
+           angetippt hat — genau wie am Raum, wo `#wallsplit` an der Wand steht und es
+           kein „Ecke einfügen" am Raum gibt. Zwei Wege zur selben Ecke wären einer zu
+           viel, und der zweite brauchte einen Merkpunkt, der wie eine Anwahl aussah. */
+        if(sel.objH!=null && sel.objH<nP){
+          const ek=sel.objH;
+          return `<div class="panel"><h3>Ecke ${ek+1} von ${nP} — Fläche${nrTxt}</h3>
+            <div class="stat"><span>Lage</span><b>${fmt(pk[ek].x,3)} / ${fmt(pk[ek].y,3)} m</b></div>
+            <div class="row">
+              <button class="btn small danger" id="fleckdel" style="flex:1"
+                ${nP<=3?'disabled title="Eine Fläche braucht mindestens drei Ecken"':''}
+                >${ico('papierkorb')}Ecke löschen</button>
+            </div>
+            <div class="row">
+              <button class="btn small" id="fleckabw" style="flex:1"
+                title="Zurück zur Fläche — dort stehen Name, Höhe, Maße und die Aktionen"
+                >${ico('pfeilLinks')}Zurück zur Fläche</button>
+            </div>
+            <p class="hint">Die Ecke ist ausgewählt — zum Verschieben noch einmal anfassen und
+              ziehen. Sie geht <b>frei</b>, ohne Raster. Beim Löschen verschmelzen die beiden
+              angrenzenden Wände. Eine <b>neue</b> Ecke entsteht an der Wand: dort „Wand teilen".</p>
+            <p class="hint">Esc = abwählen.</p></div>`;
+        }
+        if(wk!=null){
+          const wL=dist(pk[wk], pk[(wk+1)%nP]);
+          const wLvs=(p.attrs||[]).filter(a=>a.objId===selObj.id && a.flWall===wk);
+          return `<div class="panel"><h3>Wand ${wk+1} von ${nP} — Fläche${nrTxt}</h3>
+            <div class="row"><label>Länge (m)</label>
+              <input class="laser flwfld" data-w="${wk}" value="${fmt(wL,3)}"></div>
+            <div class="stat"><span>Stärke</span><b>${fmt(FL_WAND,2)} m (fest)</b></div>
+            <div class="row">
+              <button class="btn small" id="flsplit" style="flex:1"
+                title="Setzt eine Ecke in die Mitte dieser Wand — aus einer werden zwei">${ico('ecke')}Wand teilen</button>
+            </div>
+            <div class="row">
+              <button class="btn small" id="flwabw" style="flex:1"
+                title="Zurück zur Fläche — dort stehen Name, Höhe, Maße und die Aktionen"
+                >${ico('pfeilLinks')}Zurück zur Fläche</button>
+            </div>
+            <p class="hint">Ziehen verschiebt die Wand <b>parallel</b>; die beiden Nachbarwände
+              wachsen dabei mit. Die <b>Länge</b> schiebt die hintere Ecke auf der Wandachse vor
+              oder zurück — die nächste Wand folgt ihr. <b>Teilen</b> setzt eine Ecke in die
+              Mitte; die Form ändert sich dabei nicht. Esc = abwählen.</p></div>
+            <div class="panel"><h3>Aktionen</h3>
+            <div class="row"><button class="btn green small" id="flwlv" style="flex:1"
+              >${ico('liste')}LV-Position</button></div>
+            <p class="hint">Länge und Höhe sind vorbelegt: die <b>Wandlänge</b> und die
+              <b>Höhe der Fläche</b> — und sie ziehen mit, solange die Kette im Dialog steht.</p></div>
+            ${lvPanel(wLvs)}`;
+        }
         html+=`<div class="panel"><h3>Fläche${nrTxt}</h3>
+          <div class="row"><label>Name</label><input type="text" id="objname" value="${esc(selObj.name||'')}"></div>
+          <div class="row"><label>Höhe (m)</label><input class="laser flfld" data-f="hoehe" value="${fmt(fs.hoehe,3)}">
+            <button class="btn small" id="flhraum" title="Höhe des Raums übernehmen"
+              >${ico('nachbar')}${fmt((roomById(selObj.roomId)||roomById(focusRoomId)||{}).height||0,2)}</button></div>
+          <p class="hint">Auf eine <b>Kante</b> tippen wählt die Wand — dort wird verschoben,
+            geteilt und die Länge eingetragen. Auf eine <b>Ecke</b> tippen wählt die Ecke.</p>
+          <div class="stat"><span>Ecken</span><b>${nP}</b></div>
+          <div class="stat"><span>Grundfläche</span><b>${fmt(fs.area,3)} m²</b></div>
+          <div class="stat"><span>Umfang</span><b>${fmt(fs.per,3)} m</b></div>
+          <div class="stat"><span>Ansichtsfläche</span><b>${fmt(fs.ansicht,3)} m²</b></div>
+          <div class="stat"><span>Volumen</span><b>${fmt(fs.vol,3)} m³</b></div>
+          <div class="stat"><span>Wandstärke</span><b>${fmt(FL_WAND,2)} m (fest)</b></div>
+          <div style="margin-top:6px">
+            <label class="hint" style="display:block; margin-bottom:2px">Anmerkung — erscheint im Druck auf der Seite dieser Fläche</label>
+            <textarea id="flanm" rows="2" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:6px"
+              data-feldname="Anmerkung"
+              placeholder="z. B. Podest bleibt stehen, Belag nur oben">${esc(selObj.anmerkung||'')}</textarea></div>
+          <label class="row" style="gap:6px; align-items:center; margin-top:6px">
+            <input type="checkbox" id="flaufmass" ${zeigt?'checked':''}>
+            <span>Im Aufmaß anzeigen</span></label>
+          <p class="hint">Abgehakt bekommt die Fläche im Bericht eine <b>eigene Seite unter dem Raum</b>,
+            sobald ihr eine LV-Position zugeordnet ist. Gezeichnet wird sie in jedem Fall, und ihre
+            Menge zählt immer mit.</p>
+          <p class="hint">Sie rechnet wie ein Raum: eine Zuordnung an dieser Fläche nimmt für
+            <b>Grundfläche, Umfang, Ansichtsfläche und Volumen</b> die Maße oben — nicht die des Raums.
+            Sie zieht dem Raum <b>nichts ab</b>. Ihre <b>Farbe kommt aus der LV-Zuordnung</b>.
+            Ziehen in der Fläche verschiebt sie, Eckgriffe formen sie um (erst antippen, dann
+            ziehen); die Ecken rasten auf 45°. Entf = löschen, Esc = abwählen.</p></div>
+          ${aktionen}`;
+      } else if(selObj.type==='rect'){
+        html+=`<div class="panel"><h3>Rechteck${nrTxt}</h3>
           <div class="row"><label>Name</label><input type="text" id="objname" value="${esc(selObj.name||'')}"></div>
           <div class="row"><label>Länge (m)</label>${koppelKnopf(selObj,'L')}<input class="laser objdim" data-f="L" value="${fmt(objMass(selObj,'L'),3)}"></div>
           <div class="row"><label>Breite (m)</label>${koppelKnopf(selObj,'B')}<input class="laser objdim" data-f="B" value="${fmt(objMass(selObj,'B'),3)}"></div>
@@ -8697,7 +9208,7 @@ function panelObjekt(p, selObj){
           <div class="row"><label>Drehung (°)</label>
             <input type="number" min="0" max="359" step="5" id="objgrad" value="${Math.round(selObj.rot||0)}" style="width:80px">
             <button class="btn small" id="objrot" style="flex:1">${ico('drehen')}+90°</button></div>
-          <p class="hint">Ziehen verschiebt, Eckgriffe ändern die Größe. Im Plan lässt sich die Fläche
+          <p class="hint">Ziehen verschiebt, Eckgriffe ändern die Größe. Im Plan lässt sich das Rechteck
             am <b>Griff über der Oberkante</b> frei drehen — er rastet auf 5°, rechte Winkel ziehen an.
             Die Maße ändern sich beim Drehen nicht. ${koppelHinweis(selObj)} Entf = löschen, Esc = abwählen.</p></div>
           ${aktionen}`;
@@ -9204,7 +9715,7 @@ function panelRaum(p, r, objs, ops){
 
     <div class="panel"><h3>Neues Objekt${n?` — ${n} im Raum`:''}</h3>
     <div class="werkzeuge">
-      ${wz(ico('flaeche',true), mode==='objrect', 'id="objrectbtn"', 'Fläche aufziehen')}
+      ${wz(ico('flaeche',true), mode==='objrect', 'id="objrectbtn"', 'Rechteck aufziehen')}
       ${wz(ico('linie',true),   mode==='objline', 'id="objlinebtn"', 'Linie zeichnen')}
       ${wz(ico('tuer',true),    mode==='addopen'&&pendingOpenType==='door', 'id="opdoorbtn"', 'Tür — dazu eine Wand antippen')}
       ${wz(ico('fenster',true), mode==='addopen'&&pendingOpenType==='window', 'id="opwinbtn"', 'Fenster — dazu eine Wand antippen')}
@@ -9224,6 +9735,8 @@ function panelRaum(p, r, objs, ops){
         'data-sym="treppe"', 'Treppe — die Stufen ergeben sich aus der Lauflänge; keine LV-Zuordnung', 'symbtn')}
       ${wz(ico('moebel')+'Mobiliar', moebelAuf, 'id="moebelbtn"',
         'Mobiliar — Sanitärobjekte als Plansymbole. Öffnet den Ordner.', 'klapp')}
+      ${wz(ico('vieleck')+'Fläche', mode==='objflaeche', 'id="objflbtn"',
+        'Freie Fläche — Ecken antippen wie beim Raum. Eigene Höhe, 5 cm Wand, eigene Maße.')}
     </div>
     <!-- Der Ordner steht IMMER im Baum, zugeklappt nur unsichtbar. Daran hängt das
          Untermenü der Kurzbefehlsleiste: es fragt, ob es die Knöpfe GIBT — nicht, ob sie
@@ -9705,6 +10218,14 @@ function wireRaum(on, r){
        statt `renderAll`: im Plan ändert sich nichts, und ein laufender Platzier-Modus
        soll das Aufklappen überleben. */
     on('#moebelbtn','onclick',()=>{ moebelAuf=!moebelAuf; renderSidebar(); });
+    /* Die freie Fläche benutzt den Raum-Entwurf; abschalten wirft ihn weg, anschalten
+       fängt einen leeren an — dieselbe Regel wie bei der Linie. */
+    on('#objflbtn','onclick',()=>{
+      draft={points:[],cursor:null,dir:null,typed:''};
+      mode=(mode==='objflaeche')?'select':'objflaeche';
+      pendingSym=null; pendingOpenType=null; sel.objId=null;
+      renderAll(); updateDrawHint();
+    });
     document.querySelectorAll('.symbtn').forEach(btn=>{
       btn.onclick=()=>{
         if(mode==='objsym' && pendingSym===btn.dataset.sym){ mode='select'; pendingSym=null; }
@@ -10334,6 +10855,74 @@ function wireObjekt(on, r){
       });
       on('#p360proj','onchange',e=>{ localStorage.setItem(P360_PROJ_KEY, e.target.value); p360WinkelText(); });
       on('#p360laden','onclick',()=>{ p360Ziel={objId:selObj.id, roomId:r.id}; $('#p360file').click(); });
+      /* ---- freie Fläche ---- */
+      document.querySelectorAll('input.flfld').forEach(inp=>{
+        inp.onchange=()=>{
+          const v=parseNum(inp.value);
+          if(!isFinite(v) || v<0){ renderSidebar(); return; }
+          selObj[inp.dataset.f]=mm(v); save(); renderAll();
+        };
+      });
+      on('#flhraum','onclick',()=>{ selObj.hoehe=r.height||0; save(); renderAll(); });
+      on('#flanm','onchange',e=>{ selObj.anmerkung=e.target.value; save(); });
+      document.querySelectorAll('input.flwfld').forEach(inp=>{
+        inp.onchange=()=>{
+          const v=parseNum(inp.value);
+          // Zwei Gründe, eine Meldung: unter 2 cm ist keine Wand, und darüber hinaus
+          // kann der Umriss umschlagen. Beides endet damit, dass die Wand stehen bleibt.
+          if(!flWandLaenge(selObj, +inp.dataset.w, v))
+            melde('Diese Länge geht nicht — sie ist zu klein, oder der Umriss würde sich selbst überschneiden.', true);
+          save(); renderAll();
+        };
+      });
+      /* Wand teilen: eine Ecke in die MITTE dieser Wand. Aus einer Wand werden zwei, und
+         die neue Ecke ist gleich angewählt — man will sie ja verschieben. */
+      on('#flsplit','onclick',()=>{
+        const k=sel.flWall; if(k==null) return;
+        const pts=flPunkte(selObj), n=pts.length;
+        const L=dist(pts[k], pts[(k+1)%n]);
+        const neu=eckeInLinieEinfuegen(selObj, null, {seg:k, t:L/2});
+        if(neu==null){ melde('Diese Wand ist zu kurz zum Teilen.', true); return; }
+        /* Aus Wand k werden k und k+1; alles dahinter rutscht um eins. Die Zuordnung
+           bleibt auf der VORDEREN Hälfte — sie hat die alte Nummer, und wer die Wand
+           teilt, teilt nicht ihre Abrechnung. */
+        flWandRefsUmschreiben(selObj, w => w>k ? w+1 : w);
+        merkPunkt=null;
+        sel={...sel, flWall:null, objH:neu};
+        save(); renderAll();
+      });
+      on('#flwabw','onclick',()=>{ sel={...sel, flWall:null}; renderAll(); });
+      /* LV-Position an der Wand: derselbe Dialog, nur mit `flWall` im Gepäck. Länge und
+         Höhe kommen vorbelegt aus `lvKoppelMass`, wie an einer Raumwand. */
+      on('#flwlv','onclick',()=>{
+        const k=sel.flWall; if(k==null) return;
+        const pts=flPunkte(selObj), n=pts.length;
+        openLvDialog(null, r.id, selObj.id, {flWall:k,
+          laenge:mm(dist(pts[k], pts[(k+1)%n])), hoehe:flStats(selObj).hoehe});
+      });
+      on('#fleckabw','onclick',()=>{ sel={...sel, objH:null}; renderAll(); });
+      on('#fleckdel','onclick',()=>{
+        const k=sel.objH; if(k==null) return;
+        // Objekt-Regel: ohne LV-Verweis keine Rückfrage; mit ändern sich die Maße im LV
+        if(lvVerweise(selObj.id) && !confirm(`Ecke löschen?\n\n„${selObj.name||'Fläche'}" hat LV-Zuordnungen — ihre Maße ändern sich dadurch.`)) return;
+        if(punktLoeschen(selObj, k)){
+          /* Ecke k weg heißt: die Wände k−1 und k verschmelzen zu einer — sie bekommt die
+             Nummer k−1. Was an Wand k hing, hängt danach an dieser einen; alles dahinter
+             rutscht um eins zurück. (Bei k = 0 verschmelzen die letzte und die erste; die
+             gemeinsame ist dann die letzte, deren Nummer sich durch das Wegfallen ohnehin
+             um eins verringert.) */
+          const vor=k===0 ? flPunkte(selObj).length-1 : k-1;
+          flWandRefsUmschreiben(selObj, w => w===k ? vor : (w>k ? w-1 : w));
+          sel={...sel, objH:null}; save(); renderAll();
+        }
+      });
+      /* Vorangewählt und deshalb als ABWESENHEIT gespeichert: `ohneAufmass` steht nur da,
+         wenn der Haken weg ist. So braucht keine bestehende Fläche eine Umstellung, und
+         eine aus einer fremden Datei gelesene zeigt sich wie erwartet. */
+      on('#flaufmass','onchange',e=>{
+        if(e.target.checked) delete selObj.ohneAufmass; else selObj.ohneAufmass=true;
+        save(); renderSidebar();
+      });
       on('#ptadd','onclick',()=>{                         // neue Ecke — auch ohne gewählte Ecke
         const neu=eckeInLinieEinfuegen(selObj, sel.objH, merkFuerLinie(selObj));
         if(neu!=null){ merkPunkt=null; sel={...sel, objH:neu}; save(); renderAll(); }
@@ -10505,6 +11094,15 @@ let lvPresetWall=null; // Wand-Index, wenn der Dialog aus dem Wand-Panel geöffn
    angezeigt, nicht ausgewählt. Zwei Auswahlmenüs, die man praktisch nie umstellt,
    haben beim Aufmessen mehr verwirrt als geholfen. */
 let lvRoomId=null, lvObjId=null;
+/* ---------- LV-Position an einer Wand der freien Fläche (13.8.2026) ----------
+   „Bei Wänden benötige ich noch LV-Position."
+
+   Der Träger ist ein PAAR: `a.objId` zeigt auf die Fläche, `a.flWall` auf die Nummer
+   ihrer Wand. Warum nicht `a.wall` wie am Raum? Weil `a.wall` seit jeher die Wand des
+   RAUMS meint — jede Lesestelle (Nummernvergabe `r.wallNr`, `lvZielText`, die Kopplung
+   an die Raumhöhe, `wandRefsUmschreiben`) rechnet damit. Ein zweites Feld ist billiger
+   als vierzig Fallunterscheidungen, und ohne das Feld verhält sich alles wie bisher. */
+let lvFlWall=null;
 let lvAnOeffnung=null;      // die Tür/das Fenster, an dem der Dialog hängt — sonst null
 let lvFuerRaeume=null;      // aus der Mehrfachanwahl: in diese Räume kopieren
 /* Über „＋ Neue LV-Position" im LV-Tab angelegt: die Position gehört keinem Bauteil,
@@ -10532,6 +11130,8 @@ function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
   lvObjId  = (a ? a.objId : presetObjId) || null;
   lvPresetWall = a ? (a.wall!=null?a.wall:null)
                    : ((presetVals && presetVals.wall!=null) ? presetVals.wall : null);
+  lvFlWall = a ? (a.flWall!=null?a.flWall:null)
+               : ((presetVals && presetVals.flWall!=null) ? presetVals.flWall : null);
   lvProjektEbene = a ? !!a.projekt : !!(presetVals && presetVals.projekt);
   lvZielAnzeige();
   $('#lvPos').value=a?a.lv:'';
@@ -10572,6 +11172,7 @@ function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
   $('#lvNutzGrund').checked=a?!!a.nutzGrund:false;
   $('#lvNutzAnsicht').checked=a?!!a.nutzAnsicht:false;
   $('#lvNutzVolumen').checked=a?!!a.nutzVolumen:false;
+  $('#lvNutzUmfang').checked=a?!!a.nutzUmfang:false;
   /* Festgehaltene Raummaße sichtbar machen (Räume verbunden). Ohne die Zeile sähe die
      Position aus wie jede andere, rechnete aber mit den Maßen von vorher. */
   const fest=a&&a.raumFest;
@@ -10583,7 +11184,9 @@ function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
      (Altbestand hat den Merker nicht und bleibt darum bei festen Zahlen). */
   const anWand = lvPresetWall!=null;
   lvAnOeffnung = lvOeffnungVon(roomById(lvRoomId), lvObjId);
-  const koppelbar = anWand || !!lvAnOeffnung;
+  // Die Wand einer freien Fläche koppelt genauso: Länge aus ihr, Höhe aus der Fläche
+  const anFlWand = lvFlWall!=null;
+  const koppelbar = anWand || !!lvAnOeffnung || anFlWand;
   $('#lvAutoLZeile').style.display = koppelbar?'':'none';
   $('#lvAutoHZeile').style.display = koppelbar?'':'none';
   $('#lvAutoL').checked = koppelbar && (a ? !!a.autoL : true);
@@ -10596,9 +11199,11 @@ function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
   zeile('#lvAutoLZeile', wo?`Länge folgt ${wo}`:'Länge folgt der Wand',
     wo?'Wird die Breite der Öffnung geändert, zieht dieses Maß mit'
       :'Wird die Wand gezogen oder ihre Länge getippt, zieht dieses Maß mit');
-  zeile('#lvAutoHZeile', wo?`Höhe folgt ${wo}`:'Höhe folgt dem Raum',
+  zeile('#lvAutoHZeile',
+    wo ? `Höhe folgt ${wo}` : (anFlWand ? 'Höhe folgt der Fläche' : 'Höhe folgt dem Raum'),
     wo?'Wird die Höhe der Öffnung geändert, zieht dieses Maß mit'
-      :'Wird die Raumhöhe geändert, zieht dieses Maß mit');
+      :(anFlWand ? 'Wird die Höhe der Fläche geändert, zieht dieses Maß mit'
+                 : 'Wird die Raumhöhe geändert, zieht dieses Maß mit'));
   // Hinter H gibt es an Tür und Fenster nichts zu holen — die Raumhöhe ist dort nicht gemeint
   $('#lvHoeheRaum').style.display = lvAnOeffnung ? 'none' : '';
   $('#lvUmfangRaum').title = lvAnOeffnung
@@ -10641,9 +11246,10 @@ function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
     if(Number.isFinite(B)) $('#lvB').value=fmt3(B);
   }
   $('#lvAnm').value=a?(a.anmerkung||''):'';
-  /* Altbestand „Nutze Umfang als Länge": das Häkchen gibt es nicht mehr. Beim Öffnen
-     wird der Umfang einmalig als Zahl in die Länge geschrieben; beim Speichern fällt
-     das Flag weg. Nicht angefasste Positionen rechnet `lvCalc` weiter wie bisher. */
+  /* Bei angehaktem „Umfang" steht der Umfang zur Ansicht im Längenfeld — gerechnet wird
+     er ohnehin aus dem Raum (`lvCalc`). So sieht man die Zahl, um die es geht, statt ein
+     Feld, das gerade übergangen wird. (Bis 10.8.2026 stand hier eine Umstellhilfe, die
+     das Häkchen dabei löschte — der Schalter war ausgebaut. Er ist wieder da.) */
   if(a && a.nutzUmfang){
     const r0=roomById(a.roomId);
     if(r0) $('#lvL').value=fmt3(roomStats(r0).per);
@@ -10742,7 +11348,11 @@ function lvSchalterAuffrischen(){
   });
   // Richtungen zählen nur bei Flächen — bei Länge oder Stück stünden sie nur im Weg
   const rf=$('#lvRichtFeld');
-  rf.style.display = $('#lvEinheit').value==='Flache' ? '' : 'none';
+  /* An einer freien Fläche fallen sie ganz weg. Vorn/Oben/Links rechnen mit L, B und H —
+     ein Vieleck hat die nicht. Ließe man sie stehen, wäre die Zeile still auf 0: genau
+     der Fehler, der am 10.8.2026 an Position 1.5 auffiel. Was sie stattdessen kann,
+     steht in der Automatik-Reihe direkt darüber. */
+  rf.style.display = ($('#lvEinheit').value==='Flache' && !lvFlaecheAktuell()) ? '' : 'none';
   /* Zu bleibt der Kasten nur, solange keine Richtung gesetzt ist. Sonst gälte etwas,
      das man nicht sieht — und aufklappen kann man ihn ja jederzeit selbst. */
   if(rf.querySelector('input:checked')) rf.open=true;
@@ -10750,7 +11360,7 @@ function lvSchalterAuffrischen(){
      Grundfläche noch Ansichtsfläche noch Raumvolumen zu übernehmen: die gehören dem
      Raum. Dafür stehen dort die Kopplungen, die es am Raum wiederum nicht gibt.
      Die beiden Reihen tauschen also einfach den Platz. */
-  $('#lvFlaechenZeile').style.display = (lvPresetWall!=null || lvAnOeffnung) ? 'none' : '';
+  $('#lvFlaechenZeile').style.display = (lvPresetWall!=null || lvAnOeffnung || lvFlWall!=null) ? 'none' : '';
 }
 dlgLv.addEventListener('change', e=>{
   if(e.target.matches('.schalter input, #lvEinheit')) lvSchalterAuffrischen();
@@ -10758,12 +11368,26 @@ dlgLv.addEventListener('change', e=>{
 /* Hängt die Position am RAUM selbst (kein Objekt, keine Wand), ist fast immer das Maß
    des Raums gemeint — bei „Fläche" die Bodenfläche, bei „Volumen" der Rauminhalt. Das
    Häkchen setzt sich dann von allein. Bei Objekten und Wänden bleibt es unberührt. */
+/* Die freie Fläche, an der die offene Zuordnung hängt — oder null. Sie entscheidet im
+   Dialog zweierlei: die Richtungen fallen weg, und die Automatik hakt sich an wie am
+   Raum. Denn eine Fläche IST hier der Raum, um den es geht. */
+function lvFlaecheAktuell(){
+  /* An einer WAND der Fläche gilt das nicht: dort sind Länge und Höhe echte Maße, die
+     Richtungen ergeben Sinn, und die Automatik-Reihe gehört ausgeblendet wie an jeder
+     anderen Wand. */
+  if(lvFlWall!=null) return null;
+  const r=roomById(lvRoomId);
+  const g=(r && lvObjId) ? (r.objects||[]).find(x=>x.id===lvObjId) : null;
+  return istFlaeche(g) ? g : null;
+}
 function lvGrundAuto(){
-  if(lvObjId || lvPresetWall!=null) return;
+  if(lvPresetWall!=null) return;
+  if(lvObjId && !lvFlaecheAktuell()) return;
   // Jedes Häkchen wirkt nur bei seiner Einheit — bei den anderen bleibt es auch aus
   const e=$('#lvEinheit').value;
   $('#lvNutzGrund').checked   = e==='Flache';
   $('#lvNutzVolumen').checked = e==='Volumen';
+  $('#lvNutzUmfang').checked  = e==='Lange';     // am Raum ist die Länge der Umfang
   // Die Ansichtsfläche wird nie von allein gesetzt, muss beim Wechsel aber weichen —
   // sonst leuchtete ein Schalter, der in der neuen Einheit nichts mehr tut.
   if(e!=='Flache') $('#lvNutzAnsicht').checked=false;
@@ -10782,9 +11406,18 @@ $('#lvFestLoesen').onclick=()=>{
   lvErgebnisZeigen();
   melde('Die Position rechnet wieder mit den Maßen des heutigen Raums.');
 };
-const LV_RAUMHAKEN=['#lvNutzGrund','#lvNutzAnsicht','#lvNutzVolumen'];
+const LV_RAUMHAKEN=['#lvNutzGrund','#lvNutzAnsicht','#lvNutzVolumen','#lvNutzUmfang'];
 LV_RAUMHAKEN.forEach(sel=>$(sel).onchange=e=>{
   if(e.target.checked) LV_RAUMHAKEN.forEach(a=>{ if(a!==sel) $(a).checked=false; });
+  /* Anhaken trägt den Umfang sofort ins Längenfeld — dieselbe Regel wie bei den
+     Wand-Kopplungen: man soll sehen, was man bekommt, statt ein Feld zu behalten, das
+     gerade übergangen wird. */
+  if(sel==='#lvNutzUmfang' && e.target.checked){
+    const fl=lvFlaecheAktuell(), r0=roomById(lvRoomId);
+    if(fl) $('#lvL').value=fmt3(flStats(fl).per);
+    else if(r0) $('#lvL').value=fmt3(roomStats(r0).per);
+    lvErgebnisZeigen();
+  }
 });
 /* Kopplung an die Wand: Wer selbst etwas einträgt, meint es auch so — dann fällt das
    Häkchen. Das gilt für die Tastatur (`input`) UND für den Laser, der den Wert über
@@ -10799,6 +11432,15 @@ const lvOeffnungVon = (r, id) => (r && id) ? ((r.openings||[]).find(o=>o.id===id
 function lvKoppelMass(){
   const r=roomById(lvRoomId);
   if(!r) return null;
+  /* Wand einer freien Fläche: Länge ist ihre Wandlänge, Höhe die der FLÄCHE — nicht die
+     des Raums. Dieselben zwei Häkchen, wieder nur eine andere Quelle. */
+  if(lvFlWall!=null){
+    const g=(r.objects||[]).find(x=>x.id===lvObjId);
+    if(!istFlaeche(g)) return null;
+    const pts=flPunkte(g), n=pts.length;
+    if(!(lvFlWall>=0 && lvFlWall<n)) return null;
+    return {laenge:mm(dist(pts[lvFlWall], pts[(lvFlWall+1)%n])), hoehe:flStats(g).hoehe};
+  }
   const op=lvOeffnungVon(r, lvObjId);
   if(op) return {laenge:op.width, hoehe:op.height};
   if(lvPresetWall==null || !(lvPresetWall>=0 && lvPresetWall<r.points.length)) return null;
@@ -12677,16 +13319,19 @@ function lvDialogDaten(){
     rechts:$('#lvRechts').checked, hinten:$('#lvHinten').checked, unten:$('#lvUnten').checked,
     nutzGrund:$('#lvNutzGrund').checked, nutzAnsicht:$('#lvNutzAnsicht').checked,
     nutzVolumen:$('#lvNutzVolumen').checked,
+    // Wieder in Betrieb seit 10.8.2026 — siehe den Schalter im Dialog
+    nutzUmfang:$('#lvNutzUmfang').checked,
     anmerkung:$('#lvAnm').value.trim(),  // erscheint im Druck unter dem Raumplan
-    nutzUmfang:false,                    // gibt es nicht mehr — der Umfang steht als Zahl in der Länge
     abschlag:Math.max(1, Math.round(parseNum($('#lvAbschlag').value)||p.abschlag)),
     fotos:lvFotos.map(f=>({...f}))
   };
   if(lvProjektEbene) data.projekt=true;
   if(lvPresetWall!=null) data.wall=lvPresetWall;
+  if(lvFlWall!=null) data.flWall=lvFlWall;
   // Kopplung nur mitschreiben, wenn sie besteht — sonst stünde bei jeder Zuordnung
   // ein `false` im Aufmaß, das niemand braucht (und `delete` beim Bearbeiten greift).
-  const koppelbar = lvPresetWall!=null || !!lvAnOeffnung;   // Wand ODER Tür/Fenster
+  // Wand des Raums, Tür/Fenster ODER Wand einer freien Fläche
+  const koppelbar = lvPresetWall!=null || !!lvAnOeffnung || lvFlWall!=null;
   if(koppelbar && $('#lvAutoL').checked) data.autoL=true;
   if(koppelbar && $('#lvAutoH').checked) data.autoH=true;
   if(lvObjId && $('#lvAutoObj').checked && $('#lvAutoObjZeile').style.display!=='none') data.autoObj=true;
@@ -12697,6 +13342,14 @@ function lvNummerVergeben(ziel){
   const rr=roomById(ziel.roomId);
   if(ziel.objId){
     const t=rr?((rr.objects||[]).find(g=>g.id===ziel.objId)||(rr.openings||[]).find(o=>o.id===ziel.objId)):null;
+    /* Hängt die Zuordnung an einer WAND der freien Fläche, bekommt die WAND die Nummer —
+       nicht die Fläche. Sonst trüge die Fläche eine Nummer für etwas, das gar nicht sie
+       ist, und im Plan stünde sie in ihrer Mitte statt an der abgerechneten Kante. */
+    if(t && istFlaeche(t) && ziel.flWall!=null){
+      t.wandNr=t.wandNr||{};
+      if(!t.wandNr[ziel.flWall]) t.wandNr[ziel.flWall]=nextObjNr();
+      return;
+    }
     if(t && !t.nr) t.nr=nextObjNr();
   } else if(ziel.wall!=null && rr){
     rr.wallNr=rr.wallNr||{};
@@ -13116,7 +13769,31 @@ const zeigtMasse = a => a.einheit!=='Stuck';
    bleiben alle vier Formeln unverändert, der Ausdruck zeigt weiter „1,000 × 50,000
    (Bodenfläche)", und ein Freigeben (`raumFest` löschen) macht die Position wieder
    lebendig. Neu angelegte Zuordnungen haben den Merker nicht und rechnen wie immer mit. */
+/* Hängt diese Zuordnung an einer freien Fläche? Dann sind DEREN Maße gemeint. */
+function lvFlaecheVon(a){
+  // Die WAND einer Fläche ist nicht die Fläche — sie rechnet wie jede andere Wand
+  if(!a || !a.objId || a.flWall!=null) return null;
+  const r=roomById(a.roomId);
+  let g=r ? (r.objects||[]).find(x=>x.id===a.objId) : null;
+  /* Rückfallebene: beim Verbinden und beim Verschieben in einen anderen Raum laufen
+     `a.roomId` und der wirkliche Ort für einen Moment auseinander. Ein Objekt gibt es
+     im Aufmaß nur einmal — die Suche ist also eindeutig. */
+  if(!g) for(const rr of (proj().rooms||[])){
+    g=(rr.objects||[]).find(x=>x.id===a.objId);
+    if(g) break;
+  }
+  return istFlaeche(g) ? g : null;
+}
+/* ---------- Die vier Automatiken an einer freien Fläche (seit 2026-08-13) ----------
+   Grundfläche, Umfang, Ansichtsfläche und Volumen lesen sonst den Raum. Hängt die
+   Zuordnung an einer freien Fläche, lesen sie das OBJEKT — dieselben vier Schalter,
+   dieselben Formeln, nur eine andere Quelle. Genau das ist die ganze Stelle: `lvCalc`
+   bleibt unverändert, weil es ohnehin nur dieses Zahlenbündel bekommt.
+   Ein `raumFest` (Räume verbunden) kann hier gar nicht stehen — beim Verbinden werden
+   nur Zuordnungen am Raum eingefroren, siehe `raeumeVerbinden`. */
 const lvRaumMasse = a => {
+  const fl=lvFlaecheVon(a);
+  if(fl){ const s=flStats(fl); return {area:s.area, per:s.per, hoehe:s.hoehe, vol:s.vol}; }
   if(a && a.raumFest) return a.raumFest;
   const r=roomById(a.roomId);
   if(!r) return null;
@@ -16176,7 +16853,7 @@ function messwertUebernehmen(m){
   /* Steht die Maßseite offen, gehört der Wert in ihre Anzeige und NICHT ins Feld:
      dort steht er groß, man kann nachmessen, und erst „Übernehmen" macht ihn gültig. */
   if(massOffen()){ massMesswert(m); return; }
-  if(mode==='draw' && draft.points.length && draft.dir){ addSegment(m); return; }
+  if(zeichenModus() && draft.points.length && draft.dir){ addSegment(m); return; }
   const ae=document.activeElement;
   let target=(ae && ae.matches && ae.matches('input.laser')) ? ae : lastLaserInput;
   // Nach dem Eintragen baut die Seitenleiste neu auf — das gemerkte Feld ist dann ein
@@ -17447,9 +18124,9 @@ function druckMessen(html, fn){
 /* `eigeneSeite`: der Raumplan bekommt das Blatt für sich, die Tabelle beginnt erst auf
    dem nächsten. Dafür gibt es hier längst den Fall „unter dem Plan ist keine Zeile mehr
    frei" (`teile.push(null)`) — der Schalter setzt ihn nur von vornherein. */
-function raumLvSeiten(kopfHtml, r, f, lvs, p, eigeneSeite){
+function raumLvSeiten(kopfHtml, r, f, lvs, p, eigeneSeite, ueberschrift){
   const ueb = t => `<div style="font-weight:700; font-size:12px; margin-bottom:1.5mm">`+
-    `LV-Positionen in diesem Raum${t}</div>`;
+    `${ueberschrift||'LV-Positionen in diesem Raum'}${t}</div>`;
   /* Die Klasse ist zum Messen da: Über der Tabelle kann der Anmerkungskasten stehen,
      und der bringt eine eigene `<table>` mit. Ein bloßes `querySelector('table')`
      erwischt die — und stolpert über ihre fehlende Kopfzeile. */
@@ -17496,6 +18173,82 @@ function raumLvSeiten(kopfHtml, r, f, lvs, p, eigeneSeite){
     return (t.erste?kopfHtml:fortKopf)
       + block(ueb(zusatz) + lvDruckTabelle(lvs.slice(t.von, t.von+t.n), p, lvs, t.von));
   });
+}
+/* ---------- Die eigene Druckseite einer freien Fläche (seit 2026-08-13) ----------
+   Gewünscht: „Wenn das Objekt eine Zuordnung hält, zeige es auf einer eigenen Seite unter
+   dem Raum an, inkl. der Abmaße." Und: „In der Ansicht der Fläche in der PDF zeige dort,
+   wo normalerweise das Stockwerk ist, den Raum, der die Fläche hostet."
+
+   Genau so ist die Seite gebaut — und zwar mit **derselben** Maschine wie die Raumseite:
+   `raumLvSeiten` bekommt für Titel und Fortsetzung ein Paar Platzhalter, in denen an der
+   Stelle des Raums die Fläche und an der Stelle der Etage der Raum steht. Damit bricht
+   auch ihre Positionstabelle über mehrere Blätter um, ohne dass es hier noch einmal
+   ausprogrammiert wäre. */
+function flPlanSvg(g, boxW, boxH){
+  const pts=flPunkte(g);
+  if(pts.length<3) return '';
+  const aussen=aussenPolygon({points:pts, wandStd:FL_WAND});
+  const bb=bboxOf(pts.concat(aussen));
+  const iw=bb.maxx-bb.minx, ih=bb.maxy-bb.miny;
+  // Rand für die Kantenmaße, die außen an der Wand stehen
+  const pad=Math.max(iw,ih)*0.16+FL_WAND;
+  const w=iw+2*pad, h=ih+2*pad;
+  const mmProM=Math.min(boxW/w, boxH/h);
+  const fs=PT9_MM/mmProM;
+  const d=ps=>ps.map((p,i)=>(i?'L':'M')+p.x+' '+p.y).join(' ')+' Z';
+  let out=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${bb.minx-pad} ${bb.miny-pad} ${w} ${h}"`+
+    ` preserveAspectRatio="xMidYMid meet" style="width:${boxW}mm; height:${boxH}mm">`;
+  out+=`<path d="${d(pts)}" fill="#fff" stroke="none"/>`;
+  const ring=flWandD(g);
+  if(ring) out+=`<path d="${ring}" fill-rule="evenodd" fill="#d0d0d0" stroke="#000"
+    stroke-width="${Math.max(0.008, w/1100)}"/>`;
+  const n=pts.length;
+  for(let i=0;i<n;i++){
+    const a=pts[i], b=pts[(i+1)%n], L=dist(a,b);
+    if(L<0.04) continue;
+    const nn=aussenNormale({points:pts}, i);
+    const mx=(a.x+b.x)/2 + nn.x*(FL_WAND+fs*0.85);
+    const my=(a.y+b.y)/2 + nn.y*(FL_WAND+fs*0.85);
+    // Auf dem Kopf stehende Maßzahlen liest niemand — die Schrift bleibt lesbar herum
+    let ang=Math.atan2(b.y-a.y, b.x-a.x)*180/Math.PI;
+    if(ang>90 || ang<-90) ang+=180;
+    out+=`<text x="${mx}" y="${my}" text-anchor="middle" dominant-baseline="middle"
+      font-size="${fs}" transform="rotate(${ang} ${mx} ${my})">${fmt(L,3)}</text>`;
+  }
+  const c=raumMitte(g);
+  out+=`<text x="${c.x}" y="${c.y}" text-anchor="middle" dominant-baseline="middle"
+    font-size="${fs*1.15}" font-weight="700">${fmt(flStats(g).area,2)} m²</text>`;
+  return out+'</svg>';
+}
+const flDruckName = g => 'Fläche'+(g.nr?' #'+g.nr:'')+(objStdName(g)?'':' — '+(g.name||''));
+function flaecheSeiten(g, r, lvs, p){
+  const s=flStats(g);
+  let mini;
+  try{ mini=planSvg([r], {namen:false, masse:false, objekte:true, boxW:28, boxH:36}); }
+  catch(_){ mini=''; }
+  const kopf=`
+    <div style="display:flex; justify-content:space-between; align-items:flex-start">
+      <div class="ptitle">▼ ${esc(flDruckName(g))}<small>${esc(r.name)}</small></div>
+      <div class="pstats">GRUNDFLÄCHE: ${fmt(s.area,2)} m² • UMFANG: ${fmt(s.per,2)} m • HÖHE: ${fmt(s.hoehe,2)} m</div>
+    </div>
+    <div class="pcols" style="margin-top:3mm">
+      <div style="flex:0 0 30mm">
+        <div class="pmini">${mini}</div>
+        <table class="ptab" style="margin-top:2mm"><tbody>
+          <tr><td>Ansichtsfläche</td><td class="num">${fmt(s.ansicht,2)} m²</td></tr>
+          <tr><td>Volumen</td><td class="num">${fmt(s.vol,2)} m³</td></tr>
+          <tr><td>Ecken</td><td class="num">${flPunkte(g).length}</td></tr>
+          <tr><td>Wandstärke</td><td class="num">${fmt(FL_WAND,2)} m</td></tr>
+        </tbody></table>
+      </div>
+      <div style="flex:1">${flPlanSvg(g, 150, 132)}</div>
+    </div>
+    ${g.anmerkung ? `<table class="ptab" style="margin-top:3mm"><tbody>
+      <tr><td style="width:22mm"><b>Anmerkung</b></td><td>${esc(g.anmerkung)}</td></tr>
+      </tbody></table>` : ''}`;
+  // Platzhalter: an der Stelle des Raums die Fläche, an der Stelle der Etage der Raum
+  return raumLvSeiten(kopf, {name:flDruckName(g)}, {name:r.name}, lvs, p, false,
+    'LV-Positionen auf dieser Fläche');
 }
 function lvMassSpalten(rows){
   const sp=[];
@@ -17916,6 +18669,16 @@ function buildPrintIntern(){
       if(!druckRaumListen() || druckOhneLv()) seiten.push(raumKopf);
       // Passt die Positionstabelle nicht mehr unters Blatt, läuft sie auf Folgeseiten weiter
       else raumLvSeiten(raumKopf, r, f, lvs, p, ganzeSeite).forEach(s=>seiten.push(s));
+      /* 2b) Freie Flächen mit eigener Zuordnung: je eine Seite UNTER dem Raum, aus dem
+         sie kommt. „Im Aufmaß anzeigen" schaltet allein diese Seite ab — gezeichnet
+         wird die Fläche im Raumplan weiter, und ihre Menge zählt in jeder Liste mit.
+         Ohne Zuordnung gibt es nichts abzurechnen, dann bleibt es beim Raumplan. */
+      if(druckRaumListen() && !druckOhneLv() && !druckOhneObjekte())
+        (r.objects||[]).filter(g=>istFlaeche(g) && g.ohneAufmass!==true).forEach(g=>{
+          const flLvs=lvs.filter(a=>a.objId===g.id);
+          if(!flLvs.length) return;
+          flaecheSeiten(g, r, flLvs, p).forEach(s=>seiten.push(s));
+        });
       /* 3) Fotoaufmaß: je Foto EINE ganze Seite. Bewusst nicht vier auf einer Seite wie
          bei den übrigen Bildern — hier stehen Maße im Bild, und die müssen lesbar sein.
          Unter dem Bild die Summen je Slot, damit die Seite für sich allein steht. */
@@ -18286,7 +19049,8 @@ function handyOrt(){
   const r=roomById(focusRoomId);
   const g=r && (r.objects||[]).find(x=>x.id===sel.objId);
   if(!g) return 'objekt';
-  if(g.type==='rect') return 'flaeche';
+  if(g.type==='rect') return 'rechteck';
+  if(istFlaeche(g)) return 'freiflaeche';
   if(g.type==='line') return 'linie';
   if(g.type==='sym' && ['schacht','treppe','p360','fotom'].includes(g.sub)) return g.sub;
   return 'objekt';
@@ -18301,7 +19065,9 @@ const HANDYZEILE={
   wand:     ['#walllv','wandmass','wandbau','nachbarn','#wfoto'],
   oeffnung: ['#objlv','tuertyp','fenstertyp','messen','opakt','#opfoto'],  // Typ: nur einer greift
   // Seit die Fläche drehbar ist (10.8.2026) steht bei ihr dasselbe Menü wie am Symbol
-  flaeche:  ['#objlv','messen','#objname','objaktdreh','#objfoto'],
+  rechteck:   ['#objlv','messen','#objname','objaktdreh','#objfoto'],
+  // Die freie Fläche hat kein Länge/Breite-Paar, dafür Höhe und Eckenwerkzeug
+  freiflaeche:['#objlv','#flwlv','flaechenwerk','#objname','objakt','#objfoto'],
   linie:    ['#objlv','liniewerk','#objname','objakt','#objfoto'],
   schacht:  ['#objlv','messen','#objname','objakt','#objfoto'],
   treppe:   ['#objrot','messen','#objname','objakt','#objfoto'],
@@ -18413,7 +19179,7 @@ const LEISTE = {
   oeffnung: ['tuertyp','fenstertyp','messen','-',
              '#objlv','#opdup','.opdel','#opfoto'],
   objekt: ['#objrot','#p360dreh','#p360laden','#ptadd','#ptdel','-',
-           'messen','#objname','-','#objlv','#objdup','#objdel','#objfoto'],
+           'messen','flaechenwerk','#objname','#flanm','-','#objlv','#flwlv','#objdup','#objdel','#objfoto'],
   // Die angewählte Ecke hat nur zwei Knöpfe — beide gehören in die Leiste (9.8.2026)
   ecke: ['#eckedel','#eckedesel']
 };
@@ -18475,7 +19241,13 @@ const KLAPP = {
   objaktdreh:{q:'#sidebar #objdup, #sidebar #objdel, #sidebar #objrot',
               titel:'Duplizieren · Löschen · Drehen', ico:'kopie'},
   liniewerk: {q:'#sidebar input.objdim, #sidebar #ptadd, #sidebar #ptdel',
-              titel:'Messen & Ecken', ico:'massstab'}
+              titel:'Messen & Ecken', ico:'massstab'},
+  // Dasselbe für die freie Fläche: ihr Maß ist die Höhe, ihre Form sind die Ecken
+  /* Die freie Fläche: Höhe (an ihr selbst), Wandlänge und Teilen (an der Wand),
+     Ecke löschen (an der Ecke). Je Ort greift nur, was dort im Panel steht — was es
+     nicht gibt, fällt von selbst weg. */
+  flaechenwerk:{q:'#sidebar input.flfld, #sidebar input.flwfld, #sidebar #flsplit, #sidebar #fleckdel',
+              titel:'Maße & Wände', ico:'massstab'}
 };
 function leisteKlapp(knopf, art){
   const alt=$('#leisteklapp');
