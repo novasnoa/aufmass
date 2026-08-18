@@ -281,6 +281,14 @@
     border-radius:8px; padding:7px 10px; font-size:13px; color:var(--ink);
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .katbtn::after{content:' ▾'; color:var(--muted);}
+  /* Zwei-Wege-Schalter „Raum / Projekt" neben dem Kapitel. Bewusst schmal: er steht in
+     einer Zeile, die schon einen breiten Knopf trägt, und die Wahl ist binär. */
+  .ebenewahl{display:flex; flex:0 0 auto; border:1px solid var(--line); border-radius:8px;
+    overflow:hidden; background:#fff;}
+  .ebenewahl button{border:0; background:#fff; color:var(--muted); font-size:12px;
+    padding:7px 9px; white-space:nowrap;}
+  .ebenewahl button+button{border-left:1px solid var(--line);}
+  .ebenewahl button.an{background:#eaf1ff; color:var(--accent); font-weight:600;}
   /* Das Menü selbst: eine Zeile je Kapitel, Nummer vorn, Haken hinten. Vollbild, weil
      die Kapitelnamen lang sind („Baustelleneinrichtung allgemein und besonders …") und
      in einem Aufklapper unter dem Knopf nur als Stummel ankämen. */
@@ -447,14 +455,34 @@
     border:1px solid var(--line); border-radius:50%; background:#fff; color:var(--accent);
     font-size:13px; font-weight:700; cursor:pointer;}
   .sugbox .it .lvinfo.an{background:var(--accent); color:#fff; border-color:var(--accent);}
-  /* Langtext-Einblendung */
-  #lvtip{position:fixed; z-index:60; display:none; max-width:min(430px,62vw); max-height:52vh; overflow:auto;
+  /* Langtext-Knopf in der LV-Übersicht und im Kopf der Zuordnungsliste. Bewusst NICHT
+     `.lvinfo`: das ist der Knopf der Vorschlagsliste und am Telefon ausgeblendet (dort
+     stört sein Einblendkasten). Dieser hier wird gerade unterwegs gebraucht. */
+  .langbtn{display:inline-flex; align-items:center; justify-content:center;
+    width:22px; height:22px; padding:0; margin-left:6px; vertical-align:-5px;
+    border:1px solid var(--line); border-radius:50%; background:#fff; color:var(--accent);
+    font-size:12px; font-weight:700; cursor:pointer; flex:0 0 auto;}
+  .langbtn:hover{border-color:var(--accent); background:#eaf1ff;}
+  /* Ein Nachtrag ist keine gewöhnliche Position — das soll man in der Liste sehen,
+     ohne den Kurztext lesen zu müssen. */
+  .ntchip{display:inline-block; margin-right:5px; padding:1px 5px; border-radius:5px;
+    background:#fdecc8; color:#7a5200; font-size:10px; font-weight:700; vertical-align:1px;}
+  /* Ein Fotofeld, über dem gerade eine Datei hängt. Der gestrichelte Rahmen ist die
+     einzige Auskunft, dass hier abgelegt werden DARF — ohne ihn rät man. */
+  .dropbereit{outline:2px dashed var(--accent); outline-offset:2px; background:#eaf1ff !important;}
+  .dropladt{opacity:.6; pointer-events:none;}
+  /* Langtext-Einblendung. `#langpop` sieht genauso aus, heisst aber anders — die
+     Handy-Regel weiter unten blendet nur `#lvtip` aus (dessen Kasten geht beim Tippen
+     ungefragt auf, weil er an `mouseenter` haengt). Der Langtext-Popup dagegen kommt nur
+     auf Knopfdruck und wird gerade unterwegs gebraucht. */
+  #lvtip, #langpop{position:fixed; z-index:60; display:none; max-width:min(430px,62vw); max-height:52vh; overflow:auto;
     background:#1c2330; color:#fff; border-radius:9px; padding:9px 11px; font-size:12px; line-height:1.5;
     white-space:pre-wrap; box-shadow:0 10px 30px rgba(0,0,0,.35); cursor:pointer;
     -webkit-overflow-scrolling:touch;}
-  #lvtip.on{display:block;}
-  #lvtip b{display:block; margin-bottom:4px; color:#8fe3bd; font-variant-numeric:tabular-nums;}
-  #lvtip i{display:block; margin-top:6px; color:#9aa6bb; font-size:11px; font-style:normal;}
+  #langpop{max-width:min(520px,86vw); max-height:70vh;}
+  #lvtip.on, #langpop.on{display:block;}
+  #lvtip b, #langpop b{display:block; margin-bottom:4px; color:#8fe3bd; font-variant-numeric:tabular-nums;}
+  #lvtip i, #langpop i{display:block; margin-top:6px; color:#9aa6bb; font-size:11px; font-style:normal;}
   /* Auf Touch-Geräten ist die Liste schmaler — dort darf der Kasten fast voll breit werden */
   /* ---------- Wenn es oben eng wird, fällt zuerst der Schriftzug ----------
      Seit der Abschlags-Chip neben den Reitern steht, wird die Kopfzeile deutlich früher
@@ -1090,6 +1118,42 @@
   <div id="katListe"></div>
 </dialog>
 
+<!-- Eine LV-Position ANLEGEN — nicht zuordnen. Der Knopf „＋ Neue LV-Position" öffnete
+     bis zum 17.8.2026 den Zuordnungs-Dialog; dort stehen Mengen, Maße, Abschlag und
+     Fotos, also alles, was eine MESSUNG ausmacht. Eine Position ist aber ein
+     Katalogeintrag: Nummer, Text, Einheit, Preis. -->
+<dialog id="dlgLvNeu">
+  <div class="dhead">Neue LV-Position <button data-close>✕</button></div>
+  <div class="dbody">
+    <div class="row"><label>LV-Nummer</label>
+      <input id="lnNr" type="text" autocomplete="off" placeholder="z. B. 8.3.1">
+      <button class="btn small" id="lnNrVor" title="Vorschlag noch einmal einsetzen">↺</button></div>
+    <p class="hint" id="lnNrInfo" style="margin:-2px 0 6px"></p>
+    <label class="row" style="gap:6px; align-items:center">
+      <input type="checkbox" id="lnNachtrag" style="width:17px; height:17px">
+      <span><b>Nachtrag</b> — nicht im ursprünglichen Leistungsverzeichnis</span></label>
+    <p class="hint" id="lnKatInfo" style="margin:-2px 0 6px"></p>
+    <div class="row"><label>Kurzbeschreibung</label>
+      <textarea id="lnKurz" rows="2" placeholder="z. B. Sockelleisten demontieren"></textarea></div>
+    <div class="row"><label>Einheit</label>
+      <select id="lnEinheit">
+        <option value="Flache">Fläche (m²)</option>
+        <option value="Lange">Länge (m)</option>
+        <option value="Stuck">Stück (Stück/h)</option>
+        <option value="Volumen">Volumen (m³)</option>
+      </select></div>
+    <div class="row"><label>Einheitspreis (€)</label>
+      <input id="lnPreis" type="text" inputmode="decimal" autocomplete="off" placeholder="optional"></div>
+    <p class="hint">Die Position wird in den Katalog eingetragen — sie steht danach in der
+      Übersicht und in der Auswahlliste, noch ohne Zuordnung. Gemessen wird wie immer im Plan:
+      Raum, Wand oder Bauteil antippen und dort „LV-Position".</p>
+  </div>
+  <div class="dfoot">
+    <button class="btn" data-close>Abbrechen</button>
+    <button class="btn primary" id="lnOk">Anlegen</button>
+  </div>
+</dialog>
+
 <!-- Langtext einer Position: eigene Seite mit „← Zurück" -->
 <dialog id="dlgLvLang" class="vollbild" tabindex="-1">
   <div class="dhead"><button class="btn small" id="llZurueck">← Zurück</button>
@@ -1098,6 +1162,23 @@
 </dialog>
 
 <!-- Vorlagen-Dialog -->
+<!-- Reihenfolge der Etagen. Bewusst mit Pfeilen und nicht mit Ziehen: auf dem Tablett
+     trifft man eine Zeile sicher, eine Ziehgeste über eine rollende Liste dagegen nicht.
+     Jeder Klick wirkt SOFORT (speichern + neu zeichnen) — es gibt kein „Übernehmen", das
+     man vergessen könnte, und das Menü darunter zeigt die neue Folge gleich mit. -->
+<dialog id="dlgFloorSort">
+  <div class="dhead">Etagen sortieren <button data-close>✕</button></div>
+  <div class="dbody">
+    <p class="hint" style="margin-bottom:8px">Die Reihenfolge gilt für das Auswahlmenü,
+      für die Kopfzeile und für den <b>Ausdruck</b>: In dieser Folge stehen die Etagen im
+      Bericht, samt ihrer Übersicht und ihrer Raumseiten. Oben = zuerst.</p>
+    <div id="floorSortList"></div>
+  </div>
+  <div class="dfoot">
+    <button class="btn primary" data-close>Fertig</button>
+  </div>
+</dialog>
+
 <dialog id="dlgTemplate">
   <div class="dhead">Raum aus Vorlage <button data-close>✕</button></div>
   <div class="dbody">
@@ -1128,6 +1209,15 @@
     <input id="lvPos" type="hidden">
     <div class="row"><label>Kapitel</label>
       <button type="button" class="katbtn" id="lvKatBtn">Alle Kapitel</button>
+      <!-- Wohin die Menge gehört: an den Raum (bzw. das angetippte Bauteil) oder ans
+           PROJEKT. Steht hier oben, weil es die erste Frage ist — sie entscheidet, ob
+           die Position im Bericht unter einem Raum auftaucht oder nur in der Übersicht. -->
+      <span class="ebenewahl" id="lvEbene">
+        <button type="button" data-ebene="raum"
+          title="Die Menge gehört zu diesem Raum bzw. Bauteil — sie erscheint unter dem Raum und in der Auflistung">Raum</button>
+        <button type="button" data-ebene="projekt"
+          title="Die Menge gehört zum ganzen Bauvorhaben — sie erscheint NUR in der Übersicht der LV-Positionen, ohne Einzelliste und ohne Raum">Projekt</button>
+      </span>
     </div>
     <div class="row" id="lvKurzZeile"><label>Kurztext</label>
       <span class="sugwrap"><textarea id="lvKurz" rows="2" autocomplete="off" placeholder="Suchen: z. B. spachteln"></textarea><div class="sugbox" id="lvKurzSug"></div></span>
@@ -1490,6 +1580,9 @@
         <b>LV-Positionen</b> — nur der Plan; das Deckblatt nennt dann „Plan"</label>
       <label style="display:block; margin-bottom:4px"><input type="checkbox" id="agOhneObjekte">
         <b>Objekte</b> — Flächen, Linien und Symbole nicht zeichnen</label>
+      <label style="display:block; margin-bottom:4px"><input type="checkbox" id="agOhneEtagenNr">
+        <b>Nummern auf der Etagenübersicht</b> — Objekte werden gezeichnet, ihre Nummern
+        stehen nur auf den Raumseiten</label>
       <label style="display:block; margin-bottom:8px"><input type="checkbox" id="agOhneFotos">
         <b>Fotos</b> — keine Bildseiten und kein Fotoaufmaß</label>
       <button class="btn primary" id="agPrint">🖨 Drucken / PDF</button>
@@ -1947,6 +2040,11 @@
   <button type="button" class="ab" id="tastAb">Abbrechen</button>
   <button type="button" class="ok" id="tastOk">✓ Anwenden</button>
 </div>
+
+<!-- Der Langtext-Popup haengt auf SEITENEBENE, nicht im LV-Dialog wie `#lvtip`.
+     Dort waere er unsichtbar, sobald der Dialog zu ist — und aufgerufen wird er aus der
+     LV-Übersicht und der Zuordnungsliste, also gerade dann. -->
+<div id="langpop"></div>
 
 <script>
 'use strict';
@@ -3076,7 +3174,7 @@ let messungLaeuft=false;
 /* Das „b": am 9.8. gingen mehrere Stände aufs iPad, und ohne Zusatz war auf dem Gerät
    nicht zu erkennen, ob der reparierte oder der erste lief. Bei Nachbesserungen am
    selben Tag den Buchstaben hochzählen. */
-const APP_STAND='2026-08-13g';
+const APP_STAND='2026-08-18b';
 const WAND_STD=0.24;
 // Spanne des Schiebereglers im Wand-Panel. Von Hand darf man auch daneben liegen —
 // der Regler wird dann rot, damit der Ausreißer nicht unbemerkt bleibt.
@@ -6931,6 +7029,18 @@ document.addEventListener('keydown', e=>{
     if(zurueck) undoSchritt(); else redoSchritt();
     return;
   }
+  /* Kopieren und Einfügen — ohne Knopf, allein über die Tastatur (Nutzerwunsch
+     13.8.2026: „Objekte können kopiert und eingefügt werden, dafür gibt es keine Buttons
+     oder Ähnliches"). `metaKey` ist mitgemeint: am iPad hängt ⌘ an der Tastatur.
+
+     **Nur wenn wirklich etwas passiert** wird `preventDefault` gerufen. Ohne
+     angewähltes Objekt bleibt Strg+C also das Kopieren des Browsers — wer einen
+     markierten Text in der Seitenleiste kopieren will, kommt weiter durch. */
+  if((e.ctrlKey||e.metaKey) && /^[cvCV]$/.test(e.key)){
+    if(document.querySelector('dialog[open]')) return;   // im Dialog gehört Strg+C dem Text
+    if(e.key.toLowerCase()==='c' ? objKopieren() : objEinfuegen()) e.preventDefault();
+    return;
+  }
   if(e.key==='Escape'){
     if(zoneEdit){ zoneEdit=null; sel.zoneH=null; renderAll(); return; }
     if(wahlAn()){ etagenWahl=[]; renderAll(); return; }
@@ -6976,6 +7086,121 @@ document.addEventListener('keydown', e=>{
     else if(sel.roomId) deleteRoom(sel.roomId);
   }
 });
+
+/* ================= Kopieren und Einfügen (13.8.2026) =================
+   „Objekte können kopiert und eingefügt werden, dafür gibt es keine Buttons oder
+   Ähnliches. Kopieren und Einfügen funktioniert mit systemeigenen Mitteln (Strg+C,
+   Strg+V)."
+
+   **Eine eigene Ablage, nicht die Zwischenablage des Systems.** Was hier wandert, ist ein
+   ganzes Objekt samt Maßen, Drehung, Bindung und LV-Zuordnungen — als Text in der
+   Systemablage wäre das eine JSON-Zeile, die niemand sehen will, und beim Einfügen müsste
+   sie wieder gelesen werden. `navigator.clipboard` ist in Bluefy zudem nicht verlässlich,
+   und die App muss offline und ohne Berechtigungen laufen. Die Tastenkürzel bleiben
+   trotzdem die gewohnten; nur der Eimer dahinter gehört der App.
+
+   Die Ablage überlebt den Raumwechsel, aber nicht den Neustart: sie ist ein Handgriff,
+   kein Bestandteil des Aufmaßes. */
+let objAblage=null;                       // {objs:[…], vonRaum} — zuletzt Kopiertes
+const objArt = g => !g ? 'Objekt'
+  : istHalbwand(g) ? 'Halbwand'
+  : istFlaeche(g) ? 'Fläche'
+  : g.type==='rect' ? 'Rechteck'
+  : g.type==='line' ? 'Linie'
+  : (SYMDEFS[g.sub]||{}).label || 'Objekt';
+/* Ohne angewähltes Objekt gilt der GANZE Raum (Nutzerwunsch 17.8.2026: „Strg+C in einem
+   Raum ohne Anwahl eines Objektes kopiert alle Objekte in diesem Raum"). Das ist der
+   Weg, mit dem man eine eingerichtete Kabine oder ein Bad in den nächsten Raum bringt.
+   Maßgeblich ist allein `sel.objId`: eine angewählte Wand oder Öffnung lässt sich ohnehin
+   nicht kopieren, dort ist „alles im Raum" die einzige sinnvolle Lesart. */
+function objKopieren(){
+  const r=focusRoomId?roomById(focusRoomId):null;
+  if(!r) return false;                    // in der Etage gibt es nichts zu kopieren
+  const alle=r.objects||[];
+  const eins=sel.objId ? alle.find(x=>x.id===sel.objId) : null;
+  const liste = eins ? [eins] : alle;
+  if(!liste.length) return false;         // leerer Raum → der Browser darf kopieren
+  objAblage={objs:JSON.parse(JSON.stringify(liste)), vonRaum:r.id};
+  /* Ohne Knopf gibt es keine Rückmeldung durch den Bildschirm — also sagen wir es.
+     Sonst weiß niemand, ob das Kürzel angekommen ist. */
+  melde(eins ? `${objArt(eins)} kopiert — Strg+V fügt sie ein.`
+             : `Alle ${liste.length} Objekte aus „${r.name}" kopiert — Strg+V fügt sie ein.`);
+  return true;
+}
+/* Ein einzelnes Objekt der Ablage in den Zielraum. `dx`/`dy` ist der Versatz, der für
+   ALLE freien Objekte derselbe ist — nur so bleibt eine kopierte Einrichtung als Gruppe
+   beieinander, statt dass jedes Stück für sich in die Raummitte springt. */
+function objEinfuegenEins(r, quelle, gleich, dx, dy){
+  const p=proj();
+  const g=JSON.parse(JSON.stringify(quelle));
+  g.id=uid();
+  /* Nummer, Fotos und Wandnummern bleiben beim Original. Die Nummer kommt gleich neu,
+     wenn LV-Zuordnungen mitkommen; Fotos sind Aufnahmen einer bestimmten Stelle und
+     lassen sich nicht mitkopieren (dieselbe Regel wie bei „Duplizieren"). */
+  delete g.nr; delete g.fotos; delete g.wandNr;
+  if(wandGebunden(g)){
+    /* An eine Wand gebunden: x/y sind bei ihnen nur Mitschrift, gezeichnet wird aus
+       `wall` und `t`. Zeigt die Wandnummer im Zielraum ins Leere, fängt das Objekt an
+       Wand 1 an; im selben Raum rückt es um seine eigene Breite weiter, sonst läge es
+       genau auf dem Original. */
+    const n=r.points.length;
+    if(!(g.wall>=0 && g.wall<n)){ g.wall=0; delete g.ecke; delete g.t; }
+    const [wa,wb]=wallPoints(r, g.wall), L=dist(wa,wb);
+    let t = g.t!=null ? (gleich ? g.t+(g.w||0)+0.3 : g.t) : L/2;
+    t=Math.max(0.05, Math.min(Math.max(0.05, L-0.05), t));
+    if(istSchacht(g)){ delete g.ecke; schachtBinden(r, g, g.wall, t); }
+    else g.t=mm(t);
+  } else if(g.points) g.points=g.points.map(q=>({x:mm(q.x+dx), y:mm(q.y+dy)}));
+  else { g.x=mm(g.x+dx); g.y=mm(g.y+dy); }
+  r.objects=r.objects||[];
+  r.objects.push(g);
+  /* Die LV-Zuordnungen kommen mit — genau dafür kopiert man ein Bauteil: dieselbe
+     Leistung noch einmal, an anderer Stelle. Sie fallen in den LAUFENDEN Abschlag (die
+     Kopie ist neue Leistung), ohne Fotos und ohne Fotoaufmaß-Marke; letztere zeigt auf
+     eine Messung im Bild des Originals. Dieselben Regeln wie beim Duplizieren. */
+  const linked=(p.attrs||[]).filter(a=>a.objId===quelle.id);
+  linked.forEach(a=>{
+    const k={...ohneFotos(a), id:uid(), objId:g.id, roomId:r.id, abschlag:p.abschlag};
+    delete k.fmMark;
+    p.attrs.push(k);
+  });
+  if(linked.length) g.nr=nextObjNr();
+  return {g, lv:linked.length};
+}
+function objEinfuegen(){
+  if(!objAblage || !objAblage.objs.length) return false;   // leer → Browser darf einfügen
+  const r=focusRoomId?roomById(focusRoomId):null;
+  if(!r){ melde('Zum Einfügen erst einen Raum öffnen.', true); return true; }
+  const gleich = objAblage.vonRaum===r.id;
+  /* Der Versatz wird EINMAL für alle bestimmt. Im selben Raum ein Stück zur Seite (wie
+     „Duplizieren"), in einem anderen so, dass die Gruppe MITTIG im Zielraum landet: die
+     Koordinaten sind absolut, unverändert eingefügt läge sie dort, wo der Nachbarraum
+     gar nicht liegt. Gemessen wird über den umschließenden Kasten aller FREIEN Objekte —
+     wandgebundene rechnen ohnehin aus `wall`/`t` und haben keinen Anteil daran. */
+  let dx=0.3, dy=0.3;
+  if(!gleich){
+    const frei=objAblage.objs.filter(o=>!wandGebunden(o));
+    const pkt=frei.flatMap(o=>o.points ? o.points
+      : [{x:o.x, y:o.y}, {x:o.x+(o.w||0), y:o.y+(o.h||0)}]);
+    if(pkt.length){
+      const bb=bboxOf(pkt), z=raumMitte(r);
+      dx=z.x-(bb.minx+bb.maxx)/2; dy=z.y-(bb.miny+bb.maxy)/2;
+    }
+  }
+  const neu=objAblage.objs.map(o=>objEinfuegenEins(r, o, gleich, dx, dy));
+  const lvZahl=neu.reduce((n,x)=>n+x.lv, 0);
+  focusRoomId=r.id;
+  // Eines: gleich angewählt, man will es meist verschieben. Mehrere: nur der Raum —
+  // eine Gruppenauswahl gibt es im Plan nicht, und eine willkürliche wäre irreführend.
+  sel = neu.length===1
+    ? {roomId:r.id, wall:null, vertex:null, objId:neu[0].g.id}
+    : {roomId:r.id, wall:null, vertex:null};
+  save(); renderAll();
+  const was = neu.length===1 ? objArt(neu[0].g)+' eingefügt' : neu.length+' Objekte eingefügt';
+  melde(`${was}${gleich?'':` in „${r.name}"`}${
+    lvZahl?` — mit ${lvZahl===1?'einer LV-Zuordnung':lvZahl+' LV-Zuordnungen'}`:''}.`);
+  return true;
+}
 
 /* ---------- Platzieren (Vorlage) ---------- */
 function commitPlace(p){
@@ -8757,6 +8982,8 @@ const ICONS = {
      Rechteck daneben auf einen Blick unterscheiden, und genau das kann sie ja: eine
      Form, die kein Rechteck ist. */
   vieleck:   '<path d="M4 5h9v6h7v8H4z"/>',
+  // Zwei Pfeile gegeneinander — das übliche Zeichen für „Reihenfolge ändern"
+  sortieren: '<path d="M8 20V5m0 0L5 8m3-3 3 3M16 4v15m0 0 3-3m-3 3-3-3"/>',
   linie:     '<path d="M3 19 10 6l11 6"/>',
   rundum:    '<ellipse cx="12" cy="12" rx="9" ry="5"/><circle cx="12" cy="12" r="3"/>',
   fotomass:  '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 15l4-5 3 3 3-4"/>',
@@ -8987,6 +9214,17 @@ function panelEtage(p){
       <div style="height:8px"></div>
       <div class="row">
         <select id="floorsel" style="flex:1">${p.floors.map(f=>`<option value="${f.id}" ${f.id===activeFloorId?'selected':''}>${esc(f.name)}</option>`).join('')}</select>
+      </div>
+      <!-- Direkt unter dem Auswahlmenü: die Reihenfolge der Etagen. Sie gilt für dieses
+           Menü UND für den Ausdruck — beides liest schlicht die Liste p.floors der Reihe
+           nach. (Keine Backticks in diesem Kommentar: er steht mitten in einem
+           Template-String und würde ihn beenden.) -->
+      <div class="row">
+        <button class="btn small" id="floorsort" style="flex:1"
+          ${p.floors.length>1?'':'disabled'}
+          title="${p.floors.length>1
+            ? 'Reihenfolge der Etagen festlegen — gilt für dieses Menü und für den Ausdruck'
+            : 'Erst ab zwei Etagen gibt es etwas zu sortieren'}">${ico('sortieren')}Sortieren</button>
       </div>
       <div class="werkzeuge">
         <button id="flooradd" title="Neue Etage">${ico('plus',true)}</button>
@@ -9865,6 +10103,7 @@ function wireEtage(on, r){
     const f=proj().floors.find(f=>f.id===activeFloorId);
     const name=prompt('Etage umbenennen:', f.name); if(name){f.name=name; save(); renderAll();}
   });
+  on('#floorsort','onclick',floorSortOeffnen);
   /* Raumhöhe der Etage. Das Feld verteilt sie an alle Räume ohne eigenen Wert, „alle"
      nimmt zusätzlich die von Hand gesetzten — und fragt vorher, denn dabei gehen
      eingetragene Höhen verloren. */
@@ -10793,10 +11032,12 @@ function wireObjekt(on, r){
           save(); renderAll();
           melde('Werkzeug für diesen Slot: '+({flaeche:'Rechteck', linie:'Linie', kreuz:'Kreuz'})[FM_WERKZEUG[seq.value]]+'.');
         }; });
-        on('#fmFotoAdd','onclick',()=>fotoOeffnen({add:neu=>{
+        const fmDazu=neu=>{
           selObj.fotos=[...(selObj.fotos||[]), ...neu].slice(0, FM_MAX_FOTOS);
           save(); renderAll();
-        }}));
+        };
+        on('#fmFotoAdd','onclick',()=>fotoOeffnen({add:fmDazu}));
+        fotoDropZiel($('#fmFotoAdd'), fmDazu);   // höchstens drei, siehe `slice` oben
         document.querySelectorAll('[data-fmfoto]').forEach(im=>{
           im.onclick=()=>fmOeffnen(selObj, +im.dataset.fmfoto, r.id);
         });
@@ -11049,6 +11290,51 @@ function laserZielSetzen(){
   if(!(aktiv && aktiv.matches && aktiv.matches('input.laser'))) lastLaserInput=el;
 }
 
+/* ---------- Reihenfolge der Etagen (13.8.2026, Nutzerwunsch) ----------
+   „Hier möchte ich die Reihenfolge der Etagen manuell sortieren, die Sortierung gilt für
+   das Menü und die Reihenfolge der Etagen in der PDF."
+
+   Beides fällt zusammen, ohne dass etwas Neues gespeichert werden müsste: **die
+   Reihenfolge IST die Reihenfolge von `p.floors`.** Menü, Kopfzeilen-Auswahl, der
+   Etagen-Kopiere-Dialog, `stockwerkeText` fürs Deckblatt und der Ausdruck laufen alle
+   schlicht über dieses Feld. Es gibt also nichts zu sortieren als das Feld selbst — kein
+   `f.rang`, der doppelt gepflegt werden müsste und beim Import fehlen könnte.
+
+   Ein Haus zählt von unten nach oben, ein Bericht liest sich von oben nach unten: welche
+   der beiden Ordnungen gemeint ist, weiß nur der Nutzer. Deshalb von Hand und keine
+   Automatik, die Namen zu deuten versucht („2. OG" vor „EG"? „Keller" wohin?). */
+function floorSortListe(){
+  const p=proj(), n=p.floors.length;
+  $('#floorSortList').innerHTML = p.floors.map((f,i)=>{
+    const raeume=p.rooms.filter(r=>r.floorId===f.id).length;
+    return `<div class="stat" style="gap:6px">
+      <span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">
+        <b style="color:var(--muted); font-weight:600; margin-right:6px">${i+1}.</b>${esc(f.name)}
+        <span style="color:var(--muted)">${raeume===1?'1 Raum':raeume+' Räume'}</span></span>
+      <span style="flex:0 0 auto; display:flex; gap:4px">
+        <button class="btn small" data-fsort="hoch" data-i="${i}" ${i===0?'disabled':''}
+          title="Eine Stelle nach oben">▲</button>
+        <button class="btn small" data-fsort="runter" data-i="${i}" ${i===n-1?'disabled':''}
+          title="Eine Stelle nach unten">▼</button>
+      </span></div>`;
+  }).join('');
+}
+function floorSortOeffnen(){
+  if(proj().floors.length<2) return;
+  floorSortListe();
+  $('#dlgFloorSort').showModal();
+}
+/* Ein Klick, ein Schritt. Gespeichert wird sofort — und `renderAll` zieht das Menü
+   darunter mit, damit man die neue Folge nicht erst nach dem Schließen sieht. */
+$('#floorSortList').addEventListener('click', e=>{
+  const b=e.target.closest('button[data-fsort]'); if(!b) return;
+  const p=proj(), i=+b.dataset.i;
+  const j = b.dataset.fsort==='hoch' ? i-1 : i+1;
+  if(!(j>=0 && j<p.floors.length)) return;
+  [p.floors[i], p.floors[j]] = [p.floors[j], p.floors[i]];
+  save(); floorSortListe(); renderAll();
+});
+
 /* ================= Vorlagen ================= */
 const dlgTpl=$('#dlgTemplate');
 function tplFieldHtml(){
@@ -11108,16 +11394,60 @@ let lvRoomId=null, lvObjId=null;
    an die Raumhöhe, `wandRefsUmschreiben`) rechnet damit. Ein zweites Feld ist billiger
    als vierzig Fallunterscheidungen, und ohne das Feld verhält sich alles wie bisher. */
 let lvFlWall=null;
+/* Gibt es überhaupt einen Träger, dem Länge und Höhe folgen könnten? Beim Öffnen
+   festgestellt und gemerkt, damit der Schalter „Raum / Projekt“ die beiden
+   Kopplungszeilen ein- und ausblenden kann, ohne den Dialog neu aufzubauen. */
+let lvKoppelbarBasis=false;
 let lvAnOeffnung=null;      // die Tür/das Fenster, an dem der Dialog hängt — sonst null
 let lvFuerRaeume=null;      // aus der Mehrfachanwahl: in diese Räume kopieren
 /* Über „＋ Neue LV-Position" im LV-Tab angelegt: die Position gehört keinem Bauteil,
    sondern dem Projekt. Sie liegt technisch trotzdem in einem Raum (die Rechnung
    braucht ihn für Grundfläche und Umfang) — angezeigt wird aber „Projekt". */
 let lvProjektEbene=false;
+/* ---------- Raum oder Projekt (13.8.2026, Nutzerwunsch) ----------
+   „Erstelle im LV-Zuordnungsfenster oben neben Kapitel einen Toggle Projekt / Raum.
+   Standard ist immer Raum. Wenn Projekt gewählt ist, erscheint die Summe in der PDF nur
+   oben in den LV-Positionen. Keine Einzelliste und keine Darstellung in einem Raum."
+
+   Das Merkmal `a.projekt` gab es schon — bisher aber ohne Schalter (gesetzt wurde es
+   allein beim „＋ Neu" aus der LV-Übersicht) und **ohne Wirkung im Druck**: die Position
+   stand trotzdem unter ihrem Raum und in der Auflistung. Beides ist jetzt da.
+
+   `lvEbeneSetzen` ist der einzige Weg, den Zustand zu ändern — er stellt die Knöpfe UND
+   das Modul-Flag, und frischt auf, was davon abhängt. */
+function lvEbeneKnoepfe(){
+  $('#lvEbene').querySelectorAll('button').forEach(b=>
+    b.classList.toggle('an', (b.dataset.ebene==='projekt')===lvProjektEbene));
+}
+function lvEbeneSetzen(projekt){
+  lvProjektEbene=!!projekt;
+  lvEbeneKnoepfe();
+  lvZielAnzeige();
+  /* Am Projekt gibt es keinen Raum, dessen Maße man übernehmen könnte — die vier
+     Automatikschalter fallen weg. Sie werden dabei auch AUSGEHAKT: ein Haken, den man
+     nicht mehr sieht, rechnete sonst still weiter mit den Maßen eines Raums, der mit
+     dieser Position nichts zu tun hat. */
+  if(lvProjektEbene) lvRaummassLoesen();
+  /* Die beiden Kopplungszeilen gehen am Projekt mit — sonst stünde dort „Höhe folgt dem
+     Raum“ an einer Position, die keinen Raum hat. Abgehakt werden sie auch: ein Haken,
+     der nicht mehr gilt, soll auch nicht mehr leuchten. */
+  const kopp = !lvProjektEbene && lvKoppelbarBasis;
+  $('#lvAutoLZeile').style.display = kopp?'':'none';
+  $('#lvAutoHZeile').style.display = kopp?'':'none';
+  if(!kopp){ $('#lvAutoL').checked=false; $('#lvAutoH').checked=false; }
+  lvSchalterAuffrischen();
+  lvErgebnisZeigen();
+}
+$('#lvEbene').addEventListener('click', e=>{
+  const b=e.target.closest('button[data-ebene]'); if(!b) return;
+  lvEbeneSetzen(b.dataset.ebene==='projekt');
+});
 function lvZielAnzeige(){
   /* Kopieren gibt es am Raum und (seit 2026-08-04) an der Wand. An Objekten, Türen und
      Fenstern nicht: dort hinge die Kopie an einem Bauteil, das es anderswo nicht gibt. */
-  $('#lvKopieren').style.display = lvObjId ? 'none' : '';
+  // Am Projekt gibt es nichts zu kopieren — die Position gilt ohnehin für das ganze
+  // Bauvorhaben, eine zweite in einem anderen Raum wäre dieselbe Menge doppelt.
+  $('#lvKopieren').style.display = (lvObjId || lvProjektEbene) ? 'none' : '';
   $('#lvKopieren').textContent = lvPresetWall!=null ? '⧉ Auf Wände' : '⧉ In Räume';
   /* Die Zeile „Zuordnung: Erdgeschoss › Raum 2" gibt es seit 2026-08-05 nicht mehr
      (Nutzerwunsch). Sie stand nur da: auswählen ließ sie sich ohnehin nie, sie ergibt
@@ -11137,7 +11467,11 @@ function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
                    : ((presetVals && presetVals.wall!=null) ? presetVals.wall : null);
   lvFlWall = a ? (a.flWall!=null?a.flWall:null)
                : ((presetVals && presetVals.flWall!=null) ? presetVals.flWall : null);
+  /* **Standard ist immer „Raum"** (Nutzervorgabe). „Projekt" steht nur da, wo es
+     ausdrücklich gemeint ist: an einer bestehenden Position mit dem Merkmal, oder beim
+     „＋ Neu" aus der LV-Übersicht — dort gibt es kein Bauteil, an dem die Menge hinge. */
   lvProjektEbene = a ? !!a.projekt : !!(presetVals && presetVals.projekt);
+  lvEbeneKnoepfe();
   lvZielAnzeige();
   $('#lvPos').value=a?a.lv:'';
   $('#lvKurz').value=a?(a.kurz||''):'';
@@ -11191,7 +11525,9 @@ function openLvDialog(attrId, presetRoomId, presetObjId, presetVals){
   lvAnOeffnung = lvOeffnungVon(roomById(lvRoomId), lvObjId);
   // Die Wand einer freien Fläche koppelt genauso: Länge aus ihr, Höhe aus der Fläche
   const anFlWand = lvFlWall!=null;
-  const koppelbar = anWand || !!lvAnOeffnung || anFlWand;
+  // Am Projekt gibt es keinen Träger — also auch nichts, dem ein Maß folgen könnte
+  lvKoppelbarBasis = anWand || !!lvAnOeffnung || anFlWand;
+  const koppelbar = !lvProjektEbene && lvKoppelbarBasis;
   $('#lvAutoLZeile').style.display = koppelbar?'':'none';
   $('#lvAutoHZeile').style.display = koppelbar?'':'none';
   $('#lvAutoL').checked = koppelbar && (a ? !!a.autoL : true);
@@ -11365,7 +11701,8 @@ function lvSchalterAuffrischen(){
      Grundfläche noch Ansichtsfläche noch Raumvolumen zu übernehmen: die gehören dem
      Raum. Dafür stehen dort die Kopplungen, die es am Raum wiederum nicht gibt.
      Die beiden Reihen tauschen also einfach den Platz. */
-  $('#lvFlaechenZeile').style.display = (lvPresetWall!=null || lvAnOeffnung || lvFlWall!=null) ? 'none' : '';
+  $('#lvFlaechenZeile').style.display =
+    (lvPresetWall!=null || lvAnOeffnung || lvFlWall!=null || lvProjektEbene) ? 'none' : '';
 }
 dlgLv.addEventListener('change', e=>{
   if(e.target.matches('.schalter input, #lvEinheit')) lvSchalterAuffrischen();
@@ -11386,7 +11723,8 @@ function lvFlaecheAktuell(){
   return istFlaeche(g) ? g : null;
 }
 function lvGrundAuto(){
-  if(lvPresetWall!=null) return;
+  // Am Projekt gibt es keinen Raum, dessen Maß gemeint sein könnte
+  if(lvProjektEbene || lvPresetWall!=null) return;
   if(lvObjId && !lvFlaecheAktuell()) return;
   // Jedes Häkchen wirkt nur bei seiner Einheit — bei den anderen bleibt es auch aus
   const e=$('#lvEinheit').value;
@@ -11534,15 +11872,24 @@ function fotoOeffnen(ziel){ fotoZiel=ziel; dlgFotoSrc.showModal(); }
 const dlgFotoStapel=$('#dlgFotoStapel');
 let fotoStapel=null;                  // [{id,src,ts}] — null = kein Stapel offen
 let fotoQuelle='#fotoInCam';          // zuletzt benutzte Quelle für „Noch ein Foto"
-async function fotosAufnehmen(files){
-  const liste=[...files].filter(f=>/^image\//.test(f.type)||/\.(jpe?g|png|heic|webp)$/i.test(f.name));
-  if(!liste.length || !fotoZiel) return;
-  const info=$('#lvFotoInfo'); if(info && fotoZiel.imDialog) info.textContent=`verarbeite ${liste.length} Foto(s) …`;
+/* Welche der abgelegten Dateien sind überhaupt Bilder? Der Typ allein reicht nicht —
+   Windows liefert für HEIC gern gar keinen MIME-Typ mit, darum zusätzlich die Endung. */
+const istBilddatei = f => /^image\//.test(f.type) || /\.(jpe?g|png|heic|webp)$/i.test(f.name);
+/* Dateien → fertige Fotos (verkleinert). Herausgelöst aus `fotosAufnehmen`, weil das
+   Ablegen per Maus denselben Weg braucht, aber OHNE den Stapel-Dialog dahinter. */
+async function fotosVonDateien(files){
   const neu=[];
-  for(const f of liste){
+  for(const f of [...files].filter(istBilddatei)){
     try{ neu.push({id:uid(), src:await fotoVerkleinern(f), ts:Date.now()}); }
     catch(err){ btLog('Foto: '+err.message); }
   }
+  return neu;
+}
+async function fotosAufnehmen(files){
+  const liste=[...files].filter(istBilddatei);
+  if(!liste.length || !fotoZiel) return;
+  const info=$('#lvFotoInfo'); if(info && fotoZiel.imDialog) info.textContent=`verarbeite ${liste.length} Foto(s) …`;
+  const neu=await fotosVonDateien(liste);
   if(info && fotoZiel.imDialog) info.textContent='';
   if(!neu.length) return;
   fotoStapel=(fotoStapel||[]).concat(neu);
@@ -12700,10 +13047,67 @@ function fotoBtn(list, id){
   const n=(list||[]).length;
   return `<button class="btn small" id="${id}" style="flex:1">${ico('foto')}Fotos${n?' ('+n+')':''}</button>`;
 }
+/* ================= Fotos auf den Knopf ziehen (17.8.2026, Nutzerwunsch) =================
+   „Ich möchte auf jedes Fotofeld ein Foto ziehen können, und es wird automatisch und ohne
+   Rückfrage importiert."
+
+   **Ohne Rückfrage heißt: an zwei Dialogen vorbei.** Der Weg über den Knopf fragt erst
+   „Kamera oder Datei?" und zeigt danach den Stapel zum Bestätigen. Beides ergibt Sinn,
+   wenn man auf der Baustelle knipst — beim Ziehen einer Datei hat man die Auswahl aber
+   schon getroffen, und zwar mit der Maus. Darum geht der Zug direkt in die Liste
+   (`fotosVonDateien` + `add`), genau wie es der Stapel am Ende auch täte.
+
+   Nur am Rechner von Bedeutung: auf dem iPad gibt es nichts zu ziehen. Der Knopf tut
+   unverändert, was er immer tat. */
+function hatDateien(e){
+  const dt=e.dataTransfer;
+  return !!dt && [...(dt.types||[])].includes('Files');
+}
+function fotoDropZiel(el, add){
+  if(!el || !add) return;
+  el.addEventListener('dragover', e=>{
+    if(!hatDateien(e)) return;
+    e.preventDefault();                       // ohne das nimmt der Browser das Ablegen nicht an
+    e.dataTransfer.dropEffect='copy';
+    el.classList.add('dropbereit');
+  });
+  ['dragleave','dragend'].forEach(t=>el.addEventListener(t, ()=>el.classList.remove('dropbereit')));
+  el.addEventListener('drop', async e=>{
+    if(!hatDateien(e)) return;
+    e.preventDefault(); e.stopPropagation();
+    el.classList.remove('dropbereit');
+    /* Die Dateiliste JETZT festhalten: `dataTransfer` ist nach dem ersten `await` nicht
+       mehr zu gebrauchen — der Browser räumt sie mit dem Ereignis ab. */
+    const dateien=[...e.dataTransfer.files];
+    if(!dateien.some(istBilddatei)){ melde('Das war keine Bilddatei.', true); return; }
+    el.classList.add('dropladt');
+    let neu=[];
+    try{ neu=await fotosVonDateien(dateien); }
+    finally{ el.classList.remove('dropladt'); }
+    if(!neu.length){ melde('Die Datei ließ sich nicht als Bild lesen.', true); return; }
+    add(neu);
+    melde(`${neu.length===1?'Ein Foto':neu.length+' Fotos'} übernommen.`);
+  });
+}
+/* ---------- Das Netz darunter ----------
+   Fällt eine Datei NEBEN ein Fotofeld, öffnet der Browser sie von sich aus — die App
+   verschwindet, und was nicht gespeichert war, ist weg. Das ist kein hübsches Detail,
+   sondern der teuerste Fehler, den ein Ziehen hier anrichten kann. Darum lehnt das
+   Dokument jedes Ablegen ab, das kein Fotofeld erwischt hat, und sagt auch, warum. */
+document.addEventListener('dragover', e=>{ if(hatDateien(e)) e.preventDefault(); });
+document.addEventListener('drop', e=>{
+  if(!hatDateien(e)) return;
+  e.preventDefault();
+  melde('Fotos bitte auf den Knopf „Fotos" ziehen — dort werden sie übernommen.', true);
+});
 /* Button + Thumbnails eines Trägers verdrahten (ent[key] ist das Foto-Array) */
 function wireFotos(btnId, ent, key){
   const b=$('#'+btnId); if(!b || !ent) return;
-  b.onclick=()=>fotoOeffnen({add:neu=>{ ent[key]=[...(ent[key]||[]), ...neu]; save(); renderAll(); }});
+  const dazu=neu=>{ ent[key]=[...(ent[key]||[]), ...neu]; save(); renderAll(); };
+  b.onclick=()=>fotoOeffnen({add:dazu});
+  /* Dieselbe Liste, anderer Weg hinein: gezogene Dateien landen ohne Umweg dort.
+     Der Knopf wird bei jedem Zeichnen NEU gebaut, die Zuhörer häufen sich also nicht. */
+  fotoDropZiel(b, dazu);
   const box=b.closest('.panel');
   if(!box) return;
   /* Jede Kachel führt in die Rolle — auch die mit „+x", dort geht es dann weiter.
@@ -12733,7 +13137,10 @@ function renderLvFotos(){
     im.onclick=()=>rolleOeffnen(holen, lvFotos.findIndex(x=>x.id===im.dataset.fview), bearb, weg);
   });
 }
-$('#lvFotoAdd').onclick=()=>fotoOeffnen({imDialog:true, add:neu=>{ lvFotos.push(...neu); renderLvFotos(); }});
+const lvFotosDazu = neu=>{ lvFotos.push(...neu); renderLvFotos(); };
+$('#lvFotoAdd').onclick=()=>fotoOeffnen({imDialog:true, add:lvFotosDazu});
+// Fest im Blatt, also EINMAL verdrahtet — anders als die Knöpfe der Seitenleiste
+fotoDropZiel($('#lvFotoAdd'), lvFotosDazu);
 $('#fotoSerie').onclick=()=>{ dlgFotoSrc.close(); kameraStarten(); };
 $('#fotoCam').onclick=()=>{ dlgFotoSrc.close(); fotoQuelle='#fotoInCam'; $('#fotoInCam').click(); };
 $('#fotoFile').onclick=()=>{ dlgFotoSrc.close(); fotoQuelle='#fotoInFile'; $('#fotoInFile').click(); };
@@ -12929,6 +13336,83 @@ function lvPairs(alle){
    zusätzlich einen ℹ-Knopf, der ihn ein- und ausschaltet. */
 let lvTipTimer=null, lvTipLv=null;
 const lvLangtext = lv => (proj().lvLong||{})[lv] || '';
+/* ---------- Den Langtext lesen (17.8.2026, Nutzerwunsch) ----------
+   „Erstelle einen Knopf zum Lesen des Langtextes in den LV-Positionen in der Übersicht
+   und oben in der Kopfzeile der Zuordnungsliste."
+
+   Die SEITE dafür gibt es schon (`#dlgLvLang`, Vollbild mit „← Zurück") — bisher kam man
+   nur aus dem Positionswähler dorthin, also ausgerechnet vor dem Zuordnen und nicht beim
+   Nachlesen. Jetzt führen drei Wege auf dieselbe Seite; das Öffnen steht darum an EINER
+   Stelle. Vollbild und nicht als Einblendkasten: ein Langtext hat schnell zwanzig Zeilen
+   Vorbemerkung, und die will man rollen können. */
+function lvLangZeigen(lv, kurz){
+  $('#llTitel').textContent=`${lv||''}${kurz?' · '+kurz:''}`;
+  $('#llText').textContent=lvLangtext(lv);
+  dlgLvLang.showModal();
+}
+/* ---------- …und zwar als POPUP (Nutzerwunsch: „mach das wieder als ein Popup") ----------
+   Erst öffneten die beiden neuen Knöpfe die Vollbildseite. Sie ist der richtige Ort, wenn
+   man aus dem **Positionswähler** kommt — der ist selbst Vollbild, ein Kasten darüber
+   wäre dort eingeklemmt. Beim Nachlesen in der Übersicht ist sie zu viel: man verliert
+   die Liste aus den Augen und muss zurück. Der Popup legt sich daneben, die Zeile bleibt
+   stehen, ein Tipp schließt ihn wieder.
+
+   Er benutzt die Platzierung des Hover-Kastens (`#lvtip`) und dessen Aussehen, hat aber
+   eine EIGENE Kennung: `#lvtip` ist am Telefon ausgeblendet, weil er an `mouseenter`
+   hängt und dort ungefragt aufging. Dieser hier kommt nur auf Knopfdruck. */
+function langPopSchliessen(){
+  const el=$('#langpop'); if(el) el.classList.remove('on');
+}
+function lvLangPopup(anchor, lv, kurz){
+  const txt=lvLangtext(lv);
+  if(!txt) return;
+  const el=$('#langpop');
+  el.innerHTML=`<b>${esc(lv)}${kurz?' · '+esc(kurz):''}</b>${esc(txt)}<i>Zum Schließen antippen</i>`;
+  el.classList.add('on');
+  /* Dieselbe Rechnung wie beim Hover-Kasten: daneben, wenn Platz ist — sonst auf die
+     andere Seite, sonst darüber oder darunter. Auf dem Tablett ist der dritte Fall der
+     Normalfall, und ohne ihn stünde der Kasten halb außerhalb des Bildes. */
+  const r=anchor.getBoundingClientRect(), w=el.offsetWidth, h=el.offsetHeight;
+  let x=r.right+12, y=Math.min(r.top, innerHeight-h-8);
+  if(x+w>innerWidth-8){
+    x=r.left-w-12;
+    if(x<8){
+      x=Math.max(8, Math.min(r.left, innerWidth-w-8));
+      y = r.top>h+16 ? r.top-h-8 : Math.min(r.bottom+8, innerHeight-h-8);
+    }
+  }
+  el.style.left=Math.max(8,x)+'px'; el.style.top=Math.max(8,y)+'px';
+}
+// Antippen schließt — auf dem Kasten selbst wie daneben. Und Esc, wie bei allem anderen.
+$('#langpop').addEventListener('mousedown', e=>{ e.preventDefault(); langPopSchliessen(); });
+document.addEventListener('pointerdown', e=>{
+  const el=$('#langpop');
+  if(!el || !el.classList.contains('on')) return;
+  if(el.contains(e.target) || (e.target.closest && e.target.closest('[data-lvlang]'))) return;
+  langPopSchliessen();
+}, true);
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') langPopSchliessen(); });
+/* Der Knopf selbst — nur, wenn es überhaupt einen Langtext gibt. Ein ℹ, das einen leeren
+   Kasten öffnet, ist schlimmer als keines. */
+const lvLangKnopf = (lv, marke) => lvLangtext(lv)
+  ? `<button type="button" class="langbtn" data-lvlang="${esc(lv)}"${marke||''}
+      title="Langtext dieser Position lesen">ℹ</button>` : '';
+/* Verdrahtet alle Langtext-Knöpfe im gerade gebauten Bild. `stopPropagation`, weil die
+   Knöpfe in der Übersicht IN einer anklickbaren Zeile sitzen — ohne das öffnete derselbe
+   Tipp zusätzlich die Zuordnungsliste (dieselbe Sorge wie beim Papierkorb daneben). */
+function lvLangVerdrahten(wurzel){
+  (wurzel||document).querySelectorAll('[data-lvlang]').forEach(b=>{
+    b.onclick=e=>{
+      e.stopPropagation();
+      // Derselbe Knopf noch einmal schließt wieder — sonst müsste man daneben zielen
+      if($('#langpop').classList.contains('on') && $('#langpop').dataset.lv===b.dataset.lvlang){
+        langPopSchliessen(); return;
+      }
+      $('#langpop').dataset.lv=b.dataset.lvlang;
+      lvLangPopup(b, b.dataset.lvlang, b.dataset.lvkurz||'');
+    };
+  });
+}
 function lvTipHide(){
   clearTimeout(lvTipTimer); lvTipLv=null;
   const el=$('#lvtip'); if(el) el.classList.remove('on');
@@ -13217,9 +13701,7 @@ function lvWahlListe(){
   });
   box.querySelectorAll('[data-lang]').forEach(el=>el.onclick=()=>{
     const it=treffer[+el.dataset.lang];
-    $('#llTitel').textContent=`${it.lv}${it.kurz?' · '+it.kurz:''}`;
-    $('#llText').textContent=lvLangtext(it.lv);
-    dlgLvLang.showModal();
+    lvLangZeigen(it.lv, it.kurz);
   });
 }
 /* Gesetzt, solange der Positionswaehler fuer ein Farbfeld des Fotoaufmasses offen ist */
@@ -13330,13 +13812,29 @@ function lvDialogDaten(){
     abschlag:Math.max(1, Math.round(parseNum($('#lvAbschlag').value)||p.abschlag)),
     fotos:lvFotos.map(f=>({...f}))
   };
-  if(lvProjektEbene) data.projekt=true;
-  if(lvPresetWall!=null) data.wall=lvPresetWall;
-  if(lvFlWall!=null) data.flWall=lvFlWall;
+  /* ---- Projekt statt Raum ----
+     Die Menge gehört dem Bauvorhaben, nicht einem Bauteil. Der Träger fällt deshalb
+     WEG — sonst hinge dieselbe Zuordnung an zwei Stellen, und „keine Darstellung in
+     einem Raum" wäre nicht zu halten: `objMarks` und `wallMarks` malen nach `objId`
+     bzw. `wall`, nicht nach `projekt`. `a.roomId` bleibt stehen; es sagt nur, wo der
+     Dialog geöffnet wurde, und keine Auswertung fragt es bei Projektpositionen ab.
+     Die vier Raum-Automatiken fallen mit: am Projekt gibt es keinen Raum zu messen. */
+  if(lvProjektEbene){
+    data.projekt=true;
+    data.objId=null;
+    data.nutzGrund=data.nutzAnsicht=data.nutzVolumen=data.nutzUmfang=false;
+  } else {
+    if(lvPresetWall!=null) data.wall=lvPresetWall;
+    if(lvFlWall!=null) data.flWall=lvFlWall;
+  }
   // Kopplung nur mitschreiben, wenn sie besteht — sonst stünde bei jeder Zuordnung
   // ein `false` im Aufmaß, das niemand braucht (und `delete` beim Bearbeiten greift).
-  // Wand des Raums, Tür/Fenster ODER Wand einer freien Fläche
-  const koppelbar = lvPresetWall!=null || !!lvAnOeffnung || lvFlWall!=null;
+  /* Wand des Raums, Tür/Fenster ODER Wand einer freien Fläche — aber nie am PROJEKT:
+     dort ist der Träger weg, und „Höhe folgt dem Raum" zöge die Höhe eines Raums nach,
+     mit dem die Position nichts zu tun hat. (Der Merker `lvPresetWall` steht noch, weil
+     der Dialog an einer Wand geöffnet wurde; gemeint ist er nach dem Umschalten nicht
+     mehr.) */
+  const koppelbar = !lvProjektEbene && (lvPresetWall!=null || !!lvAnOeffnung || lvFlWall!=null);
   if(koppelbar && $('#lvAutoL').checked) data.autoL=true;
   if(koppelbar && $('#lvAutoH').checked) data.autoH=true;
   if(lvObjId && $('#lvAutoObj').checked && $('#lvAutoObjZeile').style.display!=='none') data.autoObj=true;
@@ -13374,6 +13872,13 @@ function lvSpeichern(){
   if(!data.autoL) delete ziel.autoL;
   if(!data.autoH) delete ziel.autoH;
   if(!data.autoObj) delete ziel.autoObj;
+  /* Dieselbe Falle beim Schalter „Raum / Projekt": `Object.assign` schreibt ein
+     FEHLENDES Feld nicht weg. Wer eine Zuordnung von der Wand auf „Projekt" stellt,
+     behielte sonst `wall` — die Position stünde weiter an der Wand im Plan, obwohl im
+     Dialog „Projekt" leuchtet. Und umgekehrt bliebe `projekt` an einer Position hängen,
+     die längst wieder an einem Raum hängt. */
+  if(data.projekt){ delete ziel.wall; delete ziel.flWall; delete ziel.objId; }
+  else delete ziel.projekt;
   lvNummerVergeben(ziel);
   /* Aus der Mehrfachanwahl: dieselbe Position in die übrigen gewählten Räume. Die
      Kopien bekommen eigene IDs und Nummern, aber keine Fotos — die hängen am Original.
@@ -13883,8 +14388,26 @@ function lvCalc(a){
    `lvGroups`, `planSvg`, `objMarks`, `fotosVonRaum` … es alle einzeln weiterreichen.
    `buildPrint` setzt und löscht es in einem try/finally. */
 let druckFilter=null;
+/* ---------- Nachträge sind ein eigenes Dokument (18.8.2026, Nutzerwunsch) ----------
+   „Nachträge sollen nicht in einem Aufmaß auftauchen. Man soll sie aber in der LV-Liste
+   filtern können … und als PDF exportieren."
+
+   `null`  am Bildschirm und überall sonst — es ändert sich nichts
+   `false` im Aufmaß-Bericht: Nachtragspositionen fallen heraus
+   `true`  im Nachtrags-Bericht: NUR sie zählen
+
+   Warum hier und nicht in `buildPrint`: `imAbschlag` ist die eine Stelle, durch die im
+   Druck jede Zuordnung muss — Raumtabellen, Auflistung, Übersicht, Ausgrauen im Plan,
+   welche Räume überhaupt eine Seite bekommen. Ein Sieb an dieser Stelle wirkt in allen
+   davon; jede andere Lösung hätte ein Dutzend Aufrufer einzeln anfassen müssen. */
+let druckNachtrag=null;
+// Steht gerade ein DOKUMENT im Bau (Abschlag, Schlussrechnung oder Nachträge)?
+const druckAuswahl = () => !!druckFilter || druckNachtrag!=null;
 const abschlagVon = a => Number.isFinite(a.abschlag) ? a.abschlag : 1;
 function imAbschlag(a){
+  /* Zuerst die Trennung Aufmaß / Nachtrag — sie sticht den Abschlag. Ein Nachtrag gehört
+     in kein Aufmaß, auch nicht in „Gesamtes Aufmaß" (das läuft ohne `druckFilter`). */
+  if(druckNachtrag!=null && lvNachtragIst(a.lv)!==druckNachtrag) return false;
   if(!druckFilter) return true;
   return druckFilter.art==='schluss'
     ? abschlagVon(a) >= proj().abschlag
@@ -13901,9 +14424,9 @@ const attrsFuer = pred => (proj().attrs||[]).filter(a=>a.lv && pred(a));
    wird blass. Die Listen bleiben beim Umfang: sonst wäre es kein Abschlag mehr,
    sondern das gesamte Aufmaß — und dafür gibt es die Auswahl darüber.
    Am Bildschirm (`druckFilter` null) ist ohnehin alles kräftig, darum die Kopplung. */
-const alleZeichnen = () => !!druckFilter && proj().druckAlleRaeume===true;
+const alleZeichnen = () => druckAuswahl() && proj().druckAlleRaeume===true;
 function bauteilAktiv(list){
-  if(druckFilter) return alleZeichnen() || list.some(imAbschlag);
+  if(druckAuswahl()) return alleZeichnen() || list.some(imAbschlag);
   return !list.length || list.some(a=>abschlagVon(a)===proj().abschlag);
 }
 const objAktiv  = g => bauteilAktiv(attrsFuer(a=>a.objId===g.id));
@@ -13917,10 +14440,14 @@ const fotoAktiv = list => alleZeichnen() || !list.length || list.some(imAbschlag
 const wandFotoAktiv = (r,i) => fotoAktiv(attrsFuer(a=>a.roomId===r.id && a.wall===i));
 const objFotoAktiv  = g => fotoAktiv(attrsFuer(a=>a.objId===g.id));
 // Räume und Etagen werden nur im Druck ausgegraut — am Bildschirm wäre das zu viel
-const raumAktiv = r => !druckFilter || alleZeichnen()
-  || attrsFuer(a=>a.roomId===r.id).some(imAbschlag);
+/* Projektpositionen zählen hier NICHT mit: sie gehören dem Bauvorhaben, nicht dem Raum,
+   in dem der Dialog zufällig offen war. Sonst bekäme genau dieser eine Raum seine Seite
+   im Abschlagsdruck — „keine Darstellung in einem Raum" wäre gebrochen. */
+const raumAktiv = r => !druckAuswahl() || alleZeichnen()
+  || attrsFuer(a=>a.roomId===r.id && !a.projekt).some(imAbschlag);
 // Bezeichnung fürs Deckblatt und die Fußzeile
-const abschlagText = f => !f ? '' : (f.art==='schluss' ? 'Schlussrechnung' : `Abschlag ${f.nr}`);
+const abschlagText = f => f && f.art==='nachtrag' ? 'Nachträge'
+  : !f ? '' : (f.art==='schluss' ? 'Schlussrechnung' : `Abschlag ${f.nr}`);
 
 // LV-Positionen gruppieren (nur solche mit mindestens einer Zuordnung)
 function lvGroups(){
@@ -13930,7 +14457,15 @@ function lvGroups(){
     if(!m.has(k)) m.set(k, []);
     m.get(k).push(a);
   });
-  return [...m.entries()].sort((x,y)=>lvCmp(x[0],y[0])).map(([lv,list])=>{
+  return [...m.entries()].sort((x,y)=>lvCmp(x[0],y[0])).map(([lv,list])=>lvGruppeBauen(lv, list));
+}
+/* Eine Gruppe aus einer Positionsnummer und IHREN Zuordnungen. Herausgelöst, damit die
+   Auflistung der Einzelpositionen dieselbe Rechnung mit einer GEFILTERTEN Liste noch
+   einmal anstellen kann (ohne die Projektzeilen) — sonst zeigte sie Zeilen ohne die
+   Projektmenge, darunter aber eine Summe MIT ihr. */
+function lvGruppeBauen(lv, list){
+  {
+    const p=proj();
     const einheiten=[...new Set(list.map(a=>a.einheit).filter(Boolean))];
     const res=list.map(a=>lvCalc(a));
     const summe=res.reduce((s,x)=>s+x.wert, 0);
@@ -13948,9 +14483,17 @@ function lvGroups(){
     return {lv, list, einheiten, summe, fehlend, soll, ueber, preis, betrag, sollBetrag,
       sym:einheiten.length===1?(EINH_SYM[einheiten[0]]||''):'',
       kurz:(p.lvTexts||{})[lv] || (list.find(a=>a.kurz)||{}).kurz || ''};
-  });
+  }
 }
 let lvDrill=null;   // gesetzt = Detailansicht einer LV-Position
+/* Wo die Übersicht stand, als man in eine Position hineinging (Nutzerwunsch 18.8.2026:
+   „wenn ich aus einer LV-Position wieder zurück in die Übersicht gehe, will ich dort
+   ankommen, wo ich reingegangen bin, nicht automatisch am Anfang der Liste“).
+
+   **Einmalig**: gesetzt beim Hineingehen, verbraucht beim nächsten Aufbau der Übersicht.
+   Dauerhaft wäre es falsch — dann spränge die Liste bei JEDER Änderung an die alte
+   Stelle, auch wenn man inzwischen selbst woanders hingerollt ist. */
+let lvScrollZurueck=null;
 /* ---------- Mehrfachauswahl in der Detailansicht (seit 2026-08-07) ----------
    Statt eines Papierkorbs je Zeile trägt jede Zuordnung ein Kästchen; gehandelt wird
    oben für alle angehakten. Damit gibt es Löschen und Umhängen in einem Zug — und
@@ -13969,6 +14512,11 @@ let lvAbschlagWahl=null;
    einmal wegschaltet, will es beim nächsten Öffnen nicht wieder anschalten. */
 const LV_LEER_KEY='grundriss-lv-nur-belegte';
 let lvNurBelegte = localStorage.getItem(LV_LEER_KEY)==='1';
+/* „Nur Nachträge" ist wie „leere ausblenden" eine ANSICHTS-Sache und gehört ins Gerät,
+   nicht ins Aufmaß. Sie überlebt aber den Neustart: wer die Nachträge durchgeht, will
+   nicht bei jedem Öffnen neu filtern. */
+const LV_NACHTRAG_KEY='grundriss-lv-nur-nachtrag';
+let lvNurNachtrag = localStorage.getItem(LV_NACHTRAG_KEY)==='1';
 function lvGroupsGefiltert(){
   const alt=druckFilter;
   if(lvAbschlagWahl!=null) druckFilter={art:'teil', nr:lvAbschlagWahl};
@@ -13986,10 +14534,14 @@ const lvAbschlaege = () => [...new Set((proj().attrs||[]).filter(a=>a.lv).map(ab
    hängengebliebener `druckFilter` färbte danach den ganzen Plan blass. */
 function abschlagStand(){
   const nr=proj().abschlag;
-  const alt=druckFilter;
+  const alt=druckFilter, altN=druckNachtrag;
   druckFilter={art:'teil', nr};
+  /* Ohne Nachträge — der Chip nennt den Betrag DIESES Abschlags, und Nachträge werden
+     getrennt abgerechnet. Zählten sie mit, stünde oben eine andere Zahl als im
+     gedruckten Abschlag, und niemand wüsste, welche stimmt. */
+  druckNachtrag=false;
   let groups;
-  try{ groups=lvGroups(); } finally{ druckFilter=alt; }
+  try{ groups=lvGroups(); } finally{ druckFilter=alt; druckNachtrag=altN; }
   const mitPreis=groups.filter(g=>Number.isFinite(g.betrag));
   return {nr,
     betrag: mitPreis.reduce((s,g)=>s+g.betrag, 0),
@@ -14004,6 +14556,128 @@ function abschlagStand(){
 
    Bewusst NUR für den LV-Tab: `lvGroups()` selbst bleibt bei den Positionen mit
    Zuordnung, sonst stünde im Ausdruck plötzlich das komplette LV statt der Abrechnung. */
+/* ================= Eine LV-Position anlegen (17.8.2026, Nutzerwunsch) =================
+   „‚Neue LV-Position‘ stimmt noch nicht. Hier sollen keine Werte einer LV-Zuordnung hin,
+   sondern LV-Nummer, Checkbox Nachtrag, Kurzbeschreibung, Einheit und optional
+   Einheitspreis."
+
+   Der Knopf öffnete den Zuordnungs-Dialog — dort stehen Menge, Maße, Abschlag, Fotos,
+   also alles, was eine **Messung** ausmacht. Eine Position ist aber ein **Katalogeintrag**;
+   gemessen wird danach im Plan. Zwei verschiedene Dinge, jetzt zwei Fenster.
+
+   Geschrieben wird in dieselben Kataloge, die auch der Import füllt (`p.lvTexts`,
+   `p.lvUnits`, `p.lvPreis`) — damit verhält sich eine von Hand angelegte Position ab
+   sofort wie jede andere: sie steht in der Übersicht, im Positionswähler, in der
+   Auswahlliste und im Bericht. Dazu zwei eigene Merker: `p.lvNachtrag` und `p.lvEigen`
+   („von Hand angelegt", siehe Nummernvorschlag). */
+const lvNachtragIst = lv => !!(proj().lvNachtrag||{})[lv];
+// Kapitel, in dem von Hand angelegte Nachträge landen — eine Stelle, ein Name
+const NACHTRAG_KAT='Nachtrag aktuell';
+/* ---------- Was für eine Nummer schlagen wir vor? ----------
+   „Wenn die letzte Position 8.2.12 war, schlage 8.3.1 vor. Bei dem nächsten händisch
+   hinzugefügten Punkt gehe nur einen Schritt weiter, also 8.3.2."
+
+   Die Regel steckt vollständig in den Daten, es braucht keinen Sitzungszustand: Kam die
+   höchste Nummer aus dem **LV**, fängt ein neues Kapitel an (vorletzte Stelle +1, letzte
+   auf 1). Haben **wir** sie angelegt (`lvEigen`), zählt nur die letzte Stelle weiter.
+   Damit stimmt der Vorschlag auch nach einem Neustart und auf dem zweiten Rechner. */
+function lvNummerVorschlag(){
+  const p=proj();
+  const alle=[...new Set([...Object.keys(p.lvTexts||{}), ...(p.attrs||[]).map(a=>a.lv)])]
+    .filter(Boolean);
+  if(!alle.length) return '1.1';
+  const hoch=alle.map(lv=>({lv, norm:lvNormNr(lv)}))
+    .sort((a,b)=>lvCmp(a.norm, b.norm)).pop().lv;
+  const t=lvTeile(hoch);
+  if(!t.length) return '1.1';
+  /* Die Schreibweise des LV übernehmen: manche Verzeichnisse setzen ein Leerzeichen
+     hinter den Punkt („1. 2. 29"). Ein Vorschlag, der anders aussieht als seine
+     Nachbarn, sieht nach Fremdkörper aus — und sortiert am Ende womöglich daneben. */
+  const sep = /\.\s/.test(hoch) ? '. ' : '.';
+  const zahl = x => { const n=parseInt(String(x).replace(/\D+/g,''), 10); return Number.isFinite(n)?n:0; };
+  if((p.lvEigen||{})[hoch] || t.length<2){
+    t[t.length-1]=String(zahl(t[t.length-1])+1);          // selbst angelegt: ein Schritt
+  } else {
+    t[t.length-2]=String(zahl(t[t.length-2])+1);          // aus dem LV: nächstes Kapitel
+    t[t.length-1]='1';
+  }
+  return t.join(sep);
+}
+function lvNeuOeffnen(){
+  const vor=lvNummerVorschlag();
+  $('#lnNr').value=vor;
+  $('#lnNr').dataset.vorschlag=vor;
+  $('#lnNachtrag').checked=false;
+  $('#lnKurz').value='';
+  $('#lnEinheit').value='Flache';
+  $('#lnPreis').value='';
+  lvNeuNrPruefen();
+  lvNeuKatZeigen();
+  $('#dlgLvNeu').showModal();
+  setTimeout(()=>{ const k=$('#lnKurz'); if(k) k.focus(); }, 40);
+}
+/* Sagt unter dem Feld, was gerade gilt: woher der Vorschlag kommt — oder dass die
+   getippte Nummer schon vergeben ist. Lieber vorher warnen als hinterher ablehnen. */
+function lvNeuNrPruefen(){
+  const p=proj(), nr=$('#lnNr').value.trim();
+  const el=$('#lnNrInfo');
+  const belegt = nr && ((p.lvTexts||{})[nr]!=null
+    || (p.attrs||[]).some(a=>(a.lv||'')===nr));
+  el.style.color = belegt ? 'var(--danger)' : '';
+  el.textContent = !nr ? 'Ohne Nummer geht es nicht.'
+    : belegt ? `„${nr}" gibt es schon — bitte eine andere Nummer.`
+    : `Vorgeschlagen: ${$('#lnNr').dataset.vorschlag||nr}. Frei änderbar.`;
+  $('#lnOk').disabled = !nr || belegt;
+}
+/* Wohin die Position im Kapitelbaum kommt — sichtbar, weil sie danach im
+   Positionswähler dort und nirgends sonst zu finden ist. */
+function lvNeuKatZeigen(){
+  const an=$('#lnNachtrag').checked;
+  $('#lnKatInfo').textContent = an
+    ? `Kapitel: „${NACHTRAG_KAT}" — und im Aufmaß-Bericht taucht sie nicht auf.`
+    : 'Ohne Kapitel. Im Aufmaß-Bericht zählt sie ganz normal mit.';
+}
+$('#lnNachtrag').addEventListener('change', lvNeuKatZeigen);
+$('#lnNr').addEventListener('input', lvNeuNrPruefen);
+$('#lnNrVor').onclick=()=>{ $('#lnNr').value=$('#lnNr').dataset.vorschlag||''; lvNeuNrPruefen(); };
+$('#lnOk').onclick=()=>{
+  const p=proj(), nr=$('#lnNr').value.trim(), kurz=$('#lnKurz').value.trim();
+  if(!nr) return;
+  if((p.lvTexts||{})[nr]!=null || (p.attrs||[]).some(a=>(a.lv||'')===nr)){
+    melde(`„${nr}" gibt es schon.`, true); return;
+  }
+  if(!kurz && !confirm('Ohne Kurzbeschreibung anlegen?\n\nIn den Listen steht die Position dann nur mit ihrer Nummer.')) return;
+  p.lvTexts=p.lvTexts||{}; p.lvUnits=p.lvUnits||{};
+  p.lvTexts[nr]=kurz;
+  p.lvUnits[nr]=$('#lnEinheit').value;
+  const preis=parseNum($('#lnPreis').value);
+  if(Number.isFinite(preis) && preis>0){ p.lvPreis=p.lvPreis||{}; p.lvPreis[nr]=preis; }
+  if($('#lnNachtrag').checked){
+    p.lvNachtrag=p.lvNachtrag||{}; p.lvNachtrag[nr]=true;
+    /* Alle Nachträge in EIN Kapitel (Nutzerwunsch 18.8.2026: „Das Kapitel der neuen
+       Positionen soll Nachtrag aktuell heißen"). Damit stehen sie im Positionswähler
+       beieinander — der filtert über genau dieses Feld. */
+    p.lvKat=p.lvKat||{}; p.lvKat[nr]=NACHTRAG_KAT;
+  }
+  /* Der Merker für den nächsten Vorschlag — er allein entscheidet, ob dort ein neues
+     Kapitel anfängt oder nur weitergezählt wird. */
+  p.lvEigen=p.lvEigen||{}; p.lvEigen[nr]=true;
+  /* Eine frisch angelegte Position hat noch keine Zuordnung. Steht der Filter
+     „leere ausblenden", wäre sie damit unsichtbar — ausgerechnet die, die man gerade
+     angelegt hat. Also abschalten und es sagen. */
+  let geloest=false;
+  if(lvNurBelegte){
+    lvNurBelegte=false;
+    try{ localStorage.setItem(LV_LEER_KEY,'0'); }catch(err){}
+    geloest=true;
+  }
+  save();
+  $('#dlgLvNeu').close();
+  renderAll();
+  melde(`Position „${nr}"${kurz?` — ${kurz}`:''} angelegt.`
+    + ($('#lnNachtrag').checked?' Nachtrag.':'')
+    + (geloest?' „Leere ausblenden" wurde abgeschaltet, sonst wäre sie nicht zu sehen.':''));
+};
 function lvGroupsVoll(){
   const p=proj();
   const mit=lvGroupsGefiltert();
@@ -14037,7 +14711,7 @@ function renderLv(){
    neu — das ist gewollt und der Grund, warum hier ohne Netz-Rückfrage gelöscht werden
    darf. */
 const LV_KATALOGE=['lvTexts','lvUnits','lvKat','lvLong','lvSoll','lvPreis',
-                   'lvHidden','lvOhneListe','lvColors'];
+                   'lvHidden','lvOhneListe','lvColors','lvNachtrag','lvEigen'];
 function lvPositionLoeschen(lv){
   const p=proj();
   const dran=(p.attrs||[]).filter(a=>(a.lv||'')===lv);
@@ -14062,7 +14736,9 @@ function renderLvUebersicht(){
   const p=proj(), teile=lvAbschlaege();
   // Nach einem Projektwechsel kann der gewählte Abschlag verschwunden sein
   if(lvAbschlagWahl!=null && !teile.includes(lvAbschlagWahl)) lvAbschlagWahl=null;
-  const alle=lvGroupsVoll();
+  /* „Nur Nachträge" greift VOR allem anderen — die Zahl in der Überschrift soll dann die
+     der Nachträge sein und nicht die des ganzen LV. */
+  const alle=lvNurNachtrag ? lvGroupsVoll().filter(g=>lvNachtragIst(g.lv)) : lvGroupsVoll();
   const mitAufmass=alle.filter(g=>g.list.length).length;
   // Leere ausblenden: Positionen ohne jede Zuordnung in diesem Abschlag
   const groups = lvNurBelegte ? alle.filter(g=>g.list.length) : alle;
@@ -14088,6 +14764,9 @@ function renderLvUebersicht(){
       <label class="hint" style="display:flex; align-items:center; gap:5px"
         title="Positionen ohne eine einzige Zuordnung nicht anzeigen">
         <input type="checkbox" id="lvnurbelegt" ${lvNurBelegte?'checked':''}> leere ausblenden</label>
+      <label class="hint" style="display:inline-flex; align-items:center; gap:5px; cursor:pointer"
+        title="Nur die Nachtragspositionen zeigen — die Übersicht über alles, was nachträglich dazugekommen ist">
+        <input type="checkbox" id="lvnurnachtrag" ${lvNurNachtrag?'checked':''}> nur Nachträge</label>
       <span style="flex:1"></span>
       <button class="btn primary" id="lvnew">＋ Neue LV-Position</button>
       <button class="btn" id="lvedit" title="Auswahllisten pflegen: Positionen ausblenden, Kurztexte ändern">LV editieren</button>
@@ -14111,7 +14790,9 @@ function renderLvUebersicht(){
       return `<tr style="cursor:pointer${g.ohneAufmass?'; color:var(--muted)':''}" data-lvdrill="${esc(g.lv)}"
         title="${g.ohneAufmass?'Noch keine Zuordnung im Aufmaß':'Zuordnungen anzeigen'}">
         <td class="sp-lv">${c?`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${c};margin-right:6px;vertical-align:-1px"></span>`:''}<b>${esc(g.lv||'– ohne Nummer –')}</b></td>
-        <td class="sp-kurz">${esc(g.kurz)}${mix?` <span style="color:var(--danger)" title="Gemischte Einheiten in dieser Position">Zu überprüfen</span>`:''}</td>
+        <td class="sp-kurz">${lvNachtragIst(g.lv)?'<span class="ntchip" title="Nachtrag — nicht im ursprünglichen Leistungsverzeichnis">Nachtrag</span>':''}${
+          esc(g.kurz)}${mix?` <span style="color:var(--danger)" title="Gemischte Einheiten in dieser Position">Zu überprüfen</span>`:''}${
+          lvLangKnopf(g.lv, ` data-lvkurz="${esc(g.kurz)}"`)}</td>
         <td class="num sp-zu">${g.list.length}</td>
         <td class="num sp-soll">${Number.isFinite(g.soll)?fmt3(g.soll)+' '+g.sym:'–'}</td>
         <td class="num sp-summe"${g.ueber&&!mix?' title="Aufmaß liegt über der LV-Menge"':''}>
@@ -14122,7 +14803,9 @@ function renderLvUebersicht(){
         <td class="sp-weg"><button class="btn small danger" data-lvweg="${esc(g.lv)}"
           title="Diese LV-Position ganz löschen — samt aller Zuordnungen">${ico('papierkorb', true)}</button></td>
       </tr>`;
-    }).join('') || `<tr><td colspan="9" style="color:var(--muted)">${lvNurBelegte
+    }).join('') || `<tr><td colspan="9" style="color:var(--muted)">${lvNurNachtrag && !alle.length
+        ? 'Kein Nachtrag erfasst. Neue Positionen bekommen das Häkchen „Nachtrag" im Fenster „＋ Neue LV-Position".'
+        : lvNurBelegte
         ? 'Keine Position mit Zuordnungen. Der Haken „leere ausblenden“ blendet gerade '+alle.length+' Position(en) aus.'
         : 'Noch keine LV-Positionen. Über „＋ Neue LV-Position“, im Raum-Panel oder am ausgewählten Objekt anlegen.'}</td></tr>`}
     </tbody>
@@ -14152,8 +14835,10 @@ function renderLvUebersicht(){
       darunter liegt. Der Preis kommt aus Airtable („Einheitspreis") bzw. aus dem GAEB-Import.
       Der Papierkorb löscht die <b>ganze Position</b> samt Zuordnungen; in Airtable bleibt sie
       stehen und kommt beim nächsten Holen wieder.</p>`;
-  // Aus dem LV-Tab heraus gibt es kein Bauteil — die Position gehört dem Projekt
-  $('#lvnew').onclick=()=>openLvDialog(null, sel.roomId||((proj().rooms[0]||{}).id), null, {projekt:true});
+  /* „＋ Neue LV-Position" legt eine POSITION an, keine Zuordnung — siehe `lvNeuOeffnen`.
+     Wer messen will, tippt im Plan auf Raum, Wand oder Bauteil und dort auf
+     „LV-Position"; in der Zuordnungsliste steht dafür „＋ Neue Zuordnung". */
+  $('#lvnew').onclick=lvNeuOeffnen;
   $('#lvedit').onclick=openLvEdit;
   $('#lvabschlag').onchange=e=>{
     lvAbschlagWahl = e.target.value==='' ? null : +e.target.value;
@@ -14164,6 +14849,11 @@ function renderLvUebersicht(){
     try{ localStorage.setItem(LV_LEER_KEY, lvNurBelegte?'1':'0'); }catch(err){}
     renderLv();
   };
+  $('#lvnurnachtrag').onchange=e=>{
+    lvNurNachtrag=e.target.checked;
+    try{ localStorage.setItem(LV_NACHTRAG_KEY, lvNurNachtrag?'1':'0'); }catch(err){}
+    renderLv();
+  };
   // Der Papierkorb sitzt IN der anklickbaren Zeile — ohne `stopPropagation` würde
   // derselbe Tipp zusätzlich die Detailansicht öffnen
   document.querySelectorAll('[data-lvweg]').forEach(b=>b.onclick=e=>{
@@ -14171,8 +14861,19 @@ function renderLvUebersicht(){
     if(lvPositionLoeschen(b.dataset.lvweg)) renderAll();
   });
   document.querySelectorAll('[data-lvdrill]').forEach(tr=>{
-    tr.onclick=()=>{ lvDrill=tr.dataset.lvdrill; renderLv(); };
+    tr.onclick=()=>{
+      // Rollstand mitnehmen, damit „Zurück“ wieder hier landet und nicht ganz oben
+      lvScrollZurueck=$('#lvview').scrollTop;
+      lvDrill=tr.dataset.lvdrill; renderLv();
+    };
   });
+  lvLangVerdrahten($('#lvview'));
+  /* Ganz zum Schluss: das `innerHTML` weiter oben hat den Rollstand auf 0 gesetzt — jede
+     frühere Zuweisung wäre damit wieder weg. */
+  if(lvScrollZurueck!=null){
+    $('#lvview').scrollTop=lvScrollZurueck;
+    lvScrollZurueck=null;
+  }
 }
 // Summe (und Betrag) im Kopf der Detailansicht — wird beim Bearbeiten neu geschrieben
 const lvKopfSumme = g =>
@@ -14235,7 +14936,8 @@ function renderLvDetail(){
       <button class="btn" id="lvback">← Zurück</button>
       <h2 style="font-size:17px">${c?`<span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:${c};margin-right:7px"></span>`:''}${esc(g.lv||'– ohne Nummer –')}</h2>
       <button class="btn primary" id="lvneuhier" title="Neue Zuordnung für genau diese Position">＋ Neue Zuordnung</button>
-      <span class="hint">${esc(g.kurz)}</span>
+      <span class="hint">${esc(g.kurz)}</span>${
+        lvLangKnopf(g.lv, ` data-lvkurz="${esc(g.kurz)}"`)}
       <span style="flex:1"></span>
       ${Number.isFinite(g.soll)?`<span class="hint">lt. LV: ${fmt3(g.soll)} ${g.sym}</span>`:''}
       ${Number.isFinite(g.preis)?`<span class="hint">EP: ${fmtGeld(g.preis)} €</span>`:''}
@@ -14322,6 +15024,7 @@ function renderLvDetail(){
       ändern — beim Abschlag auch mit den Pfeiltasten. Ergebnis je Zeile wie in magicplan gerechnet — Formel als Tooltip.
       ${g.einheiten[0]==='Flache'?'Jede Zeile entscheidet für sich: mit Ansichtsflächen zählen die gesetzten Seiten, ohne gilt L×H + L×B.':''}</p>`;
   $('#lvback').onclick=()=>{ lvDrill=null; lvMarkiert.clear(); renderLv(); };
+  lvLangVerdrahten($('#lvview'));      // der ℹ-Knopf oben in der Kopfzeile
   $('#lvneuhier').onclick=()=>openLvDialog(null, sel.roomId||((proj().rooms[0]||{}).id), null,
     {projekt:true, lv:g.lv});
   document.querySelectorAll('#lvview [data-lvfeld]').forEach(el=>{
@@ -17620,12 +18323,17 @@ function agUmfangFuellen(){
     opt.push([`abschlag:${n}`, `Abschlag ${n}${n===p.abschlag?' (laufend)':' — Nachdruck'}`]);
   opt.push(['schluss','Schlussrechnung — alles noch nicht Abgerechnete']);
   opt.push(['alles','Gesamtes Aufmaß — alle Abschläge']);
+  /* Nachträge sind kein Abschlag, sondern ein eigenes Dokument: alle Nachtragspositionen,
+     gleich in welchem Abschlag sie entstanden sind. Sie fehlen dafür in JEDEM der drei
+     Umfänge darüber — auch in „Gesamtes Aufmaß". */
+  opt.push(['nachtrag','Nachträge — alle erfassten Nachtragspositionen']);
   sel.innerHTML=opt.map(([v,t])=>`<option value="${v}">${esc(t)}</option>`).join('');
   sel.value=`abschlag:${p.abschlag}`;
   agUmfangGeaendert();
 }
 function agFilter(){
   const v=$('#agUmfang').value;
+  if(v==='nachtrag') return {art:'nachtrag'};
   if(v==='alles') return null;
   if(v==='schluss') return {art:'schluss'};
   return {art:'abschlag', nr:+v.split(':')[1]};
@@ -17634,7 +18342,10 @@ function agUmfangGeaendert(){
   const f=agFilter(), p=proj();
   $('#agPrint').textContent=`🖨 ${f?abschlagText(f):'Gesamtes Aufmaß'} drucken`;
   // zeigen, wie viele Zuordnungen das Dokument überhaupt enthält
-  const alt=druckFilter; druckFilter=f;
+  const alt=druckFilter, altN=druckNachtrag;
+  const nachtrag = !!(f && f.art==='nachtrag');
+  druckFilter = nachtrag ? null : f;
+  druckNachtrag = nachtrag ? true : false;      // wie in `buildPrint`, sonst zählt er falsch
   const n=(p.attrs||[]).filter(imAbschlag).length;
   const raeume=p.rooms.filter(raumAktiv).length;
   const alle=alleZeichnen();
@@ -17657,6 +18368,7 @@ $('#ausgabebtn').onclick=()=>{
   $('#agRaumSeite').checked   = druckRaumSeite();
   $('#agOhneLv').checked      = druckOhneLv();
   $('#agOhneObjekte').checked = druckOhneObjekte();
+  $('#agOhneEtagenNr').checked= druckOhneEtagenNr();
   $('#agOhneFotos').checked   = druckOhneFotos();
   $('#dlgAusgabe').showModal();
 };
@@ -17672,6 +18384,11 @@ const druckAlleRaeume  = () => proj().druckAlleRaeume===true;    // Vorgabe: aus
 const druckOhneLv      = () => proj().druckOhneLv===true;
 const druckOhneObjekte = () => proj().druckOhneObjekte===true;
 const druckOhneFotos   = () => proj().druckOhneFotos===true;
+/* Nur die NUMMERN auf der Etagenübersicht weglassen — die Objekte selbst bleiben stehen.
+   Auf einer ganzen Etage steht eine Plakette neben der anderen; wer den Grundriss lesen
+   will, sucht dann den Plan unter den Nummern. Auf den RAUMSEITEN bleiben sie, dort ist
+   Platz und dort werden sie gebraucht (die Positionstabelle verweist auf sie). */
+const druckOhneEtagenNr = () => proj().druckOhneEtagenNr===true;
 // Merken im Projekt (sparse: nur die Abweichung von der Vorgabe wird gespeichert)
 $('#agOeffMasse').onchange=e=>{
   const p=proj();
@@ -17701,7 +18418,7 @@ $('#agAlleRaeume').onchange=e=>{
 };
 // Die drei Ausschlüsse laufen alle gleich: gesetzt = weglassen, sonst Feld weg
 [['agOhneLv','druckOhneLv'], ['agOhneObjekte','druckOhneObjekte'],
- ['agOhneFotos','druckOhneFotos']].forEach(([id, feld])=>{
+ ['agOhneFotos','druckOhneFotos'], ['agOhneEtagenNr','druckOhneEtagenNr']].forEach(([id, feld])=>{
   $('#'+id).onchange=e=>{
     const p=proj();
     if(e.target.checked) p[feld]=true; else delete p[feld];
@@ -18472,7 +19189,8 @@ function deckSheet(inhalt){
     /* Ohne LV-Positionen ist das Blatt kein Aufmaß mehr, sondern ein Plan — und genau
        das soll dort dann stehen, statt der Art des Bauvorhabens. */
     ['Art des Bauvorhabens:', druckOhneLv() ? 'Plan' : (p.artBauvorhaben||'')],
-    ['Abschlag Nr.:',         abschlagText(druckFilter)],   // aus der Druckauswahl
+    // Beim Nachtragsdokument steht `druckFilter` auf null — der Schalter trägt die Auskunft
+    ['Abschlag Nr.:',         druckNachtrag ? 'Nachträge' : abschlagText(druckFilter)],
     ['Zeitraum:',             zeitraumText(p)]
   ];
   return `<div class="psheet deck">
@@ -18507,9 +19225,14 @@ function pSheet(inner, nr, bv){
    Der Filter steckt in `druckFilter`, damit ihn planSvg, lvGroups und die
    Foto-Auswahl sehen, ohne ihn durch jede Ebene zu reichen. */
 function buildPrint(filter){
-  druckFilter=filter||null;
+  /* Der Nachtrags-Umfang ist KEIN Abschlagsfilter: er nimmt alle Nachträge, gleich in
+     welchem Abschlag sie entstanden sind — abgerechnet werden sie ohnehin getrennt.
+     Darum `druckFilter` null und nur der Nachtragsschalter auf `true`. */
+  const nachtrag = !!(filter && filter.art==='nachtrag');
+  druckFilter = nachtrag ? null : (filter||null);
+  druckNachtrag = nachtrag ? true : false;     // im Aufmaß: Nachträge heraus
   try{ return buildPrintIntern(); }
-  finally{ druckFilter=null; }                 // Bildschirm zeigt immer alles
+  finally{ druckFilter=null; druckNachtrag=null; }   // Bildschirm zeigt immer alles
 }
 /* Anmerkungen zum Raum, gesammelt unter dem Raumplan (Ticket vom 3.8.2026).
    Bewusst ein eigener Kasten und **nicht** eine weitere Spalte in der Positionstabelle:
@@ -18595,7 +19318,8 @@ function anmerkungKasten(r, lvs){
 }
 function buildPrintIntern(){
   const p=proj();
-  const bv=[p.bauvorhaben || p.name || '', abschlagText(druckFilter)].filter(Boolean).join(' · ');
+  const bv=[p.bauvorhaben || p.name || '',
+    druckNachtrag ? 'Nachträge' : abschlagText(druckFilter)].filter(Boolean).join(' · ');
   const seiten=[];
   const etagenStart=[];                     // fürs Inhaltsverzeichnis auf dem Deckblatt
   p.floors.forEach(f=>{
@@ -18608,10 +19332,19 @@ function buildPrintIntern(){
     if(!aktiv.length) return;
     etagenStart.push({name:f.name, idx:seiten.length});
     // 1) Übersicht der Etage — alle Räume, die nicht beitragenden nur blass
+    /* `plakettenAus` gibt es längst — die Mini-Etage neben dem Raumplan benutzt es seit
+       jeher. Hier ist es dieselbe Frage in groß: gezeichnet wird alles, nur die Nummern
+       bleiben weg. `try/finally`, damit ein Fehler beim Zeichnen sie nicht dauerhaft
+       abschaltet — die Raumseiten danach sind auf sie angewiesen. */
+    let etagenPlan;
+    plakettenAus=druckOhneEtagenNr();
+    try{
+      etagenPlan=planSvg(rooms, {namen:true, masse:false, objekte:!druckOhneObjekte(),
+        boxW:186, boxH:240});
+    } finally { plakettenAus=false; }
     seiten.push(`<div class="ptitle">▼ ${esc(f.name)}</div>
       <div style="display:flex; align-items:center; justify-content:center; margin-top:4mm">
-        ${planSvg(rooms, {namen:true, masse:false, objekte:!druckOhneObjekte(),
-          boxW:186, boxH:240})}
+        ${etagenPlan}
       </div>`);
     // 2) je Raum eine Seite — mit Zuordnungen in diesem Abschlag, oder alle bei „Alle Räume"
     aktiv.forEach(r=>{
@@ -18623,7 +19356,9 @@ function buildPrintIntern(){
          Sichtbar bleibt sie allein in der Übersicht auf Seite 2 (`alleGruppen`) —
          die führt bewusst ALLE Positionen samt Ergebnis. */
       const ohnePdf=p.lvOhneListe||{};
-      const lvs=(p.attrs||[]).filter(a=>a.roomId===r.id && imAbschlag(a) && !ohnePdf[a.lv])
+      /* `!a.projekt`: eine Position des Bauvorhabens gehört nicht unter einen Raum —
+         `a.roomId` sagt bei ihr nur, wo der Dialog offen war. */
+      const lvs=(p.attrs||[]).filter(a=>a.roomId===r.id && !a.projekt && imAbschlag(a) && !ohnePdf[a.lv])
         .sort((a,b)=>lvCmp(a.lv,b.lv));
       const grp={};
       lvs.forEach(a=>{ (grp[a.lv]=grp[a.lv]||[]).push(a); });
@@ -18753,7 +19488,20 @@ function buildPrintIntern(){
      fallen BEIDE Teile weg, die Übersicht auf Seite 2 und die Auflistung der
      Einzelpositionen. Eine Stelle statt zwei Abfragen weiter unten. */
   const alleGruppen = druckOhneLv() ? [] : lvGroups();
-  const gruppen=alleGruppen.filter(g=>!(p.lvOhneListe||{})[g.lv]);
+  /* ---- Projektpositionen erscheinen NUR in der Übersicht oben ----
+     „Wenn Projekt gewählt ist, erscheint die Summe in der PDF nur oben in den
+     LV-Positionen. Keine Einzelliste und keine Darstellung in einem Raum."
+     Die Übersicht (`alleGruppen`) bleibt darum unangetastet — dort steht die Summe.
+     Die Auflistung bekommt die Gruppe OHNE ihre Projektzeilen, und zwar frisch
+     gerechnet: sonst stünden dort Zeilen ohne die Projektmenge, darunter aber eine
+     Summe mit ihr. Bleibt nichts übrig, fällt die Tabelle ganz weg. */
+  const gruppen=alleGruppen
+    .filter(g=>!(p.lvOhneListe||{})[g.lv])
+    .map(g=>{
+      const ohne=g.list.filter(a=>!a.projekt);
+      return ohne.length===g.list.length ? g : lvGruppeBauen(g.lv, ohne);
+    })
+    .filter(g=>g.list.length);
 
   /* ---- Seite 2: LV-Positionen mit Ergebnissen (alle Positionen) ----
      Läuft die Tabelle über das Blatt, wird sie wie die Detailtabellen geteilt. */
@@ -19160,7 +19908,7 @@ const LEISTE = {
      selbst weg, wie Duplizieren und Fotos. */
   wahl:  ['#wahlEinzel','#wahlMehr','-','#rsperr','#rheight','nameanm','farbe','-',
           'spiegeln','#rverbinden','-','#rlv','#rdup','#rdel','-','#rfoto'],
-  etage: ['#flooradd','#floorren','#floordup','#floordel','-','#fheight','#fheightall','-',
+  etage: ['#flooradd','#floorren','#floordup','#floordel','#floorsort','-','#fheight','#fheightall','-',
           '#modedraw','#modetpl'],
   /* Zehn Werkzeuge und fünfzehn Farben stecken jetzt in zwei Aufklappmenüs — aus
      vierzehn Kacheln werden sechs. */
@@ -19231,7 +19979,7 @@ const KLAPP = {
   messen:     {q:'#sidebar input.opfld, #sidebar input.objdim', titel:'Messen', ico:'massstab'},
   /* ---- Menüs der Handy-Kurzzeile (9.8.2026). `mehr` verweist auf ein weiteres Menü:
      die Farbe hat fünfzehn Felder, die sprengen jede Liste — ein Eintrag klappt um. */
-  etagemenu: {q:'#sidebar #flooradd, #sidebar #floorren, #sidebar #floordup, #sidebar #floordel',
+  etagemenu: {q:'#sidebar #flooradd, #sidebar #floorren, #sidebar #floordup, #sidebar #floordel, #sidebar #floorsort',
               titel:'Etage', ico:'plus'},
   raumdaten: {q:'#sidebar #rsperr, #sidebar #rheight, #sidebar #rname, #sidebar #ranm',
               titel:'Festsetzen · Raumhöhe · Name · Anmerkung · Farbe', ico:'stift',
